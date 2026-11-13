@@ -153,6 +153,31 @@ class SupplierPayablesRobolectricTest {
     }
 
     @Test
+    fun supplierInvoiceMaturityUsesValidatedAsOfDateAndRejectsInvalidCalendarDates() {
+        val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 98911, "MATURITY-ASOF",
+            75.0, "2026-10-01", null, 1
+        )
+        val invalidDates = listOf("2026-02-30", "2026-1-03", "2026-10-01T00:00:00")
+        invalidDates.forEach { value ->
+            assertTrue(
+                "Invalid as-of date must be rejected: $value",
+                runCatching {
+                    SupplierPayablesRepository.getSupplierInvoices(db, 1, supplierId, asOfDate = value)
+                }.isFailure
+            )
+        }
+        val result = SupplierPayablesRepository.getSupplierInvoices(
+            db, 1, supplierId, asOfDate = "2026-11-13"
+        )
+        val invoice = (0 until result.length()).map { result.getJSONObject(it) }
+            .first { it.getLong("id") == invoiceId }
+        assertEquals("undated", invoice.getString("maturity_status"))
+        assertEquals("", invoice.getString("due_date"))
+        assertEquals("2026-10-01", invoice.getString("invoice_date"))
+    }
+
+    @Test
     fun fifoAllocationsUpdateInvoiceBalancesAndAreIdempotent() {
         val firstInvoice = SupplierPayablesRepository.createPurchaseInvoice(
             db, 1, supplierId, "manual", 91001, "MAN-91001",

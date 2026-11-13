@@ -989,7 +989,8 @@ object SupplierPayablesRepository {
                 val source=c.getString(7).orEmpty()
                 val termsSource=c.getString(15).orEmpty()
                 val trusted=source=="purchase_creation" && termsSource=="explicit_text"
-                val today=asOf ?: LocalDate.parse(BusinessDay.currentDate())
+                val today = parseOptionalCanonicalDate(asOfDate, "تاريخ تقييم استحقاق فاتورة المورد")
+                    ?: LocalDate.parse(BusinessDay.currentDate())
                 val dueDate=if(trusted) parseDate(due) else null
                 val maturityStatus=when {
                     c.getDouble(13)<=EPSILON -> "paid"
