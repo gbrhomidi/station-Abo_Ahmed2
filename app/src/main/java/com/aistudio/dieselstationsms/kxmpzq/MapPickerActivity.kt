@@ -158,9 +158,13 @@ class MapPickerActivity : AppCompatActivity() {
         }
         // Prefer a fresh device fix; fall back to a recent cached fix only after timeout.
         var delivered = false
+        val nowMillis = System.currentTimeMillis()
         val cached = providers.mapNotNull { provider ->
             runCatching { manager.getLastKnownLocation(provider) }.getOrNull()
-        }.filter { isValidCoordinate(it.latitude, it.longitude) }.maxByOrNull(Location::getTime)
+        }.filter {
+            isValidCoordinate(it.latitude, it.longitude) &&
+                MapPickerLocationPolicy.isRecentCachedLocation(it, nowMillis)
+        }.maxByOrNull(Location::getTime)
         val listener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
                 if (delivered || !isValidCoordinate(location.latitude, location.longitude)) return
@@ -252,6 +256,19 @@ class MapPickerActivity : AppCompatActivity() {
         finish()
     }
 
+
+    override fun onPause() {
+        // Stop active GPS/network callbacks when the picker is no longer visible.
+        activeLocationListener?.let { listener ->
+            runCatching {
+                (getSystemService(Context.LOCATION_SERVICE) as LocationManager).removeUpdates(listener)
+            }
+        }
+        activeLocationListener = null
+        locationTimeoutHandler.removeCallbacksAndMessages(null)
+        super.onPause()
+    }
+
     override fun onDestroy() {
         activeLocationListener?.let { listener ->
             runCatching { (getSystemService(Context.LOCATION_SERVICE) as LocationManager).removeUpdates(listener) }
@@ -271,4 +288,19 @@ class MapPickerActivity : AppCompatActivity() {
         latitude.isFinite() && longitude.isFinite() &&
             latitude in -90.0..90.0 && longitude in -180.0..180.0 &&
             !(latitude == 0.0 && longitude == 0.0)
+}
+
+/** Reject stale/future cached fixes; cached coordinates are a fallback, never a substitute for GPS. */
+internal object MapPickerLocationPolicy {
+    const val MAX_CACHED_AGE_MILLIS = 120_000L
+
+    fun isRecentCachedLocation(
+        location: Location,
+        nowMillis: Long,
+        maxAgeMillis: Long = MAX_CACHED_AGE_MILLIS
+    ): Boolean {
+        if (maxAgeMillis < 0L) return false
+        val ageMillis = nowMillis - location.time
+        return ageMillis in 0L..maxAgeMillis
+    }
 }
