@@ -32,6 +32,11 @@ const response = data => JSON.stringify({ success: true, data });
 
 function installBridge(window) {
   window.AndroidInterface = {
+    openNativeMapPicker(latitude, longitude) { calls.push(['openNativeMapPicker', latitude, longitude]); return JSON.stringify({ success: true }); },
+    calculateStationRoute(originLat, originLon, destLat, destLon, requestId) {
+      calls.push(['calculateStationRoute', originLat, originLon, destLat, destLon, requestId]);
+      return JSON.stringify({ success: true, message: 'بدأ حساب المسار' });
+    },
     getVehicleTripWorkspace(payload) {
       const parsed = JSON.parse(payload); calls.push(['getVehicleTripWorkspace', parsed]);
       assert.strictEqual(parsed.station_id, undefined, 'WebView must never supply station_id');
@@ -88,6 +93,22 @@ function installBridge(window) {
   assert.strictEqual(filteredLoad.vehicle_id, 101, 'vehicle filter must be sent to the SQLite workspace query');
 
   window.document.getElementById('newTripButton').click();
+  window.document.getElementById('pickTripOrigin').click();
+  assert.ok(calls.some(call => call[0] === 'openNativeMapPicker' && call[1] === 0 && call[2] === 0), 'origin picker must open without inventing a default location');
+  window.onNativeMapLocationSelected(15.3694, 44.191);
+  window.document.getElementById('pickTripDestination').click();
+  window.onNativeMapLocationSelected(15.40, 44.22);
+  window.document.getElementById('calculateTripRoute').click();
+  const routeCall = calls.find(call => call[0] === 'calculateStationRoute');
+  assert.ok(routeCall, 'route calculation must use the native attested route bridge');
+  assert.strictEqual(routeCall[1], 15.3694, 'route origin latitude must be the map-selected value');
+  assert.strictEqual(routeCall[3], 15.40, 'route destination latitude must be the map-selected value');
+  window.onNativeRouteResult(routeCall[5], JSON.stringify({ success: true, distanceKm: 12.34, durationSeconds: 900 }));
+  assert.strictEqual(window.document.getElementById('distanceKm').value, '12.34', 'valid route result must populate trip distance');
+  window.document.getElementById('pickTripOrigin').click();
+  window.onNativeMapLocationSelected(15.37, 44.20);
+  assert.strictEqual(window.document.getElementById('distanceKm').value, '', 'changing a route endpoint must invalidate its previous distance estimate');
+
   window.document.getElementById('tripVehicleId').value = '101';
   window.document.getElementById('tripDate').value = '2026-08-27';
   window.document.getElementById('distanceKm').value = '17.25';

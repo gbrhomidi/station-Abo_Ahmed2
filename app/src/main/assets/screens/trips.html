@@ -286,10 +286,13 @@
           point.longitude > 180 || (point.latitude === 0 && point.longitude === 0)) {
         toast('الإحداثيات المستلمة غير صالحة', true); return;
       }
+      if (routeSelection.pendingTarget !== 'origin' && routeSelection.pendingTarget !== 'destination') return;
       if (routeSelection.pendingTarget === 'origin') routeSelection.origin = point;
-      else if (routeSelection.pendingTarget === 'destination') routeSelection.destination = point;
-      else return;
+      else routeSelection.destination = point;
       routeSelection.pendingTarget = null;
+      routeSelection.requestId = null;
+      $('distanceKm').value = '';
+      $('routeEstimateStatus').textContent = 'تغيّرت إحدى نقطتي الرحلة؛ أعد حساب المسافة قبل الحفظ.';
       updateRouteSelectionStatus();
     };
     window.onNativeRouteResult = (requestId, rawPayload) => {
@@ -298,10 +301,16 @@
       try {
         const result = JSON.parse(rawPayload);
         if (!result.success) throw new Error(result.error || 'تعذر حساب المسار');
-        $('distanceKm').value = Number(result.distanceKm).toFixed(2);
+        const distanceKm = Number(result.distanceKm);
+        const durationSeconds = Number(result.durationSeconds);
+        if (!Number.isFinite(distanceKm) || distanceKm <= 0 ||
+            !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+          throw new Error('أعادت خدمة المسارات قيماً غير صالحة للمسافة أو الزمن');
+        }
+        $('distanceKm').value = distanceKm.toFixed(2);
         $('routeEstimateStatus').textContent =
           'المسافة عبر الطرق: ' + formatNumber(result.distanceKm) + ' كم · الزمن التقديري: ' +
-          formatNumber(Number(result.durationSeconds) / 60, 0) + ' دقيقة' +
+          formatNumber(durationSeconds / 60, 0) + ' دقيقة' +
           (result.cacheHit ? ' · من الذاكرة المؤقتة' : '');
         toast('تم حساب المسافة من خدمة المسارات');
       } catch (error) {
@@ -322,10 +331,16 @@
         routeSelection.pendingTarget = null;
         toast('محدد الخريطة الأصلي غير متاح في هذا الإصدار', true); return;
       }
-      const response = JSON.parse(bridge().openNativeMapPicker(latitude, longitude));
-      if (!response.success) {
+      try {
+        const raw = bridge().openNativeMapPicker(latitude, longitude);
+        const response = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (!response || response.success !== true) {
+          routeSelection.pendingTarget = null;
+          toast(response?.message || response?.error || 'تعذر فتح الخريطة', true);
+        }
+      } catch (error) {
         routeSelection.pendingTarget = null;
-        toast(response.message || response.error || 'تعذر فتح الخريطة', true);
+        toast(error.message || 'تعذر فتح محدد الخريطة', true);
       }
     }
     function calculateTripRoute() {
@@ -338,13 +353,20 @@
       const requestId = routeRequestId();
       routeSelection.requestId = requestId;
       $('routeEstimateStatus').textContent = 'جارٍ حساب المسار والتحقق من App Check…';
-      const response = JSON.parse(bridge().calculateStationRoute(
-        routeSelection.origin.latitude, routeSelection.origin.longitude,
-        routeSelection.destination.latitude, routeSelection.destination.longitude, requestId
-      ));
-      if (!response.success) {
+      try {
+        const raw = bridge().calculateStationRoute(
+          routeSelection.origin.latitude, routeSelection.origin.longitude,
+          routeSelection.destination.latitude, routeSelection.destination.longitude, requestId
+        );
+        const response = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (!response || response.success !== true) {
+          routeSelection.requestId = null;
+          $('routeEstimateStatus').textContent = response?.message || response?.error || 'تعذر بدء حساب المسار';
+          toast($('routeEstimateStatus').textContent, true);
+        }
+      } catch (error) {
         routeSelection.requestId = null;
-        $('routeEstimateStatus').textContent = response.message || response.error || 'تعذر بدء حساب المسار';
+        $('routeEstimateStatus').textContent = error.message || 'تعذر بدء حساب المسار';
         toast($('routeEstimateStatus').textContent, true);
       }
     }
