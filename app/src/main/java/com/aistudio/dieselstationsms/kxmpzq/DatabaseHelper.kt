@@ -18788,6 +18788,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         val limit = params.optInt("limit", 1000).coerceIn(1, 5000)
         val offset = params.optInt("offset", 0).coerceAtLeast(0)
+        // Use the station's business timezone; SQLite date('now') is UTC.
+        val adenMonthStart = java.time.LocalDate.now(ZoneId.of("Asia/Aden")).withDayOfMonth(1).toString()
+        val adenNextMonthStart = java.time.LocalDate.parse(adenMonthStart).plusMonths(1).toString()
         val salesColumns = readableDatabase.rawQuery("PRAGMA table_info(sales_transactions)", null).use { cursor ->
             buildSet {
                 while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
@@ -21298,7 +21301,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """.trimIndent()
         val summarySql = """
             SELECT COUNT(*) AS record_count, COALESCE(SUM(e.amount), 0) AS total_expenses,
-                   COALESCE(SUM(CASE WHEN e.expense_date >= date('now', 'start of month') AND e.expense_date < date('now', 'start of month', '+1 month') THEN e.amount ELSE 0 END), 0) AS current_month_expenses,
+                   COALESCE(SUM(CASE WHEN e.expense_date >= ? AND e.expense_date < ? THEN e.amount ELSE 0 END), 0) AS current_month_expenses,
                    SUM(CASE WHEN NULLIF(TRIM(COALESCE(e.invoice_path, '')), '') IS NOT NULL THEN 1 ELSE 0 END) AS attached_invoice_count,
                    (SELECT COALESCE(SUM(t.distance_km), 0) FROM vehicle_trips t
                     WHERE t.trip_status <> 'cancelled' AND COALESCE(t.distance_km, 0) > 0
@@ -21325,7 +21328,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = readableDatabase
             val rows = db.rawQuery(detailsSql, (args + limit.toString() + offset.toString()).toTypedArray()).use(::cursorToJsonArray)
-            val summary = db.rawQuery(summarySql, (listOf(stationId.toString()) + tripArgs + args).toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursorToJsonObject(cursor) else JSONObject() }
+            val summary = db.rawQuery(summarySql, (listOf(adenMonthStart, adenNextMonthStart, stationId.toString()) + tripArgs + args).toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursorToJsonObject(cursor) else JSONObject() }
             val totalDistance = summary.optDouble("total_distance_km", 0.0)
             val totalExpenses = summary.optDouble("total_expenses", 0.0)
             summary.put("cost_per_km", if (totalDistance > 0.0) totalExpenses / totalDistance else JSONObject.NULL)
