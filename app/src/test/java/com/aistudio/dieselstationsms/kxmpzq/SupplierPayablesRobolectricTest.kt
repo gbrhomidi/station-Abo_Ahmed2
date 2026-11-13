@@ -92,6 +92,39 @@ class SupplierPayablesRobolectricTest {
     }
 
     @Test
+    fun supplierInvoiceCreationRejectsMalformedDatesWithoutPersistingPartialInvoiceOrTask() {
+        val beforeInvoices = db.rawQuery("SELECT COUNT(*) FROM supplier_invoices", null).use { it.moveToFirst(); it.getInt(0) }
+        val beforeTasks = db.rawQuery("SELECT COUNT(*) FROM supplier_invoice_tasks", null).use { it.moveToFirst(); it.getInt(0) }
+        listOf("2026-02-30", "2026-1-03", "2026-11-13T10:00:00").forEachIndexed { index, invalid ->
+            assertTrue(runCatching {
+                SupplierPayablesRepository.createPurchaseInvoice(
+                    db, 1, supplierId, "manual", 98900L + index, "INVALID-DATE-$index",
+                    50.0, invalid, null, 1
+                )
+            }.isFailure)
+        }
+        assertEquals(beforeInvoices, db.rawQuery("SELECT COUNT(*) FROM supplier_invoices", null).use { it.moveToFirst(); it.getInt(0) })
+        assertEquals(beforeTasks, db.rawQuery("SELECT COUNT(*) FROM supplier_invoice_tasks", null).use { it.moveToFirst(); it.getInt(0) })
+    }
+
+    @Test
+    fun supplierInvoiceAndPaymentDateFiltersRejectMalformedAndReversedRanges() {
+        val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 98910, "DATE-FILTER", 50.0, "2026-11-01", null, 1
+        )
+        val paymentId = createCompletedSupplierPayment(20.0, "DATE-FILTER")
+        val checks = listOf<() -> Any>(
+            { SupplierPayablesRepository.getSupplierInvoices(db, 1, supplierId, fromDate = "2026-02-30") },
+            { SupplierPayablesRepository.getSupplierInvoices(db, 1, supplierId, fromDate = "2026-11-20", toDate = "2026-11-01") },
+            { SupplierPayablesRepository.getSupplierInvoices(db, 1, supplierId, asOfDate = "2026-11-13T12:00:00") },
+            { SupplierPayablesRepository.getSupplierPayments(db, 1, supplierId, toDate = "2026-1-03") },
+            { SupplierPayablesRepository.getSupplierPayments(db, 1, supplierId, fromDate = "2026-11-20", toDate = "2026-11-01") }
+        )
+        checks.forEach { check -> assertTrue("Invalid supplier date filter must fail closed", runCatching { check() }.isFailure) }
+        assertTrue(invoiceId > 0L && paymentId > 0L)
+    }
+
+    @Test
     fun fifoAllocationsUpdateInvoiceBalancesAndAreIdempotent() {
         val firstInvoice = SupplierPayablesRepository.createPurchaseInvoice(
             db, 1, supplierId, "manual", 91001, "MAN-91001",

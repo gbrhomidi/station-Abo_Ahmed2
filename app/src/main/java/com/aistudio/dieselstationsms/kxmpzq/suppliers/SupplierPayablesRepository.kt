@@ -380,6 +380,33 @@ object SupplierPayablesRepository {
         currencyId: Long?,
         actorId: Long
     ): Long {
+        if (db.inTransaction()) return createPurchaseInvoiceWithinTransaction(
+            db, stationId, supplierId, sourceType, sourceId, invoiceNumber, amount, invoiceDate, currencyId, actorId
+        )
+        db.beginTransaction()
+        try {
+            val id = createPurchaseInvoiceWithinTransaction(
+                db, stationId, supplierId, sourceType, sourceId, invoiceNumber, amount, invoiceDate, currencyId, actorId
+            )
+            db.setTransactionSuccessful()
+            return id
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    private fun createPurchaseInvoiceWithinTransaction(
+        db: SQLiteDatabase,
+        stationId: Int,
+        supplierId: Long,
+        sourceType: String,
+        sourceId: Long,
+        invoiceNumber: String,
+        amount: Double,
+        invoiceDate: String?,
+        currencyId: Long?,
+        actorId: Long
+    ): Long {
         require(stationId > 0 && supplierId > 0L && sourceId > 0L && actorId > 0L) {
             "بيانات فاتورة المورد غير صالحة"
         }
@@ -437,7 +464,7 @@ object SupplierPayablesRepository {
         val termsText=terms[0] as String
         val termsSource=terms[3] as String
         val days=if(termsSource=="explicit_text") (terms[1] as? Int)?.takeIf { it in 0..365 } ?: DebtDueDateRepository.parseTermsDays(termsText) else null
-        val base = parseDate(invoiceDate)
+        val base = parseOptionalCanonicalDate(invoiceDate, "تاريخ فاتورة المورد")
         val due = if(base!=null && days!=null) base.plusDays(days.toLong()).toString() else null
         val now = BusinessDay.currentDate()
         val id = db.insertOrThrow("supplier_invoices",null,ContentValues().apply {
@@ -962,7 +989,7 @@ object SupplierPayablesRepository {
                 val source=c.getString(7).orEmpty()
                 val termsSource=c.getString(15).orEmpty()
                 val trusted=source=="purchase_creation" && termsSource=="explicit_text"
-                val today=parseDate(asOfDate) ?: LocalDate.parse(BusinessDay.currentDate())
+                val today=asOf ?: LocalDate.parse(BusinessDay.currentDate())
                 val dueDate=if(trusted) parseDate(due) else null
                 val maturityStatus=when {
                     c.getDouble(13)<=EPSILON -> "paid"
@@ -1001,11 +1028,14 @@ object SupplierPayablesRepository {
         toDate: String? = null
     ): JSONArray {
         require(stationId>0) { "معرف المحطة غير صالح" }
+        val from = parseOptionalCanonicalDate(fromDate, "بداية فترة دفعات المورد")
+        val to = parseOptionalCanonicalDate(toDate, "نهاية فترة دفعات المورد")
+        require(from == null || to == null || !from.isAfter(to)) { "بداية فترة دفعات المورد تتجاوز نهايتها" }
         val where=mutableListOf("p.station_id=?","p.supplier_party_id IS NOT NULL","p.is_deleted=0","p.status IN ('completed','refunded')")
         val args=mutableListOf(stationId.toString())
         if(supplierId>0L){requireSupplierScope(db,supplierId,stationId);where+="p.supplier_party_id=?";args+=supplierId.toString()}
-        if(!fromDate.isNullOrBlank()){where+="date(p.created_at)>=date(?)";args+=fromDate.take(10)}
-        if(!toDate.isNullOrBlank()){where+="date(p.created_at)<=date(?)";args+=toDate.take(10)}
+        if(from!=null){where+="date(p.created_at)>=date(?)";args+=from.toString()}
+        if(to!=null){where+="date(p.created_at)<=date(?)";args+=to.toString()}
         val rows=JSONArray()
         db.rawQuery(
             """SELECT p.id,p.supplier_party_id,p.payment_code,p.amount,p.payment_method,p.status,p.created_at,
@@ -1076,7 +1106,7 @@ object SupplierPayablesRepository {
     ): JSONObject {
         require(supplierId>0L && stationId>0) { "معرف المورد والمحطة مطلوبان" }
         requireSupplierScope(db,supplierId,stationId)
-        val asOf=parseDate(asOfDate) ?: LocalDate.parse(BusinessDay.currentDate())
+        val asOf=parseOptionalCanonicalDate(asOfDate, "تاريخ أعمار ذمم المورد") ?: LocalDate.parse(BusinessDay.currentDate())
         val invoices=getSupplierInvoices(db,stationId,supplierId, asOfDate=asOf.toString())
         val byCurrency=linkedMapOf<Long,JSONObject>()
         val legacyOffsets = JSONArray()
@@ -1303,6 +1333,17 @@ object SupplierPayablesRepository {
             while(c.moveToNext()) names.add(c.getString(c.getColumnIndexOrThrow("name")))
             names
         }
+
+    private fun parseOptionalCanonicalDate(value: String?, label: String): LocalDate? {
+        val raw = value.orEmpty().trim()
+        if (raw.isEmpty()) return null
+        require(raw.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) { "$label يجب أن يكون بصيغة YYYY-MM-DD" }
+        return try {
+            LocalDate.parse(raw).also { require(it.toString() == raw) { "$label غير صالح" } }
+        } catch (error: DateTimeParseException) {
+            throw IllegalArgumentException("$label غير صالح؛ استخدم تاريخاً تقويمياً صحيحاً", error)
+        }
+    }
 
     private fun parseDate(value: String?): LocalDate? {
         val raw=value.orEmpty().trim()
