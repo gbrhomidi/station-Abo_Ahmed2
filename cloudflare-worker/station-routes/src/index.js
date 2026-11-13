@@ -46,12 +46,25 @@ async function verifyAppCheck(request, env) {
   if (!/^\d+$/.test(projectNumber) || !expectedAppId) {
     throw Object.assign(new Error('App Check configuration is incomplete'), { status: 503 });
   }
-  const { payload, protectedHeader } = await jwtVerify(token, APP_CHECK_JWKS, {
-    algorithms: ['RS256'],
-    issuer: `https://firebaseappcheck.googleapis.com/${projectNumber}`,
-    audience: `projects/${projectNumber}`,
-    requiredClaims: ['iss', 'aud', 'exp', 'iat', 'sub']
-  });
+  let verified;
+  try {
+    verified = await jwtVerify(token, APP_CHECK_JWKS, {
+      algorithms: ['RS256'],
+      issuer: `https://firebaseappcheck.googleapis.com/${projectNumber}`,
+      audience: `projects/${projectNumber}`,
+      requiredClaims: ['iss', 'aud', 'exp', 'iat', 'sub']
+    });
+  } catch (error) {
+    // A bad/expired signature is an authentication failure, not an upstream
+    // routing outage. Preserve JWKS/network failures as 502 for observability.
+    const code = String(error?.code || '');
+    if (code.startsWith('ERR_JWT_') || code.startsWith('ERR_JWS_') ||
+        code.startsWith('ERR_JWKS_NO_MATCHING_KEY')) {
+      throw Object.assign(new Error('Invalid App Check token'), { status: 401 });
+    }
+    throw error;
+  }
+  const { payload, protectedHeader } = verified;
   if (protectedHeader.typ !== 'JWT' || payload.sub !== expectedAppId) {
     throw Object.assign(new Error('App Check token is not for this Android app'), { status: 401 });
   }

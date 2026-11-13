@@ -15,6 +15,25 @@ test('route endpoint rejects a missing App Check token', async () => {
   assert.equal(response.status, 401);
 });
 
+test('route endpoint classifies malformed App Check tokens as unauthorized', async () => {
+  const response = await worker.fetch(new Request('https://worker/v1/routes', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'X-Firebase-AppCheck': 'not.a.valid.jwt'
+    },
+    body: JSON.stringify({
+      origin: { latitude: 15.4, longitude: 44.2 },
+      destination: { latitude: 15.5, longitude: 44.3 }
+    })
+  }), {
+    FIREBASE_PROJECT_NUMBER: '593620032216',
+    FIREBASE_APP_ID: '1:593620032216:android:30e3116ba61c31055355ad'
+  });
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: 'unauthorized' });
+});
+
 test('unknown paths are rejected', async () => {
   const response = await worker.fetch(new Request('https://worker/not-found'), {});
   assert.equal(response.status, 404);
