@@ -108,6 +108,34 @@ class SupplierPayablesRobolectricTest {
     }
 
     @Test
+    fun supplierInvoiceCreationRollsBackWhenOperationalTaskPersistenceFails() {
+        val sourceId = 98920L
+        db.execSQL(
+            """CREATE TRIGGER fail_supplier_task_insert
+               BEFORE INSERT ON supplier_invoice_tasks
+               BEGIN SELECT RAISE(ABORT, 'forced_supplier_task_failure'); END"""
+        )
+        try {
+            assertTrue(runCatching {
+                SupplierPayablesRepository.createPurchaseInvoice(
+                    db, 1, supplierId, "manual", sourceId, "ATOMIC-ROLLBACK",
+                    75.0, "2026-11-01", null, 1
+                )
+            }.isFailure)
+        } finally {
+            db.execSQL("DROP TRIGGER IF EXISTS fail_supplier_task_insert")
+        }
+        assertEquals(0, db.rawQuery(
+            "SELECT COUNT(*) FROM supplier_invoices WHERE station_id=1 AND source_type='manual' AND source_id=?",
+            arrayOf(sourceId.toString())
+        ).use { it.moveToFirst(); it.getInt(0) })
+        assertEquals(0, db.rawQuery(
+            "SELECT COUNT(*) FROM supplier_invoice_tasks WHERE station_id=1 AND reference='ATOMIC-ROLLBACK'",
+            null
+        ).use { it.moveToFirst(); it.getInt(0) })
+    }
+
+    @Test
     fun supplierInvoiceAndPaymentDateFiltersRejectMalformedAndReversedRanges() {
         val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
             db, 1, supplierId, "manual", 98910, "DATE-FILTER", 50.0, "2026-11-01", null, 1
