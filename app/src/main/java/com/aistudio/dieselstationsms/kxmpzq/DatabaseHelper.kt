@@ -1116,6 +1116,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     private fun ensureFleetSchema(db: SQLiteDatabase) {
+        // Coordinate and route snapshots are additive: preserve all legacy rows and
+        // make repeated database opens safe on both fresh and upgraded installations.
+        ensureColumn(db, "parties", "latitude", "REAL")
+        ensureColumn(db, "parties", "longitude", "REAL")
+        ensureColumn(db, "parties", "location_accuracy", "REAL")
+        ensureColumn(db, "parties", "location_updated_at", "TEXT")
+        ensureColumn(db, "parties", "location_source", "TEXT")
+        ensureColumn(db, "vehicle_trips", "start_latitude", "REAL")
+        ensureColumn(db, "vehicle_trips", "start_longitude", "REAL")
+        ensureColumn(db, "vehicle_trips", "end_latitude", "REAL")
+        ensureColumn(db, "vehicle_trips", "end_longitude", "REAL")
+        ensureColumn(db, "vehicle_trips", "route_duration_seconds", "INTEGER")
+        ensureColumn(db, "vehicle_trips", "route_provider", "TEXT")
+        ensureColumn(db, "vehicle_trips", "route_calculated_at", "TEXT")
+        ensureColumn(db, "vehicle_expenses", "trip_id", "INTEGER")
+        ensureColumn(db, "vehicle_expenses", "source_distance_km", "REAL")
+        ensureColumn(db, "vehicle_expenses", "idempotency_key", "TEXT")
         ensureColumn(db, "drivers", "station_id", "INTEGER")
         ensureColumn(db, "vehicles", "vehicle_photo_name", "VARCHAR(255)")
         ensureColumn(db, "vehicles", "vehicle_photo_mime", "VARCHAR(100)")
@@ -1143,6 +1160,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_locations_vehicle_time ON vehicle_locations(vehicle_id, location_time)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_trips_vehicle_date ON vehicle_trips(vehicle_id, trip_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_expenses_vehicle_date ON vehicle_expenses(vehicle_id, expense_date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_parties_location_station ON parties(station_id, latitude, longitude)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_station_location_date ON deliveries(station_id, latitude, longitude, delivery_date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_trips_route_vehicle_date ON vehicle_trips(vehicle_id, trip_date, start_latitude, end_latitude)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_expenses_trip ON vehicle_expenses(trip_id, vehicle_id)")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicle_expenses_station_idempotency ON vehicle_expenses(idempotency_key) WHERE idempotency_key IS NOT NULL AND TRIM(idempotency_key) <> ''")
     }
 
     private fun ensureFleetPermissions(db: SQLiteDatabase) {
@@ -1929,6 +1951,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureColumn(db, "deliveries", "total_amount", "REAL DEFAULT 0")
         ensureColumn(db, "deliveries", "status", "TEXT DEFAULT 'delivered'")
         ensureColumn(db, "deliveries", "location", "TEXT")
+        // Explicit coordinates and immutable route metadata; never derive coordinates
+        // from free-form legacy location text.
+        ensureColumn(db, "deliveries", "latitude", "REAL")
+        ensureColumn(db, "deliveries", "longitude", "REAL")
+        ensureColumn(db, "deliveries", "location_accuracy", "REAL")
+        ensureColumn(db, "deliveries", "location_source", "TEXT")
+        ensureColumn(db, "deliveries", "route_distance_km", "REAL")
+        ensureColumn(db, "deliveries", "route_duration_seconds", "INTEGER")
+        ensureColumn(db, "deliveries", "route_provider", "TEXT")
+        ensureColumn(db, "deliveries", "route_calculated_at", "TEXT")
         ensureColumn(db, "deliveries", "notes", "TEXT")
         ensureColumn(db, "deliveries", "created_at", "TEXT")
         ensureColumn(db, "deliveries", "updated_at", "TEXT")
