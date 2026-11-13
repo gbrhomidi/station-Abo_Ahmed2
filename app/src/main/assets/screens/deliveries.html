@@ -6747,6 +6747,16 @@
         return { valid: true };
     }
 
+    window.onNativeMapLocationSelected = function(latitude, longitude) {
+        if (window.__stationMapTarget !== 'delivery') return;
+        if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+            !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return;
+        $('f_latitude').value = latitude.toFixed(7);
+        $('f_longitude').value = longitude.toFixed(7);
+        $('deliveryCoordinatesStatus').textContent = 'تم تحديد إحداثيات موقع التوصيل من الخريطة / GPS.';
+        window.__stationMapTarget = null;
+    };
+
     function pickDeliveryLocation() {
         window.__stationMapTarget = 'delivery';
         const lat = Number($('f_latitude').value), lng = Number($('f_longitude').value);
