@@ -960,11 +960,18 @@ object SupplierPayablesRepository {
     ): JSONArray {
         require(stationId>0) { "معرف المحطة غير صالح" }
         if(supplierId>0L) requireSupplierScope(db,supplierId,stationId)
+        val from = parseOptionalCanonicalDate(fromDate, "بداية فترة فواتير المورد")
+        val to = parseOptionalCanonicalDate(toDate, "نهاية فترة فواتير المورد")
+        val today = parseOptionalCanonicalDate(asOfDate, "تاريخ تقييم استحقاق فاتورة المورد")
+            ?: LocalDate.parse(BusinessDay.currentDate())
+        require(from == null || to == null || !from.isAfter(to)) {
+            "بداية فترة فواتير المورد تتجاوز نهايتها"
+        }
         val where=mutableListOf("i.station_id=?","i.is_deleted=0")
         val args=mutableListOf(stationId.toString())
         if(supplierId>0L){where+="i.supplier_id=?";args+=supplierId.toString()}
-        if(!fromDate.isNullOrBlank()){where+="date(i.invoice_date)>=date(?)";args+=fromDate.take(10)}
-        if(!toDate.isNullOrBlank()){where+="date(i.invoice_date)<=date(?)";args+=toDate.take(10)}
+        if(from!=null){where+="date(i.invoice_date)>=date(?)";args+=from.toString()}
+        if(to!=null){where+="date(i.invoice_date)<=date(?)";args+=to.toString()}
         val rows=JSONArray()
         db.rawQuery(
             """SELECT i.id,i.supplier_id,i.source_type,i.source_id,i.invoice_number,i.invoice_date,i.due_date,
@@ -989,8 +996,6 @@ object SupplierPayablesRepository {
                 val source=c.getString(7).orEmpty()
                 val termsSource=c.getString(15).orEmpty()
                 val trusted=source=="purchase_creation" && termsSource=="explicit_text"
-                val today = parseOptionalCanonicalDate(asOfDate, "تاريخ تقييم استحقاق فاتورة المورد")
-                    ?: LocalDate.parse(BusinessDay.currentDate())
                 val dueDate=if(trusted) parseDate(due) else null
                 val maturityStatus=when {
                     c.getDouble(13)<=EPSILON -> "paid"

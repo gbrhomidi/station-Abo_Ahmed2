@@ -172,8 +172,10 @@ class SupplierPayablesRobolectricTest {
         )
         val invoice = (0 until result.length()).map { result.getJSONObject(it) }
             .first { it.getLong("id") == invoiceId }
-        assertEquals("undated", invoice.getString("maturity_status"))
-        assertEquals("", invoice.getString("due_date"))
+        // The fixture supplier has explicit NET 15 terms; the immutable invoice
+        // snapshot therefore matures on 2026-10-16 and is overdue at the supplied as-of date.
+        assertEquals("overdue", invoice.getString("maturity_status"))
+        assertEquals("2026-10-16", invoice.getString("due_date"))
         assertEquals("2026-10-01", invoice.getString("invoice_date"))
     }
 
