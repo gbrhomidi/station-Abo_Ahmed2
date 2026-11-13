@@ -978,9 +978,15 @@ object SupplierPayablesRepository {
                       COALESCE((SELECT SUM(a.amount) FROM supplier_invoice_allocations a
                         WHERE a.payment_id=p.id AND a.station_id=p.station_id
                           AND a.status='posted' AND a.is_deleted=0),0) AS allocated_amount,
-                      COALESCE((SELECT SUM(a.amount) FROM supplier_invoice_allocations a
+                      COALESCE((SELECT SUM(
+                          CASE WHEN a.status='reversed' THEN a.amount
+                               ELSE COALESCE((SELECT SUM(r.amount) FROM supplier_allocation_reversals r
+                                              WHERE r.station_id=a.station_id AND r.allocation_id=a.id
+                                                AND r.status='posted'),0)
+                          END)
+                        FROM supplier_invoice_allocations a
                         WHERE a.payment_id=p.id AND a.station_id=p.station_id
-                          AND a.status='reversed' AND a.is_deleted=0),0) AS reversed_amount
+                          AND a.status IN ('posted','reversed') AND a.is_deleted=0),0) AS reversed_amount
                FROM payments p
                LEFT JOIN parties pt ON pt.id=p.supplier_party_id AND pt.station_id=p.station_id
                WHERE ${where.joinToString(" AND ")}

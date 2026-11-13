@@ -392,6 +392,7 @@ class SupplierPayablesRobolectricTest {
         )
         val payments = SupplierPayablesRepository.getSupplierPayments(db, 1, supplierId)
         assertEquals(1, payments.length())
+        assertEquals(125.0, payments.getJSONObject(0).getDouble("reversed_amount"), 0.0001)
         val allocations = payments.getJSONObject(0).getJSONArray("allocations")
         assertEquals(1, allocations.length())
         val allocation = allocations.getJSONObject(0)
