@@ -60,12 +60,17 @@ class SupplierPayablesRobolectricTest {
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
     }
 
-    private fun createCompletedSupplierPayment(amount: Double, suffix: String, currencyId: Long? = null): Long =
-        db.insertOrThrow("payments", null, ContentValues().apply {
+    private fun createCompletedSupplierPayment(
+        amount: Double,
+        suffix: String,
+        currencyId: Long? = null,
+        stationId: Int = 1,
+        targetSupplierId: Long = supplierId
+    ): Long = db.insertOrThrow("payments", null, ContentValues().apply {
             put("uuid", UUID.randomUUID().toString())
             put("payment_code", "SP-TEST-$suffix")
-            put("station_id", 1)
-            put("supplier_party_id", supplierId)
+            put("station_id", stationId)
+            put("supplier_party_id", targetSupplierId)
             put("payment_type", "cash")
             put("payment_method", "cash")
             put("amount", amount)
@@ -795,6 +800,88 @@ class SupplierPayablesRobolectricTest {
             check(cursor.moveToFirst())
             assertEquals(1, cursor.getInt(0))
             assertEquals(25.0, cursor.getDouble(1), 0.0001)
+        }
+    }
+
+    @Test
+    fun partialAllocationReleaseRemainsUnappliedCreditAcrossCurrenciesAndStations() {
+        val partyTypeId = db.rawQuery(
+            "SELECT id FROM party_types WHERE type_code='SUPPLIER' AND is_deleted=0 LIMIT 1",
+            null
+        ).use { cursor -> check(cursor.moveToFirst()); cursor.getLong(0) }
+        val secondStationSupplier = helper.insertParty(
+            JSONObject()
+                .put("party_type_id", partyTypeId)
+                .put("party_type", "supplier")
+                .put("commercial_name", "Second station supplier")
+                .put("commercial_name_ar", "مورد المحطة الثانية")
+                .put("is_active", true),
+            2
+        )
+        val stationSuppliers = listOf(1 to supplierId, 2 to secondStationSupplier)
+
+        stationSuppliers.forEachIndexed { stationIndex, (stationId, targetSupplierId) ->
+            listOf(2L, 3L).forEachIndexed { currencyIndex, currencyId ->
+                val suffix = "RELEASE-S${stationId}-C${currencyId}"
+                val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+                    db, stationId, targetSupplierId, "manual",
+                    98500L + stationIndex * 100L + currencyIndex,
+                    "RELEASE-${stationId}-${currencyId}",
+                    1000.0, "2026-11-01", currencyId, 1
+                )
+                val firstPayment = createCompletedSupplierPayment(300.0, "$suffix-300", currencyId, stationId, targetSupplierId)
+                val secondPayment = createCompletedSupplierPayment(200.0, "$suffix-200", currencyId, stationId, targetSupplierId)
+                val finalPayment = createCompletedSupplierPayment(600.0, "$suffix-600", currencyId, stationId, targetSupplierId)
+
+                SupplierPayablesRepository.allocatePayment(db, stationId, targetSupplierId, firstPayment, 300.0, 1, invoiceId)
+                SupplierPayablesRepository.allocatePayment(db, stationId, targetSupplierId, secondPayment, 200.0, 1, invoiceId)
+                val firstAllocationId = db.rawQuery(
+                    "SELECT id FROM supplier_invoice_allocations WHERE station_id=? AND payment_id=? AND supplier_invoice_id=? AND status='posted' AND is_deleted=0",
+                    arrayOf(stationId.toString(), firstPayment.toString(), invoiceId.toString())
+                ).use { cursor -> check(cursor.moveToFirst()); cursor.getLong(0) }
+                val released = SupplierPayablesRepository.reversePaymentAllocation(
+                    db, stationId, targetSupplierId, firstAllocationId, 100.0, 1,
+                    "تحرير رصيد غير مخصص بعد عكس تخصيص جزئي", "$suffix-release-100"
+                )
+                assertEquals(100.0, released.getDouble("reversed_amount"), 0.0001)
+                SupplierPayablesRepository.allocatePayment(db, stationId, targetSupplierId, finalPayment, 600.0, 1, invoiceId)
+
+                val invoice = (0 until SupplierPayablesRepository.getSupplierInvoices(db, stationId, targetSupplierId).length())
+                    .map { SupplierPayablesRepository.getSupplierInvoices(db, stationId, targetSupplierId).getJSONObject(it) }
+                    .first { it.getLong("id") == invoiceId }
+                assertEquals(1000.0, invoice.getDouble("allocated_amount"), 0.0001)
+                assertEquals(0.0, invoice.getDouble("remaining_amount"), 0.0001)
+                assertEquals("paid", invoice.getString("status"))
+
+                val aging = SupplierPayablesRepository.getSupplierAging(db, stationId, targetSupplierId, "2026-11-14")
+                val releasedCredit = (0 until aging.getJSONArray("legacy_payment_offsets_by_currency").length())
+                    .map { aging.getJSONArray("legacy_payment_offsets_by_currency").getJSONObject(it) }
+                    .single { it.optLong("currency_id", 0L) == currencyId &&
+                        it.getString("classification") == "allocation_reversal_released_credit" }
+                assertEquals(100.0, releasedCredit.getDouble("amount"), 0.0001)
+                assertEquals(0.0, aging.getJSONArray("currency_totals").length().let { count ->
+                    if (count == 0) 0.0 else (0 until count).sumOf { aging.getJSONArray("currency_totals").getJSONObject(it).getDouble("open_balance") }
+                }, 0.0001)
+
+                val payments = SupplierPayablesRepository.getSupplierPayments(db, stationId, targetSupplierId)
+                val stationCurrencyPayments = (0 until payments.length())
+                    .map { payments.getJSONObject(it) }
+                    .filter { it.optLong("currency_id", 0L) == currencyId }
+                assertEquals(3, stationCurrencyPayments.size)
+                assertEquals(1100.0, stationCurrencyPayments.sumOf { it.getDouble("amount") }, 0.0001)
+                assertEquals(100.0, stationCurrencyPayments.sumOf { it.getDouble("reversed_amount") }, 0.0001)
+                assertEquals(1000.0, stationCurrencyPayments.sumOf {
+                    it.getDouble("allocated_amount") - it.getDouble("reversed_amount")
+                }, 0.0001)
+            }
+
+            val summary = SupplierPayablesRepository.getSupplierPayablesSummary(db, stationId, "2026-11-14")
+            assertEquals(200.0, summary.getDouble("unapplied_payment_amount"), 0.0001)
+            assertEquals(2000.0, summary.getDouble("total_allocated"), 0.0001)
+            assertEquals(0.0, summary.getDouble("total_supplier_payables"), 0.0001)
+            val reconciliation = SupplierPayablesRepository.reconcileSupplier(db, stationId, targetSupplierId, "2026-11-14")
+            assertEquals(200.0, reconciliation.getDouble("unapplied_supplier_credits"), 0.0001)
+            assertEquals(-200.0, reconciliation.getDouble("expected_control_balance"), 0.0001)
         }
     }
 

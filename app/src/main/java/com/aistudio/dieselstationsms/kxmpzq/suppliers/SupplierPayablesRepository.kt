@@ -1141,6 +1141,34 @@ object SupplierPayablesRepository {
                 })
             }
         }
+        // A posted partial allocation reversal releases supplier credit without
+        // reversing the underlying cash payment. Report that released amount as
+        // unapplied credit while the original allocation remains posted. Full payment
+        // reversals retire these reversal rows and the original allocations together.
+        db.rawQuery(
+            """SELECT COALESCE(a.currency_id,0),COALESCE(SUM(r.amount),0),COUNT(*)
+               FROM supplier_allocation_reversals r
+               JOIN supplier_invoice_allocations a
+                 ON a.id=r.allocation_id AND a.station_id=r.station_id AND a.supplier_id=r.supplier_id
+               WHERE r.station_id=? AND r.supplier_id=? AND r.status='posted'
+                 AND a.status='posted' AND a.is_deleted=0
+               GROUP BY COALESCE(a.currency_id,0)
+               ORDER BY COALESCE(a.currency_id,0)""",
+            arrayOf(stationId.toString(),supplierId.toString())
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                val currencyId = cursor.getLong(0)
+                val amount = cursor.getDouble(1)
+                if (currencyId <= 0L) unallocatedWithoutCurrency += amount
+                legacyOffsets.put(JSONObject().apply {
+                    put("currency_id", if(currencyId > 0L) currencyId else JSONObject.NULL)
+                    put("amount", amount)
+                    put("allocation_count", cursor.getInt(2))
+                    put("classification", "allocation_reversal_released_credit")
+                    put("legacy_balance_offset_not_invoice_allocated", false)
+                })
+            }
+        }
         for(i in 0 until invoices.length()) {
             val row=invoices.getJSONObject(i)
             val remaining=row.optDouble("remaining_amount",0.0).coerceAtLeast(0.0)
@@ -1220,9 +1248,17 @@ object SupplierPayablesRepository {
             }
         }
         var unapplied = 0.0
-        db.rawQuery("""SELECT COALESCE(SUM(amount),0) FROM supplier_invoice_allocations
-             WHERE station_id=? AND supplier_invoice_id IS NULL AND allocation_kind='unapplied_legacy'
-               AND status='posted' AND is_deleted=0""", arrayOf(stationId.toString())
+        db.rawQuery("""SELECT
+                COALESCE((SELECT SUM(amount) FROM supplier_invoice_allocations
+                          WHERE station_id=? AND supplier_invoice_id IS NULL
+                            AND allocation_kind='unapplied_legacy' AND status='posted' AND is_deleted=0),0)
+                + COALESCE((SELECT SUM(r.amount)
+                            FROM supplier_allocation_reversals r
+                            JOIN supplier_invoice_allocations a
+                              ON a.id=r.allocation_id AND a.station_id=r.station_id AND a.supplier_id=r.supplier_id
+                            WHERE r.station_id=? AND r.status='posted'
+                              AND a.status='posted' AND a.is_deleted=0),0)""",
+            arrayOf(stationId.toString(),stationId.toString())
         ).use { c -> if (c.moveToFirst()) unapplied = c.getDouble(0).coerceAtLeast(0.0) }
         return JSONObject().apply {
             put("source", "SupplierPayablesRepository.supplier_invoices")
@@ -1310,7 +1346,18 @@ object SupplierPayablesRepository {
         var openInvoices = 0.0
         for (i in 0 until aging.getJSONArray("currency_totals").length()) openInvoices += aging.getJSONArray("currency_totals").getJSONObject(i).optDouble("open_balance", 0.0)
         var unapplied = 0.0
-        db.rawQuery("SELECT COALESCE(SUM(amount),0) FROM supplier_invoice_allocations WHERE station_id=? AND supplier_id=? AND supplier_invoice_id IS NULL AND status='posted' AND is_deleted=0", arrayOf(stationId.toString(), supplierId.toString())).use { if (it.moveToFirst()) unapplied = it.getDouble(0) }
+        db.rawQuery("""SELECT
+                COALESCE((SELECT SUM(amount) FROM supplier_invoice_allocations
+                          WHERE station_id=? AND supplier_id=? AND supplier_invoice_id IS NULL
+                            AND status='posted' AND is_deleted=0),0)
+                + COALESCE((SELECT SUM(r.amount)
+                            FROM supplier_allocation_reversals r
+                            JOIN supplier_invoice_allocations a
+                              ON a.id=r.allocation_id AND a.station_id=r.station_id AND a.supplier_id=r.supplier_id
+                            WHERE r.station_id=? AND r.supplier_id=? AND r.status='posted'
+                              AND a.status='posted' AND a.is_deleted=0),0)""",
+            arrayOf(stationId.toString(),supplierId.toString(),stationId.toString(),supplierId.toString())
+        ).use { if (it.moveToFirst()) unapplied = it.getDouble(0).coerceAtLeast(0.0) }
         val expected = openInvoices - unapplied
         val ledger = db.rawQuery("SELECT COALESCE(SUM(credit-debit),0) FROM supplier_ledger WHERE party_id=?", arrayOf(supplierId.toString())).use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
         val party = db.rawQuery("SELECT current_balance,total_due,total_payments FROM parties WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(supplierId.toString(), stationId.toString())).use { c -> require(c.moveToFirst()) { "المورد غير موجود" }; JSONObject().apply { put("current_balance", c.getDouble(0)); put("total_due", c.getDouble(1)); put("total_payments", c.getDouble(2)) } }
