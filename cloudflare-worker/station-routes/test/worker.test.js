@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import worker, { readBoundedBody, validCoordinate, validateRouteRequest } from '../src/index.js';
+import worker, { readBoundedBody, readBoundedJsonResponse, validCoordinate, validateRouteRequest } from '../src/index.js';
 
 test('health is public and identifies the routing provider', async () => {
   const response = await worker.fetch(new Request('https://worker/health'), {});
@@ -81,4 +81,41 @@ test('bounded body reader rejects malformed UTF-8', async () => {
     body: new Uint8Array([0xc3, 0x28])
   });
   await assert.rejects(readBoundedBody(request), error => error.status === 400);
+});
+
+
+test('OSRM response reader accepts valid JSON within its byte budget', async () => {
+  const payload = { code: 'Ok', routes: [{ distance: 1200, duration: 90, geometry: 'abc' }] };
+  const response = new Response(JSON.stringify(payload), {
+    headers: { 'content-type': 'application/json' }
+  });
+  assert.deepEqual(await readBoundedJsonResponse(response, 1024), payload);
+});
+
+test('OSRM response reader cancels oversized upstream streams', async () => {
+  let cancelled = false;
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('x'.repeat(80)));
+      controller.enqueue(new TextEncoder().encode('x'.repeat(80)));
+    },
+    cancel() { cancelled = true; }
+  });
+  const response = new Response(stream);
+  await assert.rejects(
+    readBoundedJsonResponse(response, 100),
+    error => error.status === 502
+  );
+  assert.equal(cancelled, true);
+});
+
+test('OSRM response reader rejects malformed JSON and invalid limits', async () => {
+  await assert.rejects(
+    readBoundedJsonResponse(new Response('{invalid'), 100),
+    error => error.status === 502
+  );
+  await assert.rejects(
+    readBoundedJsonResponse(new Response('{}'), 0),
+    error => error instanceof TypeError
+  );
 });

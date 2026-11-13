@@ -5,6 +5,7 @@ const APP_CHECK_JWKS = createRemoteJWKSet(
 );
 const routeCache = new Map();
 const MAX_BODY_BYTES = 16 * 1024;
+const MAX_OSRM_RESPONSE_BYTES = 1024 * 1024;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 256;
 
@@ -100,6 +101,46 @@ export async function readBoundedBody(request) {
   }
 }
 
+export async function readBoundedJsonResponse(response, maxBytes = MAX_OSRM_RESPONSE_BYTES) {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
+    throw new TypeError('maxBytes must be a positive safe integer');
+  }
+  if (!response.body) {
+    throw Object.assign(new Error('Routing provider returned an empty response'), { status: 502 });
+  }
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel('Routing provider response exceeds configured limit');
+        throw Object.assign(new Error('Routing provider response is too large'), { status: 502 });
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return JSON.parse(text);
+  } catch {
+    throw Object.assign(new Error('Routing provider returned invalid JSON'), { status: 502 });
+  }
+}
+
 async function getRoute(request, env) {
   await verifyAppCheck(request, env);
 
@@ -131,7 +172,7 @@ async function getRoute(request, env) {
     headers: { accept: 'application/json' },
     signal: AbortSignal.timeout(12000)
   });
-  const payload = await upstream.json().catch(() => ({}));
+  const payload = await readBoundedJsonResponse(upstream);
   const candidates = Array.isArray(payload.routes) ? payload.routes : [];
   const validRoutes = candidates.filter(route =>
     Number.isFinite(route.distance) && route.distance > 0 &&
