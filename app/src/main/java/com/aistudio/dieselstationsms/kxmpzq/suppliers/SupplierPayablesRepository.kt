@@ -703,11 +703,17 @@ object SupplierPayablesRepository {
         idempotencyKey: String
     ): JSONObject {
         db.rawQuery(
-            "SELECT amount FROM supplier_allocation_reversals WHERE station_id=? AND idempotency_key=? AND status='posted' LIMIT 1",
+            "SELECT allocation_id,supplier_id,amount FROM supplier_allocation_reversals WHERE station_id=? AND idempotency_key=? AND status='posted' LIMIT 1",
             arrayOf(stationId.toString(), idempotencyKey)
         ).use { cursor ->
-            if (cursor.moveToFirst()) return JSONObject().apply {
-                put("success", true); put("idempotent", true); put("reversed_amount", cursor.getDouble(0)); put("allocation_id", allocationId)
+            if (cursor.moveToFirst()) {
+                require(cursor.getLong(0) == allocationId && cursor.getLong(1) == supplierId &&
+                    abs(cursor.getDouble(2) - amount) <= EPSILON) {
+                    "مفتاح عكس التخصيص مستخدم مسبقاً لعملية أو مبلغ مختلف"
+                }
+                return JSONObject().apply {
+                    put("success", true); put("idempotent", true); put("reversed_amount", cursor.getDouble(2)); put("allocation_id", allocationId)
+                }
             }
         }
         data class Original(val paymentId: Long, val invoiceId: Long, val amount: Double, val currencyId: Long)

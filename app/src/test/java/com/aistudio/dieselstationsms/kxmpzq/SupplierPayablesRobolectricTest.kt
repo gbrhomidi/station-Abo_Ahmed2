@@ -500,6 +500,55 @@ class SupplierPayablesRobolectricTest {
     }
 
     @Test
+    fun partialAllocationReversalIdempotencyKeyCannotBeReusedForAnotherAllocationOrAmount() {
+        val firstInvoice = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 93003, "MAN-IDEMPOTENCY-A", 100.0, "2026-10-01", null, 1
+        )
+        val secondInvoice = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 93004, "MAN-IDEMPOTENCY-B", 100.0, "2026-10-01", null, 1
+        )
+        val firstPayment = createCompletedSupplierPayment(100.0, "IDEMPOTENCY-A")
+        val secondPayment = createCompletedSupplierPayment(100.0, "IDEMPOTENCY-B")
+        SupplierPayablesRepository.allocatePayment(db, 1, supplierId, firstPayment, 100.0, 1, firstInvoice)
+        SupplierPayablesRepository.allocatePayment(db, 1, supplierId, secondPayment, 100.0, 1, secondInvoice)
+        fun allocationId(paymentId: Long): Long = db.rawQuery(
+            "SELECT id FROM supplier_invoice_allocations WHERE payment_id=? AND status='posted' AND is_deleted=0",
+            arrayOf(paymentId.toString())
+        ).use { cursor -> check(cursor.moveToFirst()); cursor.getLong(0) }
+        val firstAllocation = allocationId(firstPayment)
+        val secondAllocation = allocationId(secondPayment)
+
+        val original = SupplierPayablesRepository.reversePaymentAllocation(
+            db, 1, supplierId, firstAllocation, 25.0, 1, "عكس أول", "shared-reversal-key"
+        )
+        assertFalse(original.getBoolean("idempotent"))
+        val retry = SupplierPayablesRepository.reversePaymentAllocation(
+            db, 1, supplierId, firstAllocation, 25.0, 1, "إعادة المحاولة", "shared-reversal-key"
+        )
+        assertTrue(retry.getBoolean("idempotent"))
+        assertEquals(25.0, retry.getDouble("reversed_amount"), 0.0001)
+
+        assertTrue(runCatching {
+            SupplierPayablesRepository.reversePaymentAllocation(
+                db, 1, supplierId, secondAllocation, 25.0, 1, "إعادة استخدام المفتاح", "shared-reversal-key"
+            )
+        }.isFailure)
+        assertTrue(runCatching {
+            SupplierPayablesRepository.reversePaymentAllocation(
+                db, 1, supplierId, firstAllocation, 20.0, 1, "تغيير مبلغ المفتاح", "shared-reversal-key"
+            )
+        }.isFailure)
+        db.rawQuery(
+            "SELECT COUNT(*),COALESCE(SUM(amount),0) FROM supplier_allocation_reversals WHERE station_id=1 AND idempotency_key='shared-reversal-key' AND status='posted'",
+            null
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+            assertEquals(25.0, cursor.getDouble(1), 0.0001)
+        }
+    }
+
+    @Test
     fun currentPaymentExcessOffsetsAreReportedSeparatelyPerCurrency() {
         SupplierPayablesRepository.createPurchaseInvoice(
             db, 1, supplierId, "manual", 94001, "MAN-94001",
