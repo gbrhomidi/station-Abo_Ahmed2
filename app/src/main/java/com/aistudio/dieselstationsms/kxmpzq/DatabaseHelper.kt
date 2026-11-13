@@ -22277,7 +22277,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }, where, whereArgs) else db.delete(spec.table, where, whereArgs)
             if (rows > 0) {
                 if (screenKey == "attendance") logOperationalAudit(screenKey, "delete", id, actorId, oldRow, operationalRowJson(screenKey, id))
-                else { logActivity("system", "archive_${spec.table}", "أرشفة سجل ${spec.table}: $id"); if (screenKey == "employees") logEmployeeAudit(id, "archive", actorId, oldRow, operationalRowJson(screenKey, id), "أرشفة من شاشة الموظفين") }
+                else { val deleteAction = if (spec.softDeleted) "archive_${spec.table}" else "delete_${spec.table}"; val deleteDescription = if (spec.softDeleted) "أرشفة سجل ${spec.table}: $id" else "حذف سجل ${spec.table}: $id"; logActivity("system", deleteAction, deleteDescription); if (screenKey == "employees") logEmployeeAudit(id, "archive", actorId, oldRow, operationalRowJson(screenKey, id), "أرشفة من شاشة الموظفين") }
             }
             rows
         } finally { dbLock.unlock() }
