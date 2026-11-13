@@ -939,7 +939,12 @@ class SupplierPayablesRobolectricTest {
         ).use { c ->
             check(c.moveToFirst())
             assertEquals(0, c.getInt(0))
-            assertEquals("غير مدفوعة", c.getString(1))
+            // Task status is date-derived (overdue / near due / unpaid / review-needed).
+            // The lifecycle invariant here is that a partial allocation must not resolve the task.
+            assertTrue(
+                "يجب أن تبقى مهمة الفاتورة مفتوحة بعد السداد الجزئي",
+                c.getString(1) in setOf("متأخرة", "قريبة من الاستحقاق", "غير مدفوعة", "بحاجة مراجعة")
+            )
             assertTrue(c.isNull(2))
             assertEquals(75.0, c.getDouble(3), 0.0001)
         }
