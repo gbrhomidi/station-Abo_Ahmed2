@@ -161,7 +161,7 @@ class SupplierPayablesRobolectricTest {
         val aging = SupplierPayablesRepository.getSupplierAging(db, 1, supplierId, "2026-11-13")
         val currency = (0 until aging.getJSONArray("currency_totals").length())
             .map { aging.getJSONArray("currency_totals").getJSONObject(it) }
-            .first { it.optLong("currency_id", 0L) == 1L }
+            .first { it.isNull("currency_id") || it.optLong("currency_id", 0L) == 0L }
         assertEquals(75.0, currency.getDouble("open_balance"), 0.0001)
         assertEquals(75.0, currency.getDouble("overdue_amount"), 0.0001)
         assertEquals(75.0, currency.getDouble("overdue_1_30"), 0.0001)
