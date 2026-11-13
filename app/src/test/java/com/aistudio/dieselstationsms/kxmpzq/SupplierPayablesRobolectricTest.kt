@@ -153,6 +153,48 @@ class SupplierPayablesRobolectricTest {
     }
 
     @Test
+    fun supplierAgingSummaryAndStatementUseStrictCanonicalDatesAndAgreeOnOpenBalances() {
+        val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 98912, "AGING-CANONICAL-DATES",
+            75.0, "2026-10-01", null, 1
+        )
+        val aging = SupplierPayablesRepository.getSupplierAging(db, 1, supplierId, "2026-11-13")
+        val currency = (0 until aging.getJSONArray("currency_totals").length())
+            .map { aging.getJSONArray("currency_totals").getJSONObject(it) }
+            .first { it.optLong("currency_id", 0L) == 1L }
+        assertEquals(75.0, currency.getDouble("open_balance"), 0.0001)
+        assertEquals(75.0, currency.getDouble("overdue_amount"), 0.0001)
+        assertEquals(75.0, currency.getDouble("overdue_1_30"), 0.0001)
+
+        val summary = SupplierPayablesRepository.getSupplierPayablesSummary(db, 1, "2026-11-13")
+        assertEquals(75.0, summary.getDouble("total_supplier_payables"), 0.0001)
+        assertEquals(75.0, summary.getDouble("total_overdue"), 0.0001)
+
+        val statement = SupplierPayablesRepository.getSupplierStatement(
+            db, 1, supplierId, "2026-10-01", "2026-10-31"
+        )
+        val movements = statement.getJSONArray("movements")
+        assertEquals(1, movements.length())
+        assertEquals(invoiceId, movements.getJSONObject(0).getLong("movement_id"))
+
+        val invalidDates = listOf("2026-02-30", "2026-1-03", "2026-11-13T12:00:00")
+        invalidDates.forEach { value ->
+            assertTrue(
+                "Supplier statement must reject non-canonical date: $value",
+                runCatching {
+                    SupplierPayablesRepository.getSupplierStatement(db, 1, supplierId, value, null)
+                }.isFailure
+            )
+            assertTrue(
+                "Supplier payables summary must reject non-canonical date: $value",
+                runCatching {
+                    SupplierPayablesRepository.getSupplierPayablesSummary(db, 1, value)
+                }.isFailure
+            )
+        }
+    }
+
+    @Test
     fun supplierInvoiceMaturityUsesValidatedAsOfDateAndRejectsInvalidCalendarDates() {
         val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
             db, 1, supplierId, "manual", 98911, "MATURITY-ASOF",

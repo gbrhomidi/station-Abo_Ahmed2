@@ -1191,7 +1191,8 @@ object SupplierPayablesRepository {
     /** Canonical station-level payable KPIs derived from invoice balances and posted allocations. */
     fun getSupplierPayablesSummary(db: SQLiteDatabase, stationId: Int, asOfDate: String): JSONObject {
         require(stationId > 0) { "معرف المحطة غير صالح" }
-        val asOf = parseDate(asOfDate) ?: throw IllegalArgumentException("تاريخ مستحقات الموردين غير صالح")
+        val asOf = parseOptionalCanonicalDate(asOfDate, "تاريخ مستحقات الموردين")
+            ?: throw IllegalArgumentException("تاريخ مستحقات الموردين مطلوب")
         var invoiced = 0.0; var allocated = 0.0; var outstanding = 0.0; var overdue = 0.0
         var openCount = 0; var overdueCount = 0
         db.rawQuery("""SELECT i.total_amount,
@@ -1243,10 +1244,8 @@ object SupplierPayablesRepository {
     ): JSONObject {
         require(stationId > 0 && supplierId > 0) { "معرف المورد والمحطة مطلوبان" }
         requireSupplierScope(db, supplierId, stationId)
-        val from = parseDate(fromDate)
-        val to = parseDate(toDate)
-        require(fromDate.isNullOrBlank() || from != null) { "تاريخ بداية كشف المورد غير صالح" }
-        require(toDate.isNullOrBlank() || to != null) { "تاريخ نهاية كشف المورد غير صالح" }
+        val from = parseOptionalCanonicalDate(fromDate, "تاريخ بداية كشف المورد")
+        val to = parseOptionalCanonicalDate(toDate, "تاريخ نهاية كشف المورد")
         require(from == null || to == null || !from.isAfter(to)) { "نطاق كشف المورد غير صالح" }
         data class Movement(val date: String, val type: String, val reference: String, val id: Long, val currency: Long, val increase: Double, val decrease: Double, val details: JSONObject)
         val movements = mutableListOf<Movement>()
