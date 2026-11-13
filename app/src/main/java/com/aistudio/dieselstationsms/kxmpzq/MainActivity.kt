@@ -3466,6 +3466,58 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        /** Calculates an optional driving route and returns it asynchronously to the originating WebView. */
+        @JavascriptInterface
+        fun calculateStationRoute(
+            originLatitude: Double,
+            originLongitude: Double,
+            destinationLatitude: Double,
+            destinationLongitude: Double,
+            requestId: String
+        ): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            if (requestId.isBlank() || requestId.length > 80 ||
+                !requestId.matches(Regex("[A-Za-z0-9_-]+"))
+            ) return errorResponse("معرف طلب المسار غير صالح")
+            val origin = StationRoutesClient.Coordinate(originLatitude, originLongitude)
+            val destination = StationRoutesClient.Coordinate(destinationLatitude, destinationLongitude)
+            if (!origin.isValid() || !destination.isValid()) {
+                return errorResponse("حدد إحداثيات صحيحة لنقطتي الانطلاق والوصول")
+            }
+            return try {
+                activity.lifecycleScope.launch {
+                    val result = runCatching { StationRoutesClient.getDrivingRoute(origin, destination) }
+                    val payload = if (result.isSuccess) {
+                        val route = result.getOrThrow()
+                        JSONObject().apply {
+                            put("success", true)
+                            put("provider", route.provider)
+                            put("distanceMeters", route.distanceMeters)
+                            put("distanceKm", route.distanceKm)
+                            put("durationSeconds", route.durationSeconds)
+                            put("encodedPolyline", route.encodedPolyline)
+                            put("cacheHit", route.cacheHit)
+                        }
+                    } else {
+                        JSONObject().apply {
+                            put("success", false)
+                            put("error", result.exceptionOrNull()?.message ?: "تعذر حساب المسار")
+                        }
+                    }
+                    activity.webView?.post {
+                        activity.safeEvaluateJs(
+                            "window.onNativeRouteResult && window.onNativeRouteResult(" +
+                                JSONObject.quote(requestId) + "," + JSONObject.quote(payload.toString()) + ");"
+                        )
+                    }
+                }
+                successResponse(true, "بدأ حساب المسار")
+            } catch (exception: Exception) {
+                DebugLogger.logException("StationRoutes", exception)
+                errorResponse("تعذر بدء حساب المسار")
+            }
+        }
+
         private fun getScreensForUser(
             activity: MainActivity,
             db: DatabaseHelper,

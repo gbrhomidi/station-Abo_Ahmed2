@@ -254,8 +254,8 @@
           <div class="form-field"><label class="field-label" for="endOdometer">عداد النهاية</label><input class="input" id="endOdometer" type="number" min="0" step="0.01" inputmode="decimal" placeholder="قراءة العداد عند الوصول"></div>
           <div class="form-field"><label class="field-label" for="fuelConsumed">الوقود المستهلك (لتر)</label><input class="input" id="fuelConsumed" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
           <div class="form-field"><label class="field-label" for="fuelCost">تكلفة الوقود</label><input class="input" id="fuelCost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
-          <div class="form-field"><label class="field-label" for="startLocation">نقطة الانطلاق</label><input class="input" id="startLocation" type="text" maxlength="255" autocomplete="off" placeholder="مثال: المحطة الرئيسية"></div>
-          <div class="form-field"><label class="field-label" for="endLocation">نقطة الوصول</label><input class="input" id="endLocation" type="text" maxlength="255" autocomplete="off" placeholder="مثال: موقع العميل"></div>
+          <div class="form-field"><label class="field-label" for="startLocation">نقطة الانطلاق</label><input class="input" id="startLocation" type="text" maxlength="255" autocomplete="off" placeholder="مثال: المحطة الرئيسية"><button class="button secondary" type="button" id="pickTripOrigin">تحديد الانطلاق على الخريطة</button></div>
+          <div class="form-field"><label class="field-label" for="endLocation">نقطة الوصول</label><input class="input" id="endLocation" type="text" maxlength="255" autocomplete="off" placeholder="مثال: موقع العميل"><button class="button secondary" type="button" id="pickTripDestination">تحديد الوصول على الخريطة</button></div><div class="form-field wide"><p class="form-hint" id="routeSelectionStatus">لم يحدد الانطلاق · لم يحدد الوصول</p><button class="button secondary" type="button" id="calculateTripRoute">حساب المسافة وزمن الطريق</button><p class="form-hint" id="routeEstimateStatus" aria-live="polite">حساب المسار اختياري ويتطلب اتصال الإنترنت وApp Check؛ لن تُحفظ إحداثيات الخريطة في SQLite.</p></div>
           <div class="form-field wide"><label class="field-label" for="tripPurpose">غرض الرحلة</label><textarea class="textarea" id="tripPurpose" maxlength="2000" placeholder="اشرح الغرض التشغيلي للرحلة"></textarea></div>
           <div class="form-field wide"><label class="field-label" for="tripNotes">ملاحظات</label><textarea class="textarea" id="tripNotes" maxlength="2000" placeholder="ملاحظات تشغيلية اختيارية"></textarea></div>
         </div>
@@ -277,6 +277,77 @@
     'use strict';
     const $ = id => document.getElementById(id);
     const state = { rows: [], vehicles: [], drivers: [], totalCount: 0, page: 1, pageSize: 20, totalPages: 0, pendingDeleteId: 0, searchTimer: null };
+    const routeSelection = { origin: null, destination: null, pendingTarget: null, requestId: null };
+    const routeRequestId = () => 'trip-route-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    window.onNativeMapLocationSelected = (latitude, longitude) => {
+      const point = { latitude: Number(latitude), longitude: Number(longitude) };
+      if (!Number.isFinite(point.latitude) || !Number.isFinite(point.longitude) ||
+          point.latitude < -90 || point.latitude > 90 || point.longitude < -180 ||
+          point.longitude > 180 || (point.latitude === 0 && point.longitude === 0)) {
+        toast('الإحداثيات المستلمة غير صالحة', true); return;
+      }
+      if (routeSelection.pendingTarget === 'origin') routeSelection.origin = point;
+      else if (routeSelection.pendingTarget === 'destination') routeSelection.destination = point;
+      else return;
+      routeSelection.pendingTarget = null;
+      updateRouteSelectionStatus();
+    };
+    window.onNativeRouteResult = (requestId, rawPayload) => {
+      if (requestId !== routeSelection.requestId) return;
+      routeSelection.requestId = null;
+      try {
+        const result = JSON.parse(rawPayload);
+        if (!result.success) throw new Error(result.error || 'تعذر حساب المسار');
+        $('distanceKm').value = Number(result.distanceKm).toFixed(2);
+        $('routeEstimateStatus').textContent =
+          'المسافة عبر الطرق: ' + formatNumber(result.distanceKm) + ' كم · الزمن التقديري: ' +
+          formatNumber(Number(result.durationSeconds) / 60, 0) + ' دقيقة' +
+          (result.cacheHit ? ' · من الذاكرة المؤقتة' : '');
+        toast('تم حساب المسافة من خدمة المسارات');
+      } catch (error) {
+        $('routeEstimateStatus').textContent = error.message || 'تعذر حساب المسار';
+        toast(error.message || 'تعذر حساب المسار؛ يمكنك إدخال المسافة يدوياً', true);
+      }
+    };
+    function updateRouteSelectionStatus() {
+      $('routeSelectionStatus').textContent =
+        (routeSelection.origin ? 'تم تحديد الانطلاق' : 'لم يحدد الانطلاق') + ' · ' +
+        (routeSelection.destination ? 'تم تحديد الوصول' : 'لم يحدد الوصول');
+    }
+    function chooseTripMapPoint(target) {
+      routeSelection.pendingTarget = target;
+      const current = target === 'origin' ? routeSelection.origin : routeSelection.destination;
+      const latitude = current?.latitude ?? 0, longitude = current?.longitude ?? 0;
+      if (!bridge()?.openNativeMapPicker) {
+        routeSelection.pendingTarget = null;
+        toast('محدد الخريطة الأصلي غير متاح في هذا الإصدار', true); return;
+      }
+      const response = JSON.parse(bridge().openNativeMapPicker(latitude, longitude));
+      if (!response.success) {
+        routeSelection.pendingTarget = null;
+        toast(response.message || response.error || 'تعذر فتح الخريطة', true);
+      }
+    }
+    function calculateTripRoute() {
+      if (!routeSelection.origin || !routeSelection.destination) {
+        toast('حدد نقطتي الانطلاق والوصول على الخريطة أولاً', true); return;
+      }
+      if (!bridge()?.calculateStationRoute) {
+        toast('خدمة حساب المسارات غير متاحة في هذا الإصدار', true); return;
+      }
+      const requestId = routeRequestId();
+      routeSelection.requestId = requestId;
+      $('routeEstimateStatus').textContent = 'جارٍ حساب المسار والتحقق من App Check…';
+      const response = JSON.parse(bridge().calculateStationRoute(
+        routeSelection.origin.latitude, routeSelection.origin.longitude,
+        routeSelection.destination.latitude, routeSelection.destination.longitude, requestId
+      ));
+      if (!response.success) {
+        routeSelection.requestId = null;
+        $('routeEstimateStatus').textContent = response.message || response.error || 'تعذر بدء حساب المسار';
+        toast($('routeEstimateStatus').textContent, true);
+      }
+    }
     const bridge = () => window.AndroidInterface;
     const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' })[char]);
     const number = value => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
@@ -397,6 +468,10 @@
     }
     function openTrip(row) {
       $('tripForm').reset(); $('tripId').value = row ? number(row.id) : '';
+      routeSelection.origin = null; routeSelection.destination = null;
+      routeSelection.pendingTarget = null; routeSelection.requestId = null;
+      $('routeEstimateStatus').textContent = 'حساب المسار اختياري ويتطلب اتصال الإنترنت وApp Check؛ لن تُحفظ إحداثيات الخريطة في SQLite.';
+      updateRouteSelectionStatus();
       $('tripModalTitle').textContent = row ? 'تعديل رحلة المركبة' : 'إضافة رحلة جديدة'; $('saveTripButton').textContent = row ? 'حفظ التعديل' : 'حفظ الرحلة';
       if (row) {
         $('tripVehicleId').value = number(row.vehicle_id) || ''; $('tripDriverId').value = number(row.driver_id) || ''; $('tripDate').value = String(row.trip_date || '').slice(0, 10);
@@ -487,7 +562,10 @@
     document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.addEventListener('click', closeByBackdrop));
     $('tripForm').addEventListener('submit', saveTrip); $('statusForm').addEventListener('submit', saveStatus); $('tripVehicleId').addEventListener('change', vehicleChange); $('confirmDeleteButton').addEventListener('click', deleteTrip);
     $('themeButton').addEventListener('click', toggleTheme); $('homeButton').addEventListener('click', () => { window.location.href = 'file:///android_asset/main.html'; });
-    $('newTripButton').addEventListener('click', () => openTrip(null)); $('refreshButton').addEventListener('click', () => loadWorkspace(state.page)); $('reportButton').addEventListener('click', () => setModal('reportModal', true)); $('generateReportButton').addEventListener('click', generateReport); $('exportButton').addEventListener('click', exportCsv); $('filtersButton').addEventListener('click', () => $('searchInput').focus());
+    $('newTripButton').addEventListener('click', () => openTrip(null));
+    $('pickTripOrigin').addEventListener('click', () => chooseTripMapPoint('origin'));
+    $('pickTripDestination').addEventListener('click', () => chooseTripMapPoint('destination'));
+    $('calculateTripRoute').addEventListener('click', calculateTripRoute); $('refreshButton').addEventListener('click', () => loadWorkspace(state.page)); $('reportButton').addEventListener('click', () => setModal('reportModal', true)); $('generateReportButton').addEventListener('click', generateReport); $('exportButton').addEventListener('click', exportCsv); $('filtersButton').addEventListener('click', () => $('searchInput').focus());
     $('nextButton').addEventListener('click', () => loadWorkspace(state.page + 1)); $('previousButton').addEventListener('click', () => loadWorkspace(state.page - 1));
     [$('vehicleFilter'), $('driverFilter'), $('tripStatusFilter'), $('fromDate'), $('toDate'), $('sortBy')].forEach(control => control.addEventListener('change', () => loadWorkspace(1)));
     $('searchInput').addEventListener('input', () => { clearTimeout(state.searchTimer); state.searchTimer = setTimeout(() => loadWorkspace(1), 280); });
