@@ -15,4 +15,19 @@ expect(detail.includes("apiCall('getSupplierAging'"), 'تفاصيل المورد
 expect(detail.includes("apiCall('getSupplierInvoices'"), 'تفاصيل المورد يجب أن تعرض فواتير المورد');
 expect(detail.includes("apiCall('getSupplierPayments'"), 'تفاصيل المورد يجب أن تعرض المدفوعات');
 expect(!detail.includes('تفاصيل الفواتير والمدفوعات والملاحظات المنفصلة غير متاحة'), 'يجب إزالة رسالة عدم توفر كشف المورد');
+
+const supplierFormStart = source.indexOf('<form id="supplierForm"');
+const supplierFormEnd = source.indexOf('</form>', supplierFormStart);
+const supplierForm = source.slice(supplierFormStart, supplierFormEnd);
+expect(supplierForm.includes('id="supplierPaymentTerms"'), 'يجب إتاحة شروط السداد في نموذج المورد');
+const saveStart = source.indexOf('async function saveSupplier()');
+const saveEnd = source.indexOf('// 24. تعديل مورد', saveStart);
+const saveSupplier = source.slice(saveStart, saveEnd);
+expect(saveSupplier.includes("payment_terms: document.getElementById('supplierPaymentTerms').value.trim()"), 'يجب حفظ شروط السداد مع بيانات المورد');
+const editStart = source.indexOf('async function editSupplier(id)');
+const editEnd = source.indexOf('function closeModal()', editStart);
+const editSupplier = source.slice(editStart, editEnd);
+expect(editSupplier.includes("document.getElementById('supplierPaymentTerms').value = getField(supplier, 'payment_terms', 'paymentTerms') || ''"), 'يجب استعادة شروط السداد عند تعديل المورد');
+expect(source.includes('لن يُفترض أجل تلقائي'), 'يجب توضيح عدم افتراض أجل عند غياب الشروط');
+
 console.log('Supplier modal runtime interaction guard contract PASS.');

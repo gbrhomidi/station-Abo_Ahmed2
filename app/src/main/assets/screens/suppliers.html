@@ -1835,6 +1835,13 @@
                     </div>
                 </div>
                 <div class="form-group">
+                    <label class="form-label">شروط سداد المورد</label>
+                    <input type="text" class="form-input" id="supplierPaymentTerms" maxlength="80"
+                        placeholder="مثال: نقداً، صافي 7 يوم، صافي 30 يوم"
+                        aria-describedby="supplierPaymentTermsHint">
+                    <small id="supplierPaymentTermsHint" class="form-hint">اتركه فارغاً إذا لم تُحدد الشروط؛ لن يُفترض أجل تلقائي.</small>
+                </div>
+                <div class="form-group">
                     <label class="form-label">الحد الائتماني</label>
                     <input type="number" class="form-input" id="creditLimit" placeholder="50000" step="0.01">
                 </div>
@@ -3184,6 +3191,7 @@ let pullStartY = 0,
                 email: document.getElementById('email').value.trim(),
                 tax_number: document.getElementById('taxNumber').value.trim(),
                 commercial_register: document.getElementById('commercialRegister').value.trim(),
+                payment_terms: document.getElementById('supplierPaymentTerms').value.trim(),
                 credit_limit: parseFloat(document.getElementById('creditLimit').value) || 0,
                 address: document.getElementById('addressLine1').value.trim(),
                 city: document.getElementById('city').value.trim(),
@@ -3233,6 +3241,7 @@ let pullStartY = 0,
             document.getElementById('taxNumber').value = getField(supplier, 'tax_number', 'taxNumber') || '';
             document.getElementById('commercialRegister').value = getField(supplier, 'commercial_register',
                 'commercialRegister') || '';
+            document.getElementById('supplierPaymentTerms').value = getField(supplier, 'payment_terms', 'paymentTerms') || '';
             document.getElementById('creditLimit').value = getField(supplier, 'credit_limit', 'creditLimit') || '';
             document.getElementById('addressLine1').value = getField(supplier, 'address_line1', 'addressLine1') || '';
             document.getElementById('city').value = getField(supplier, 'city') || '';
