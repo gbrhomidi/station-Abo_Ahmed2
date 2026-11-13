@@ -1987,6 +1987,8 @@
                     case 'getActiveCashBoxes': raw = AndroidInterface.getActiveCashBoxes(); break;
                     case 'getBankAccounts': raw = AndroidInterface.getBankAccounts(); break;
                     case 'makeSupplierPayment': raw = AndroidInterface.makeSupplierPayment(JSON.stringify(p)); break;
+                    case 'reverseSupplierPaymentAllocation': raw = AndroidInterface.reverseSupplierPaymentAllocation(JSON.stringify(p)); break;
+                    case 'reverseSupplierPaymentAllocations': raw = AndroidInterface.reverseSupplierPaymentAllocations(JSON.stringify(p)); break;
                     case 'getPartyById': raw = AndroidInterface.getPartyById(Number(p.id)); break;
                     case 'addSupplier': raw = AndroidInterface.addParty(JSON.stringify({ ...p, party_type: 'supplier', party_type_id: 6 })); break;
                     case 'updateSupplier': raw = AndroidInterface.updateParty(Number(p.id), JSON.stringify({ ...p, party_type: 'supplier', party_type_id: 6 })); break;
@@ -3360,14 +3362,26 @@ let pullStartY = 0,
                     '<td>' + formatCurrency(Number(item.remaining_amount || 0)) + '</td></tr>').join('') :
                     '<tr><td colspan="10" style="text-align:center;padding:12px;">لا توجد فواتير مورد مسجلة في سجل الفواتير الفرعي.</td></tr>';
 
-                const paymentRows = payments.length ? payments.map((item, index) => '<tr>' +
-                    '<td>' + (index + 1) + '</td><td>' + escapeHtml(item.payment_code || ('#' + item.id)) + '</td>' +
-                    '<td>' + escapeHtml(String(item.date || '').slice(0, 10) || '—') + '</td>' +
-                    '<td>' + escapeHtml(item.status || '—') + '</td><td>' + escapeHtml(currencyLabel(item.currency_id)) + '</td>' +
-                    '<td>' + formatCurrency(Number(item.amount || 0)) + '</td>' +
-                    '<td>' + formatCurrency(Number(item.allocated_amount || 0)) + '</td>' +
-                    '<td>' + formatCurrency(Number(item.reversed_amount || 0)) + '</td></tr>').join('') :
-                    '<tr><td colspan="8" style="text-align:center;padding:12px;">لا توجد دفعات مسجلة لهذا المورد.</td></tr>';
+                const paymentRows = payments.length ? payments.map((item, index) => {
+                    const allocations = Array.isArray(item.allocations) ? item.allocations : [];
+                    const actions = allocations.map(allocation => {
+                        const remaining = Math.max(0, Number(allocation.remaining_amount || 0));
+                        if (remaining <= 0.000001) return '';
+                        return '<button class="btn btn-secondary" style="padding:5px 8px;margin:2px;font-size:.7rem;" ' +
+                            'onclick="reverseSupplierAllocation(' + Number(id) + ',' + Number(allocation.allocation_id) + ',' + remaining + ')">' +
+                            'عكس تخصيص ' + escapeHtml(allocation.invoice_number || ('#' + allocation.supplier_invoice_id)) +
+                            ' — المتبقي ' + formatCurrency(remaining) + '</button>';
+                    }).join('');
+                    return '<tr>' +
+                        '<td>' + (index + 1) + '</td><td>' + escapeHtml(item.payment_code || ('#' + item.id)) + '</td>' +
+                        '<td>' + escapeHtml(String(item.date || '').slice(0, 10) || '—') + '</td>' +
+                        '<td>' + escapeHtml(item.status || '—') + '</td><td>' + escapeHtml(currencyLabel(item.currency_id)) + '</td>' +
+                        '<td>' + formatCurrency(Number(item.amount || 0)) + '</td>' +
+                        '<td>' + formatCurrency(Number(item.allocated_amount || 0)) + '</td>' +
+                        '<td>' + formatCurrency(Number(item.reversed_amount || 0)) + '</td>' +
+                        '<td>' + (actions || '<span style="color:var(--text-muted);">لا توجد تخصيصات قابلة للعكس</span>') + '</td></tr>';
+                }).join('') :
+                    '<tr><td colspan="9" style="text-align:center;padding:12px;">لا توجد دفعات مسجلة لهذا المورد.</td></tr>';
 
                 const legacyHtml = legacyOffsets.length ? '<div style="margin-top:10px;"><strong>تسويات رصيد تاريخي غير موزعة على فواتير محددة</strong>' +
                     '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:7px;">' +
@@ -3405,7 +3419,7 @@ let pullStartY = 0,
                     </div>
                     <div class="details-section"><div class="details-section-title"><i class="fas fa-money-check-alt"></i> المدفوعات والتخصيصات</div>
                         <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:650px;">
-                        <thead><tr>${['#','رقم الدفعة','التاريخ','الحالة','العملة','مبلغ الدفعة','المخصص حالياً','المعكوس'].map(x=>'<th style="padding:8px;text-align:right;border-bottom:1px solid var(--border-color);">'+x+'</th>').join('')}</tr></thead>
+                        <thead><tr>${['#','رقم الدفعة','التاريخ','الحالة','العملة','مبلغ الدفعة','المخصص حالياً','المعكوس','إجراء على تخصيص الفاتورة'].map(x=>'<th style="padding:8px;text-align:right;border-bottom:1px solid var(--border-color);">'+x+'</th>').join('')}</tr></thead>
                         <tbody>${paymentRows}</tbody></table></div>
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;">
@@ -3417,6 +3431,36 @@ let pullStartY = 0,
                 host.innerHTML = '<div class="details-header"><h3 class="details-title">📋 تفاصيل المورد</h3><button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button></div>' +
                     '<div class="empty-state">' + escapeHtml(e.message || 'تعذر تحميل كشف حساب المورد') + '</div>';
                 showToast(e.message || 'تعذر تحميل كشف حساب المورد', 'error');
+            }
+        }
+
+        async function reverseSupplierAllocation(supplierId, allocationId, remainingAmount) {
+            const maximum = Math.max(0, Number(remainingAmount || 0));
+            if (maximum <= 0.000001) return;
+            const entered = window.prompt('أدخل مبلغ عكس التخصيص فقط. الحد الأقصى: ' + maximum.toFixed(2), maximum.toFixed(2));
+            if (entered === null) return;
+            const amount = Number(entered);
+            if (!Number.isFinite(amount) || amount <= 0 || amount > maximum + 0.000001) {
+                showToast('مبلغ العكس غير صالح أو يتجاوز المتبقي من التخصيص', 'error');
+                return;
+            }
+            const reason = window.prompt('سبب عكس تخصيص الفاتورة:', 'تصحيح تخصيص دفعة المورد');
+            if (reason === null) return;
+            const idempotencyKey = 'supplier-allocation-reversal-' + String(supplierId) + '-' +
+                String(allocationId) + '-' + (window.crypto && typeof window.crypto.randomUUID === 'function'
+                    ? window.crypto.randomUUID() : String(Date.now()) + '-' + String(Math.random()).slice(2));
+            try {
+                const response = await apiCall('reverseSupplierPaymentAllocation', {
+                    supplier_id: Number(supplierId), allocation_id: Number(allocationId),
+                    amount, reason: String(reason).trim(), idempotency_key: idempotencyKey
+                });
+                if (!response.success) throw new Error(response.message || 'تعذر عكس التخصيص');
+                const result = response.data || response;
+                showToast('تم عكس تخصيص بقيمة ' + formatCurrency(result.reversed_amount || amount) +
+                    '. لم يتم عكس حركة الصندوق أو القيد المالي.', 'success');
+                await viewDetails(Number(supplierId));
+            } catch (e) {
+                showToast(e.message || 'تعذر عكس تخصيص المورد', 'error');
             }
         }
 

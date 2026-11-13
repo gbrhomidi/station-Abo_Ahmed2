@@ -377,6 +377,32 @@ class SupplierPayablesRobolectricTest {
     }
 
     @Test
+    fun supplierPaymentListingExposesAllocationIdsAndRemainingReversibleAmounts() {
+        val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 93005, "MAN-PAYMENT-LIST-ALLOCATION", 500.0, "2026-10-01", null, 1
+        )
+        val paymentId = createCompletedSupplierPayment(500.0, "PAYMENT-LIST-ALLOCATION")
+        SupplierPayablesRepository.allocatePayment(db, 1, supplierId, paymentId, 500.0, 1, invoiceId)
+        val allocationId = db.rawQuery(
+            "SELECT id FROM supplier_invoice_allocations WHERE payment_id=? AND supplier_invoice_id=? AND status='posted' AND is_deleted=0",
+            arrayOf(paymentId.toString(), invoiceId.toString())
+        ).use { cursor -> check(cursor.moveToFirst()); cursor.getLong(0) }
+        SupplierPayablesRepository.reversePaymentAllocation(
+            db, 1, supplierId, allocationId, 125.0, 1, "اختبار عرض التخصيص الجزئي", "payment-list-reversal-125"
+        )
+        val payments = SupplierPayablesRepository.getSupplierPayments(db, 1, supplierId)
+        assertEquals(1, payments.length())
+        val allocations = payments.getJSONObject(0).getJSONArray("allocations")
+        assertEquals(1, allocations.length())
+        val allocation = allocations.getJSONObject(0)
+        assertEquals(allocationId, allocation.getLong("allocation_id"))
+        assertEquals(invoiceId, allocation.getLong("supplier_invoice_id"))
+        assertEquals(500.0, allocation.getDouble("allocated_amount"), 0.0001)
+        assertEquals(125.0, allocation.getDouble("reversed_amount"), 0.0001)
+        assertEquals(375.0, allocation.getDouble("remaining_amount"), 0.0001)
+    }
+
+    @Test
     fun supplierDataCannotBeReadAcrossStationScope() {
         var rejected = false
         try {

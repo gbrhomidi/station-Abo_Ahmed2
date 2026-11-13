@@ -987,13 +987,42 @@ object SupplierPayablesRepository {
                ORDER BY datetime(p.created_at) DESC,p.id DESC""",
             args.toTypedArray()
         ).use { c ->
-            while(c.moveToNext()) rows.put(JSONObject().apply {
-                put("id",c.getLong(0));put("supplier_id",c.getLong(1));put("payment_code",c.getString(2))
-                put("amount",c.getDouble(3));put("payment_method",c.getString(4));put("status",c.getString(5))
-                put("date",c.getString(6).orEmpty());put("currency_id",if(c.isNull(7)) JSONObject.NULL else c.getLong(7))
-                put("supplier_name",c.getString(8).orEmpty());put("allocated_amount",c.getDouble(9))
-                put("reversed_amount",c.getDouble(10))
-            })
+            while(c.moveToNext()) {
+                val paymentId = c.getLong(0)
+                val paymentRow = JSONObject().apply {
+                    put("id",paymentId);put("supplier_id",c.getLong(1));put("payment_code",c.getString(2))
+                    put("amount",c.getDouble(3));put("payment_method",c.getString(4));put("status",c.getString(5))
+                    put("date",c.getString(6).orEmpty());put("currency_id",if(c.isNull(7)) JSONObject.NULL else c.getLong(7))
+                    put("supplier_name",c.getString(8).orEmpty());put("allocated_amount",c.getDouble(9))
+                    put("reversed_amount",c.getDouble(10))
+                }
+                val allocationRows = JSONArray()
+                db.rawQuery(
+                    """SELECT a.id,a.supplier_invoice_id,COALESCE(i.invoice_number,''),a.amount,
+                              COALESCE((SELECT SUM(r.amount) FROM supplier_allocation_reversals r
+                                        WHERE r.station_id=a.station_id AND r.allocation_id=a.id AND r.status='posted'),0)
+                       FROM supplier_invoice_allocations a
+                       LEFT JOIN supplier_invoices i ON i.id=a.supplier_invoice_id
+                           AND i.station_id=a.station_id AND i.supplier_id=a.supplier_id
+                       WHERE a.station_id=? AND a.supplier_id=? AND a.payment_id=?
+                         AND a.allocation_kind='invoice' AND a.status='posted' AND a.is_deleted=0
+                       ORDER BY a.id""",
+                    arrayOf(stationId.toString(),c.getLong(1).toString(),paymentId.toString())
+                ).use { allocations ->
+                    while(allocations.moveToNext()) {
+                        val originalAmount = allocations.getDouble(3)
+                        val reversedAmount = allocations.getDouble(4).coerceAtLeast(0.0)
+                        allocationRows.put(JSONObject().apply {
+                            put("allocation_id",allocations.getLong(0));put("supplier_invoice_id",allocations.getLong(1))
+                            put("invoice_number",allocations.getString(2).orEmpty());put("allocated_amount",originalAmount)
+                            put("reversed_amount",reversedAmount)
+                            put("remaining_amount",(originalAmount-reversedAmount).coerceAtLeast(0.0))
+                        })
+                    }
+                }
+                paymentRow.put("allocations",allocationRows)
+                rows.put(paymentRow)
+            }
         }
         return rows
     }

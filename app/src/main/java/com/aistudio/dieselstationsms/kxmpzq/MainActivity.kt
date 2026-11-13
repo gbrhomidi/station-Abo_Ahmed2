@@ -9821,6 +9821,53 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+        /**
+         * Reverses an invoice allocation only; the payment, cash/bank movement and journal stay intact.
+         */
+        @JavascriptInterface
+        fun reverseSupplierPaymentAllocation(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val request = JSONObject(jsonData.ifBlank { "{}" })
+                val database = db.writableDatabase
+                SupplierPayablesRepository.ensureSchema(database)
+                dataResponse(SupplierPayablesRepository.reversePaymentAllocation(
+                    database, stationId, request.optLong("supplier_id", 0L),
+                    request.optLong("allocation_id", 0L), request.optDouble("amount", 0.0),
+                    activity.currentUserId, request.optString("reason", ""),
+                    request.optString("idempotency_key", "")
+                ))
+            } catch (e: Exception) {
+                DebugLogger.logException("SupplierAllocationReversal", e)
+                errorResponse(e.message ?: "تعذر عكس تخصيص دفعة المورد")
+            }
+        }
+
+        /**
+         * Reverses invoice allocations only; this is not a payment or cash/bank reversal.
+         */
+        @JavascriptInterface
+        fun reverseSupplierPaymentAllocations(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val request = JSONObject(jsonData.ifBlank { "{}" })
+                val database = db.writableDatabase
+                SupplierPayablesRepository.ensureSchema(database)
+                dataResponse(SupplierPayablesRepository.reversePaymentAllocations(
+                    database, stationId, request.optLong("supplier_id", 0L),
+                    request.optLong("payment_id", 0L), activity.currentUserId,
+                    request.optString("reason", "")
+                ))
+            } catch (e: Exception) {
+                DebugLogger.logException("SupplierAllocationsReversal", e)
+                errorResponse(e.message ?: "تعذر عكس تخصيصات دفعة المورد")
+            }
+        }
+
         @JavascriptInterface
         fun getSupplierAging(supplierId: Long, asOfDate: String = ""): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
