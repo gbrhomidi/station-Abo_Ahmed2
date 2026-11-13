@@ -21304,7 +21304,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    COALESCE(SUM(CASE WHEN e.expense_date >= ? AND e.expense_date < ? THEN e.amount ELSE 0 END), 0) AS current_month_expenses,
                    SUM(CASE WHEN NULLIF(TRIM(COALESCE(e.invoice_path, '')), '') IS NOT NULL THEN 1 ELSE 0 END) AS attached_invoice_count,
                    (SELECT COALESCE(SUM(t.distance_km), 0) FROM vehicle_trips t
-                    WHERE t.trip_status <> 'cancelled' AND COALESCE(t.distance_km, 0) > 0
+                    WHERE t.trip_status = 'completed' AND COALESCE(t.distance_km, 0) > 0
                       AND EXISTS (SELECT 1 FROM vehicles tv JOIN parties tp ON tp.id = tv.party_id WHERE tv.id = t.vehicle_id AND tv.is_deleted = 0 AND tp.station_id = ? AND tp.is_deleted = 0)$tripDateSql) AS total_distance_km
             FROM vehicle_expenses e
             JOIN vehicles v ON v.id = e.vehicle_id AND v.is_deleted = 0
@@ -21315,7 +21315,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             FROM (
                 SELECT e.vehicle_id, $vehicleLabel AS vehicle_name, COALESCE(NULLIF(v.plate_number_ar, ''), NULLIF(v.plate_number, ''), v.vehicle_code) AS plate_number,
                        COALESCE(SUM(e.amount), 0) AS total_expenses, COUNT(*) AS record_count,
-                       (SELECT COALESCE(SUM(t.distance_km), 0) FROM vehicle_trips t WHERE t.vehicle_id = e.vehicle_id AND t.trip_status <> 'cancelled' AND COALESCE(t.distance_km, 0) > 0$tripDateSql) AS distance_km
+                       (SELECT COALESCE(SUM(t.distance_km), 0) FROM vehicle_trips t WHERE t.vehicle_id = e.vehicle_id AND t.trip_status = 'completed' AND COALESCE(t.distance_km, 0) > 0$tripDateSql) AS distance_km
                 FROM vehicle_expenses e JOIN vehicles v ON v.id = e.vehicle_id AND v.is_deleted = 0
                 WHERE $whereSql
                 GROUP BY e.vehicle_id, v.brand, v.model, v.vehicle_code, v.plate_number_ar, v.plate_number
