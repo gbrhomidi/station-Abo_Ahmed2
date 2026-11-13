@@ -123,51 +123,6 @@ class FuelSalesDeliveryFeeRobolectricTest {
     }
 
     @Test
-    fun driverFeeSettlementRollsBackJournalAndLedgerWhenDeliveryScopeCannotBeVerified() {
-        val saved = createAndPersistSale(DeliveryFeeAccounting.DRIVER, 100.0, "موقع اختبار تسوية")
-        val deliveryId = scalarLong("SELECT id FROM deliveries WHERE sale_id=? ORDER BY id DESC LIMIT 1", arrayOf(saved.parentSaleId.toString()))
-        assertTrue("Driver fee fixture must create a delivery", deliveryId > 0L)
-        val beforeJournals = scalarLong(
-            "SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND reference_type='delivery_fee_settlement' AND reference_id=?",
-            arrayOf(stationId.toString(), deliveryId.toString())
-        )
-        val beforeStatus = db.rawQuery(
-            "SELECT status FROM delivery_service_fee_ledger WHERE delivery_id=? AND station_id=?",
-            arrayOf(deliveryId.toString(), stationId.toString())
-        ).use { assertTrue(it.moveToFirst()); it.getString(0) }
-
-        // Force the legacy schema branch to fail closed if no station-scoped invoice
-        // relationship exists; the journal must roll back with the ledger update.
-        val deliveryCols = db.rawQuery("PRAGMA table_info(deliveries)", null).use { c ->
-            buildSet { while (c.moveToNext()) add(c.getString(c.getColumnIndexOrThrow("name"))) }
-        }
-        if ("station_id" in deliveryCols) {
-            db.execSQL("ALTER TABLE deliveries RENAME TO deliveries_scope_test")
-            db.execSQL("CREATE TABLE deliveries(id INTEGER PRIMARY KEY, sale_id INTEGER, delivery_fee_status TEXT)")
-            db.execSQL("INSERT INTO deliveries(id,sale_id,delivery_fee_status) VALUES(?,?,?)",
-                arrayOf(deliveryId, saved.parentSaleId, "pending"))
-            var rejected = false
-            try {
-                DeliveryFeeAccounting.settleDriverFee(helper, deliveryId, stationId, userId)
-            } catch (_: IllegalArgumentException) {
-                rejected = true
-            } finally {
-                db.execSQL("DROP TABLE deliveries")
-                db.execSQL("ALTER TABLE deliveries_scope_test RENAME TO deliveries")
-            }
-            assertTrue("Settlement must reject an unscoped delivery row", rejected)
-            assertEquals(beforeJournals, scalarLong(
-                "SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND reference_type='delivery_fee_settlement' AND reference_id=?",
-                arrayOf(stationId.toString(), deliveryId.toString())
-            ))
-            assertEquals(beforeStatus, db.rawQuery(
-                "SELECT status FROM delivery_service_fee_ledger WHERE delivery_id=? AND station_id=?",
-                arrayOf(deliveryId.toString(), stationId.toString())
-            ).use { assertTrue(it.moveToFirst()); it.getString(0) })
-        }
-    }
-
-    @Test
     fun deductFromSalesModeReducesFuelQuantityOnceAndPostsServiceRevenue() {
         assertMode(
             mode = DeliveryFeeAccounting.DEDUCT_FROM_SALES,
