@@ -991,50 +991,76 @@ object DeliveryFeeAccounting {
     fun settleDriverFee(helper: DatabaseHelper, deliveryId: Long, stationId: Int, userId: Long): JSONObject {
         ensureSchema(helper)
         val db = helper.writableDatabase
-        val record = db.rawQuery(
-            "SELECT id,amount,mode,status,journal_entry_id,employee_payment_id FROM delivery_service_fee_ledger WHERE delivery_id=? AND station_id=? LIMIT 1",
-            arrayOf(deliveryId.toString(), stationId.toString())
-        ).use { c ->
-            if (!c.moveToFirst()) null else JSONObject().apply {
-                put("id", c.getLong(0)); put("amount", c.getDouble(1)); put("mode", c.getString(2))
-                put("status", c.getString(3)); put("journal_entry_id", if (c.isNull(4)) 0L else c.getLong(4))
-                put("employee_payment_id", if (c.isNull(5)) 0L else c.getLong(5))
+        db.beginTransaction()
+        try {
+            // Re-read under the write transaction: concurrent settlement requests must
+            // observe the first posted settlement instead of creating a second journal.
+            val record = db.rawQuery(
+                "SELECT id,amount,mode,status,journal_entry_id,employee_payment_id FROM delivery_service_fee_ledger WHERE delivery_id=? AND station_id=? LIMIT 1",
+                arrayOf(deliveryId.toString(), stationId.toString())
+            ).use { c ->
+                if (!c.moveToFirst()) null else JSONObject().apply {
+                    put("id", c.getLong(0)); put("amount", c.getDouble(1)); put("mode", c.getString(2))
+                    put("status", c.getString(3)); put("journal_entry_id", if (c.isNull(4)) 0L else c.getLong(4))
+                    put("employee_payment_id", if (c.isNull(5)) 0L else c.getLong(5))
+                }
+            } ?: throw IllegalArgumentException("لا توجد رسوم توصيل مسجلة لهذا الطلب")
+            if (normalizeMode(record.optString("mode")) != DRIVER) {
+                throw IllegalArgumentException("هذا الطلب ليس على حساب السائق")
             }
-        } ?: throw IllegalArgumentException("لا توجد رسوم توصيل مسجلة لهذا الطلب")
-        if (normalizeMode(record.optString("mode")) != DRIVER) {
-            throw IllegalArgumentException("هذا الطلب ليس على حساب السائق")
-        }
-        if (record.optString("status") == "settled") {
-            return JSONObject().put("success", true).put("already_settled", true).put("message", "تم تسديد رسوم التوصيل مسبقاً")
-        }
-        require(record.optLong("journal_entry_id", 0L) > 0L) { "لم يتم ترحيل قيد استحقاق السائق بعد" }
+            if (record.optString("status") == "settled") {
+                db.setTransactionSuccessful()
+                return JSONObject().put("success", true).put("already_settled", true).put("message", "تم تسديد رسوم التوصيل مسبقاً")
+            }
+            require(record.optLong("journal_entry_id", 0L) > 0L) { "لم يتم ترحيل قيد استحقاق السائق بعد" }
 
-        val ledgerId = record.getLong("id")
-        val amount = record.getDouble("amount")
-        val cash = settlementAccount(db, stationId, "cash")
-        val driver = driverReceivableAccount(db)
-        val journalId = postFeeJournal(
-            helper, db, stationId, userId, ledgerId,
-            "تسديد السائق رسوم خدمة التوصيل للطلب رقم $deliveryId",
-            debitAccount = cash,
-            creditAccount = driver,
-            amount = amount,
-            referenceType = "delivery_fee_settlement",
-            referenceId = deliveryId
-        )
-        val values = ContentValues().apply {
-            put("status", "settled")
-            put("settlement_journal_entry_id", journalId)
-            put("settled_by", userId)
-            put("settled_at", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()))
+            val ledgerId = record.getLong("id")
+            val amount = record.getDouble("amount")
+            require(amount.isFinite() && amount > 0.0) { "مبلغ استحقاق السائق غير صالح" }
+            val cash = settlementAccount(db, stationId, "cash")
+            val driver = driverReceivableAccount(db)
+            val journalId = postFeeJournal(
+                helper, db, stationId, userId, ledgerId,
+                "تسديد السائق رسوم خدمة التوصيل للطلب رقم $deliveryId",
+                debitAccount = cash,
+                creditAccount = driver,
+                amount = amount,
+                referenceType = "delivery_fee_settlement",
+                referenceId = deliveryId
+            )
+            val values = ContentValues().apply {
+                put("status", "settled")
+                put("settlement_journal_entry_id", journalId)
+                put("settled_by", userId)
+                put("settled_at", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()))
+            }
+            updateLedger(db, ledgerId, stationId, values)
+
+            val deliveryCols = columns(db, "deliveries")
+            if ("delivery_fee_status" in deliveryCols) {
+                val where: String
+                val args: Array<String>
+                if ("station_id" in deliveryCols) {
+                    where = "id=? AND station_id=?"
+                    args = arrayOf(deliveryId.toString(), stationId.toString())
+                } else {
+                    val invoiceCols = columns(db, "sales_transactions")
+                    require("sale_id" in deliveryCols && setOf("id", "station_id").all { it in invoiceCols }) {
+                        "تعذر التحقق من نطاق محطة سجل التوصيل أثناء التسوية"
+                    }
+                    where = "id=? AND EXISTS (SELECT 1 FROM sales_transactions AS delivery_sale WHERE delivery_sale.id=deliveries.sale_id AND delivery_sale.station_id=?)"
+                    args = arrayOf(deliveryId.toString(), stationId.toString())
+                }
+                check(db.update("deliveries", ContentValues().apply { put("delivery_fee_status", "settled") }, where, args) == 1) {
+                    "تعذر تحديث حالة تسوية رسوم التوصيل في سجل الطلب"
+                }
+            }
+            cancelPayrollDeduction(db, record.optLong("employee_payment_id", 0L))
+            db.setTransactionSuccessful()
+            return JSONObject().put("success", true).put("journal_entry_id", journalId).put("message", "تم إثبات تسديد رسوم التوصيل وإنقاص مديونية السائق بقيد محاسبي")
+        } finally {
+            db.endTransaction()
         }
-        updateLedger(db, ledgerId, stationId, values)
-        val deliveryCols = columns(db, "deliveries")
-        if ("delivery_fee_status" in deliveryCols) {
-            db.update("deliveries", ContentValues().apply { put("delivery_fee_status", "settled") }, "id=? AND station_id=?", arrayOf(deliveryId.toString(), stationId.toString()))
-        }
-        cancelPayrollDeduction(db, record.optLong("employee_payment_id", 0L))
-        return JSONObject().put("success", true).put("journal_entry_id", journalId).put("message", "تم إثبات تسديد رسوم التوصيل وإنقاص مديونية السائق بقيد محاسبي")
     }
 
     fun latestFuelSaleForCustomer(helper: DatabaseHelper, partyId: Long, stationId: Int): JSONObject {
