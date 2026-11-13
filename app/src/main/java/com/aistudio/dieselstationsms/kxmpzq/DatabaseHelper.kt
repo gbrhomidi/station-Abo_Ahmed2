@@ -18788,9 +18788,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         val limit = params.optInt("limit", 1000).coerceIn(1, 5000)
         val offset = params.optInt("offset", 0).coerceAtLeast(0)
-        // Use the station's business timezone; SQLite date('now') is UTC.
-        val adenMonthStart = java.time.LocalDate.now(ZoneId.of("Asia/Aden")).withDayOfMonth(1).toString()
-        val adenNextMonthStart = java.time.LocalDate.parse(adenMonthStart).plusMonths(1).toString()
         val salesColumns = readableDatabase.rawQuery("PRAGMA table_info(sales_transactions)", null).use { cursor ->
             buildSet {
                 while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
@@ -21278,6 +21275,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val whereSql = where.joinToString(" AND ")
         val limit = params.optInt("limit", 60).coerceIn(1, 200)
         val offset = params.optInt("offset", 0).coerceAtLeast(0)
+        // Use the station's business timezone; SQLite date('now') is UTC.
+        val adenMonthStart = java.time.LocalDate.now(ZoneId.of("Asia/Aden")).withDayOfMonth(1).toString()
+        val adenNextMonthStart = java.time.LocalDate.parse(adenMonthStart).plusMonths(1).toString()
         val tripDates = mutableListOf<String>()
         val tripArgs = mutableListOf<String>()
         val from = params.optString("from_date", "").trim()
