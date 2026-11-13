@@ -26,6 +26,7 @@ const tracking = [{ vehicle_id: 101, connection_state: 'recent', last_latitude: 
 function installBridge(window) {
   window.AndroidInterface = {
     getVehicleLocationRecords(payload) { calls.push(['locations', JSON.parse(payload)]); return success(locations); },
+    openNativeMapPicker(latitude, longitude) { calls.push(['mapPicker', latitude, longitude]); return JSON.stringify({ success: true }); },
     getVehicleRecords(payload) { calls.push(['vehicles', JSON.parse(payload)]); return success(vehicles); },
     getVehicleTrackingStatus(payload) { calls.push(['tracking', JSON.parse(payload)]); return success(tracking); },
     getVehicleRouteRecords(payload) { calls.push(['route', JSON.parse(payload)]); return success(locations.slice(0, 2)); },
@@ -71,6 +72,12 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   await wait();
 
   assert.deepEqual(calls.map(call => call[0]).sort(), ['locations', 'tracking', 'vehicles'], 'screen initialization must request locations, fleet records, and tracking status from Android');
+  window.document.querySelector('[data-nav="add"]').click(); await wait();
+  window.document.getElementById('captureVehicleGpsButton').click();
+  assert.ok(calls.some(call => call[0] === 'mapPicker'), 'vehicle form must open native GPS picker');
+  window.onNativeMapLocationSelected(15.3694, 44.1910);
+  assert.equal(window.document.getElementById('latitudeInput').value, '15.3694000', 'GPS latitude must populate form');
+  assert.equal(window.document.getElementById('longitudeInput').value, '44.1910000', 'GPS longitude must populate form');
   calls.forEach(([, payload]) => assert.equal(Object.hasOwn(payload, 'station_id'), false, 'WebView payload must not carry a selectable station id'));
   assert.equal([...leafletState.layers].filter(layer => layer.kind === 'marker').length, 2, 'geographic map must ignore invalid persisted coordinates');
   assert.equal([...leafletState.layers].filter(layer => layer.kind === 'polyline').length, 1, 'geographic map must draw a route only from two valid persisted points');

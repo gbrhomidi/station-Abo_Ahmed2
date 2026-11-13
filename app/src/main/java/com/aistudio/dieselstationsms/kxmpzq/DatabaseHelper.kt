@@ -1127,8 +1127,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureColumn(db, "vehicle_trips", "start_longitude", "REAL")
         ensureColumn(db, "vehicle_trips", "end_latitude", "REAL")
         ensureColumn(db, "vehicle_trips", "end_longitude", "REAL")
+        ensureColumn(db, "vehicle_trips", "route_distance_km", "REAL")
         ensureColumn(db, "vehicle_trips", "route_duration_seconds", "INTEGER")
         ensureColumn(db, "vehicle_trips", "route_provider", "TEXT")
+        ensureColumn(db, "vehicle_trips", "route_encoded_polyline", "TEXT")
         ensureColumn(db, "vehicle_trips", "route_calculated_at", "TEXT")
         ensureColumn(db, "vehicle_expenses", "trip_id", "INTEGER")
         ensureColumn(db, "vehicle_expenses", "source_distance_km", "REAL")
@@ -21335,8 +21337,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             SELECT COUNT(*) AS record_count, COALESCE(SUM(e.amount), 0) AS total_expenses,
                    COALESCE(SUM(CASE WHEN e.expense_date >= ? AND e.expense_date < ? THEN e.amount ELSE 0 END), 0) AS current_month_expenses,
                    SUM(CASE WHEN NULLIF(TRIM(COALESCE(e.invoice_path, '')), '') IS NOT NULL THEN 1 ELSE 0 END) AS attached_invoice_count,
-                   (SELECT COALESCE(SUM(t.distance_km), 0) FROM vehicle_trips t
-                    WHERE t.trip_status = 'completed' AND COALESCE(t.distance_km, 0) > 0
+                   (SELECT COALESCE(SUM(COALESCE(t.route_distance_km, t.distance_km)), 0) FROM vehicle_trips t
+                    WHERE t.trip_status = 'completed' AND COALESCE(t.route_distance_km, t.distance_km, 0) > 0
                       AND EXISTS (SELECT 1 FROM vehicles tv JOIN parties tp ON tp.id = tv.party_id WHERE tv.id = t.vehicle_id AND tv.is_deleted = 0 AND tp.station_id = ? AND tp.is_deleted = 0)$tripDateSql) AS total_distance_km
             FROM vehicle_expenses e
             JOIN vehicles v ON v.id = e.vehicle_id AND v.is_deleted = 0
@@ -21347,7 +21349,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             FROM (
                 SELECT e.vehicle_id, $vehicleLabel AS vehicle_name, COALESCE(NULLIF(v.plate_number_ar, ''), NULLIF(v.plate_number, ''), v.vehicle_code) AS plate_number,
                        COALESCE(SUM(e.amount), 0) AS total_expenses, COUNT(*) AS record_count,
-                       (SELECT COALESCE(SUM(t.distance_km), 0) FROM vehicle_trips t WHERE t.vehicle_id = e.vehicle_id AND t.trip_status = 'completed' AND COALESCE(t.distance_km, 0) > 0$tripDateSql) AS distance_km
+                       (SELECT COALESCE(SUM(COALESCE(t.route_distance_km, t.distance_km)), 0) FROM vehicle_trips t WHERE t.vehicle_id = e.vehicle_id AND t.trip_status = 'completed' AND COALESCE(t.route_distance_km, t.distance_km, 0) > 0$tripDateSql) AS distance_km
                 FROM vehicle_expenses e JOIN vehicles v ON v.id = e.vehicle_id AND v.is_deleted = 0
                 WHERE $whereSql
                 GROUP BY e.vehicle_id, v.brand, v.model, v.vehicle_code, v.plate_number_ar, v.plate_number
@@ -21528,7 +21530,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val rows = readableDatabase.rawQuery(
                 """
                 SELECT t.id, t.vehicle_id, t.driver_id, t.trip_date, t.start_location, t.end_location,
-                       t.distance_km, t.fuel_consumed, t.fuel_cost, t.start_odometer, t.end_odometer,
+                       t.distance_km, t.route_distance_km, t.start_latitude, t.start_longitude, t.end_latitude, t.end_longitude,
+                       t.route_duration_seconds, t.route_provider, t.route_calculated_at, t.route_encoded_polyline,
+                       t.fuel_consumed, t.fuel_cost, t.start_odometer, t.end_odometer,
                        t.trip_purpose, t.notes, t.trip_status, t.scheduled_at, t.started_at, t.completed_at,
                        t.cancelled_at, t.status_note, t.created_at, t.updated_at,
                        v.vehicle_code, COALESCE(v.plate_number_ar, v.plate_number, '') AS plate_number,
@@ -21612,7 +21616,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             readableDatabase.rawQuery(
                 """
                 SELECT t.id, t.vehicle_id, t.driver_id, t.trip_date, t.start_location, t.end_location,
-                       t.distance_km, t.fuel_consumed, t.fuel_cost, t.start_odometer, t.end_odometer,
+                       t.distance_km, t.route_distance_km, t.start_latitude, t.start_longitude, t.end_latitude, t.end_longitude,
+                       t.route_duration_seconds, t.route_provider, t.route_calculated_at, t.route_encoded_polyline,
+                       t.fuel_consumed, t.fuel_cost, t.start_odometer, t.end_odometer,
                        t.trip_purpose, t.notes, t.trip_status, t.scheduled_at, t.started_at, t.completed_at,
                        t.cancelled_at, t.status_note, t.created_at, t.updated_at,
                        v.vehicle_code, COALESCE(v.plate_number_ar, v.plate_number, '') AS plate_number,

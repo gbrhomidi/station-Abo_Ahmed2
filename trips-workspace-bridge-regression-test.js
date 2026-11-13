@@ -103,7 +103,7 @@ function installBridge(window) {
   assert.ok(routeCall, 'route calculation must use the native attested route bridge');
   assert.strictEqual(routeCall[1], 15.3694, 'route origin latitude must be the map-selected value');
   assert.strictEqual(routeCall[3], 15.40, 'route destination latitude must be the map-selected value');
-  window.onNativeRouteResult(routeCall[5], JSON.stringify({ success: true, distanceKm: 12.34, durationSeconds: 900 }));
+  window.onNativeRouteResult(routeCall[5], JSON.stringify({ success: true, provider: 'OSRM', distanceKm: 12.34, durationSeconds: 900, encodedPolyline: 'encoded-road-route' }));
   assert.strictEqual(window.document.getElementById('distanceKm').value, '12.34', 'valid route result must populate trip distance');
   window.document.getElementById('pickTripOrigin').click();
   window.onNativeMapLocationSelected(15.37, 44.20);
@@ -122,6 +122,14 @@ function installBridge(window) {
   assert.strictEqual(saved[1].station_id, undefined, 'saved payload must not carry a station_id');
   assert.strictEqual(saved[1].created_by, undefined, 'saved payload must not carry user identity');
   assert.strictEqual(saved[1].end_odometer, 1259.75, 'numeric odometer must be preserved');
+  assert.strictEqual(saved[1].route_distance_km, 12.34, 'road route distance must be persisted');
+  assert.strictEqual(saved[1].route_duration_seconds, 900, 'route duration must be persisted');
+  assert.strictEqual(saved[1].route_provider, 'OSRM', 'route provider must be auditable');
+  assert.strictEqual(saved[1].route_encoded_polyline, 'encoded-road-route', 'route geometry must be persisted');
+  assert.strictEqual(saved[1].start_latitude, 15.37, 'origin coordinate must be persisted');
+  assert.strictEqual(saved[1].end_longitude, 44.22, 'destination coordinate must be persisted');
+  assert.match(databaseHelper, /ensureColumn\(db, "vehicle_trips", "route_distance_km", "REAL"\)/);
+  assert.match(databaseHelper, /SUM\(COALESCE\(t\.route_distance_km, t\.distance_km\)\)/);
 
   window.document.querySelector('[data-action="edit"]').click();
   window.document.getElementById('tripNotes').value = 'تعديل فعلي';
