@@ -2461,6 +2461,20 @@
                         class="field-warning"
                         id="w_location">
                     </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="f_latitude">خط العرض</label>
+                            <input id="f_latitude" name="latitude" class="form-input" type="number" min="-90" max="90" step="any" placeholder="GPS latitude">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="f_longitude">خط الطول</label>
+                            <input id="f_longitude" name="longitude" class="form-input" type="number" min="-180" max="180" step="any" placeholder="GPS longitude">
+                        </div>
+                    </div>
+                    <div class="form-group full">
+                        <button type="button" class="btn" onclick="pickDeliveryLocation()"><i class="fas fa-map-marker-alt"></i> تحديد موقع التوصيل على الخريطة</button>
+                        <small id="deliveryCoordinatesStatus" aria-live="polite">إحداثيات التوصيل اختيارية ولا تُستنتج من نص العنوان.</small>
+                    </div>
 
                 </div>
 
@@ -4497,6 +4511,9 @@
         $('f_vehicle_display').value = '';
         $('f_driver_id').value = '';
         $('f_driver_display').value = '';
+        $('f_latitude').value = '';
+        $('f_longitude').value = '';
+        $('deliveryCoordinatesStatus').textContent = 'إحداثيات التوصيل اختيارية ولا تُستنتج من نص العنوان.';
 
         setDeliveryFeeInput(0);
         $('f_delivery_fee_mode').value = 'exempt';
@@ -6730,6 +6747,16 @@
         return { valid: true };
     }
 
+    function pickDeliveryLocation() {
+        window.__stationMapTarget = 'delivery';
+        const lat = Number($('f_latitude').value), lng = Number($('f_longitude').value);
+        const response = window.AndroidInterface?.openNativeMapPicker(
+            Number.isFinite(lat) && Number.isFinite(lng) ? lat : 0,
+            Number.isFinite(lat) && Number.isFinite(lng) ? lng : 0
+        );
+        if (!response) $('deliveryCoordinatesStatus').textContent = 'محدد الخريطة متاح داخل تطبيق Android فقط.';
+    }
+
     function buildPayload() {
 
         const payload = {
@@ -6767,6 +6794,9 @@
             cash_customer_name: $('f_cash_customer_name').value.trim(),
 
             location: $('f_location').value.trim(),
+            latitude: $('f_latitude').value.trim() === '' ? null : Number($('f_latitude').value),
+            longitude: $('f_longitude').value.trim() === '' ? null : Number($('f_longitude').value),
+            location_source: 'map_picker',
 
             status: $('f_status').value,
 

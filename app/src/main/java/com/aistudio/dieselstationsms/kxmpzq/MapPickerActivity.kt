@@ -7,7 +7,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
+import android.location.LocationListener
 import android.os.Bundle
+import android.os.Looper
+import android.os.Handler
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -139,45 +142,76 @@ class MapPickerActivity : AppCompatActivity() {
         centerOnCurrentLocation()
     }
 
+    private var activeLocationListener: LocationListener? = null
+    private val locationTimeoutHandler = Handler(Looper.getMainLooper())
+
+    @SuppressLint("MissingPermission")
     private fun centerOnCurrentLocation() {
         if (!hasLocationPermission()) return
+        val manager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        activeLocationListener?.let { listener -> runCatching { manager.removeUpdates(listener) } }
+        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+            .filter { provider -> runCatching { manager.isProviderEnabled(provider) }.getOrDefault(false) }
+        if (providers.isEmpty()) {
+            showLocationUnavailable("خدمات الموقع غير مفعلة؛ اختر النقطة يدوياً.")
+            return
+        }
+        // Prefer a fresh device fix; fall back to a recent cached fix only after timeout.
+        var delivered = false
+        val cached = providers.mapNotNull { provider ->
+            runCatching { manager.getLastKnownLocation(provider) }.getOrNull()
+        }.filter { isValidCoordinate(it.latitude, it.longitude) }.maxByOrNull(Location::getTime)
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                if (delivered || !isValidCoordinate(location.latitude, location.longitude)) return
+                delivered = true
+                locationTimeoutHandler.removeCallbacksAndMessages(null)
+                runCatching { manager.removeUpdates(this) }
+                activeLocationListener = null
+                applyDeviceLocation(location)
+            }
+            @Deprecated("Deprecated by Android")
+            override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) = Unit
+            override fun onProviderEnabled(provider: String) = Unit
+            override fun onProviderDisabled(provider: String) = Unit
+        }
+        activeLocationListener = listener
         try {
-            val manager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            val location = listOf(
-                LocationManager.GPS_PROVIDER,
-                LocationManager.NETWORK_PROVIDER
-            ).asSequence()
-                .filter { manager.isProviderEnabled(it) }
-                .mapNotNull { provider ->
-                    runCatching { manager.getLastKnownLocation(provider) }.getOrNull()
+            providers.forEach { provider ->
+                manager.requestLocationUpdates(provider, 0L, 0f, listener, Looper.getMainLooper())
+            }
+            locationTimeoutHandler.postDelayed({
+                if (!delivered) {
+                    runCatching { manager.removeUpdates(listener) }
+                    activeLocationListener = null
+                    if (cached != null) applyDeviceLocation(cached)
+                    else showLocationUnavailable("لم يصل تثبيت GPS حديث خلال المهلة؛ اختر الموقع يدوياً.")
                 }
-                .filter { isValidCoordinate(it.latitude, it.longitude) }
-                .maxByOrNull(Location::getTime)
-
-            if (location == null) {
-                showLocationUnavailable("لم يتوفر موقع حالي؛ اختر النقطة يدوياً على الخريطة.")
-                return
-            }
-
-            val latitude = location.latitude
-            val longitude = location.longitude
-            initialLatitude = latitude
-            initialLongitude = longitude
-            selectedLatitude = latitude
-            selectedLongitude = longitude
-            updateCoordinates(latitude, longitude)
-            if (mapPageReady) {
-                binding.mapWebView.evaluateJavascript(
-                    "window.setCurrentLocation($latitude,$longitude)", null
-                )
-            }
+            }, 15000L)
         } catch (exception: SecurityException) {
+            runCatching { manager.removeUpdates(listener) }
+            activeLocationListener = null
             showLocationUnavailable("تعذر الوصول إلى الموقع؛ يمكنك الاختيار يدوياً.")
         } catch (exception: Exception) {
-            showLocationUnavailable(
-                "تعذر تحديد الموقع الحالي: ${exception.message ?: "خطأ غير معروف"}"
-            )
+            runCatching { manager.removeUpdates(listener) }
+            activeLocationListener = null
+            if (cached != null) applyDeviceLocation(cached)
+            else showLocationUnavailable("تعذر تحديد الموقع الحالي: ${exception.message ?: "خطأ غير معروف"}")
         }
+    }
+
+    private fun applyDeviceLocation(location: Location) {
+        val latitude = location.latitude
+        val longitude = location.longitude
+        initialLatitude = latitude
+        initialLongitude = longitude
+        selectedLatitude = latitude
+        selectedLongitude = longitude
+        updateCoordinates(latitude, longitude)
+        if (mapPageReady) binding.mapWebView.evaluateJavascript(
+            "window.setCurrentLocation($latitude,$longitude)", null
+        )
+        showLocationUnavailable("تم التقاط موقع الجهاز فعلياً بدقة ${if (location.hasAccuracy()) location.accuracy.toInt() else -1} متر.")
     }
 
     private fun updateCoordinates(latitude: Double?, longitude: Double?) {
@@ -219,6 +253,11 @@ class MapPickerActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        activeLocationListener?.let { listener ->
+            runCatching { (getSystemService(Context.LOCATION_SERVICE) as LocationManager).removeUpdates(listener) }
+        }
+        activeLocationListener = null
+        locationTimeoutHandler.removeCallbacksAndMessages(null)
         binding.mapWebView.apply {
             removeJavascriptInterface("MapSelectionBridge")
             stopLoading()
