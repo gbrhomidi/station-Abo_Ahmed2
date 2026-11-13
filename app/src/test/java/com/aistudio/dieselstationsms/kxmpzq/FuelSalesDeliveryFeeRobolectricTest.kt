@@ -125,7 +125,7 @@ class FuelSalesDeliveryFeeRobolectricTest {
     @Test
     fun driverFeeSettlementRollsBackJournalAndLedgerWhenDeliveryScopeCannotBeVerified() {
         val saved = createAndPersistSale(DeliveryFeeAccounting.DRIVER, 100.0, "موقع اختبار تسوية")
-        val deliveryId = saved.deliveryId
+        val deliveryId = scalarLong("SELECT id FROM deliveries WHERE sale_id=? ORDER BY id DESC LIMIT 1", arrayOf(saved.parentSaleId.toString()))
         assertTrue("Driver fee fixture must create a delivery", deliveryId > 0L)
         val beforeJournals = scalarLong(
             "SELECT COUNT(*) FROM journal_entries WHERE station_id=? AND reference_type='delivery_fee_settlement' AND reference_id=?",
@@ -145,7 +145,7 @@ class FuelSalesDeliveryFeeRobolectricTest {
             db.execSQL("ALTER TABLE deliveries RENAME TO deliveries_scope_test")
             db.execSQL("CREATE TABLE deliveries(id INTEGER PRIMARY KEY, sale_id INTEGER, delivery_fee_status TEXT)")
             db.execSQL("INSERT INTO deliveries(id,sale_id,delivery_fee_status) VALUES(?,?,?)",
-                arrayOf(deliveryId, 0, "pending"))
+                arrayOf(deliveryId, saved.parentSaleId, "pending"))
             var rejected = false
             try {
                 DeliveryFeeAccounting.settleDriverFee(helper, deliveryId, stationId, userId)
