@@ -390,10 +390,31 @@ class SupplierPayablesRobolectricTest {
         SupplierPayablesRepository.reversePaymentAllocation(
             db, 1, supplierId, allocationId, 125.0, 1, "اختبار عرض التخصيص الجزئي", "payment-list-reversal-125"
         )
+        val invoiceRowsAfterPartialReversal = SupplierPayablesRepository.getSupplierInvoices(db, 1, supplierId)
+        val invoiceAfterPartialReversal = (0 until invoiceRowsAfterPartialReversal.length())
+            .map { invoiceRowsAfterPartialReversal.getJSONObject(it) }
+            .first { it.getLong("id") == invoiceId }
+        assertEquals("المخصص الصافي يجب أن يستبعد العكس الجزئي",
+            375.0, invoiceAfterPartialReversal.getDouble("allocated_amount"), 0.0001)
+        assertEquals(125.0, invoiceAfterPartialReversal.getDouble("remaining_amount"), 0.0001)
+        val summaryAfterPartialReversal = SupplierPayablesRepository.getSupplierPayablesSummary(db, 1, "2026-11-05")
+        assertEquals(375.0, summaryAfterPartialReversal.getDouble("total_allocated"), 0.0001)
+        assertEquals(125.0, summaryAfterPartialReversal.getDouble("total_supplier_payables"), 0.0001)
+        val replacementPayment = createCompletedSupplierPayment(125.0, "PAYMENT-LIST-REPLACEMENT")
+        val replacement = SupplierPayablesRepository.allocatePayment(
+            db, 1, supplierId, replacementPayment, 125.0, 1, invoiceId
+        )
+        assertEquals(125.0, replacement.getDouble("allocated_amount"), 0.0001)
+        val settledSummary = SupplierPayablesRepository.getSupplierPayablesSummary(db, 1, "2026-11-05")
+        assertEquals(500.0, settledSummary.getDouble("total_allocated"), 0.0001)
+        assertEquals(0.0, settledSummary.getDouble("total_supplier_payables"), 0.0001)
         val payments = SupplierPayablesRepository.getSupplierPayments(db, 1, supplierId)
-        assertEquals(1, payments.length())
-        assertEquals(125.0, payments.getJSONObject(0).getDouble("reversed_amount"), 0.0001)
-        val allocations = payments.getJSONObject(0).getJSONArray("allocations")
+        assertEquals(2, payments.length())
+        val originalPayment = (0 until payments.length())
+            .map { payments.getJSONObject(it) }
+            .first { it.getLong("id") == paymentId }
+        assertEquals(125.0, originalPayment.getDouble("reversed_amount"), 0.0001)
+        val allocations = originalPayment.getJSONArray("allocations")
         assertEquals(1, allocations.length())
         val allocation = allocations.getJSONObject(0)
         assertEquals(allocationId, allocation.getLong("allocation_id"))
@@ -544,6 +565,43 @@ class SupplierPayablesRobolectricTest {
         assertEquals(cashBefore, cashAfter)
         assertEquals(journalsBefore, journalsAfter)
         assertEquals(1000.0, allocation.getDouble("allocated_amount"), 0.0001)
+    }
+
+    @Test
+    fun fullPaymentReversalAfterPartialAllocationReversalDoesNotDoubleSubtract() {
+        val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 93006, "MAN-FULL-AFTER-PARTIAL", 400.0, "2026-10-01", null, 1
+        )
+        val paymentId = createCompletedSupplierPayment(300.0, "FULL-AFTER-PARTIAL")
+        SupplierPayablesRepository.allocatePayment(db, 1, supplierId, paymentId, 300.0, 1, invoiceId)
+        val allocationId = db.rawQuery(
+            "SELECT id FROM supplier_invoice_allocations WHERE payment_id=? AND supplier_invoice_id=?",
+            arrayOf(paymentId.toString(), invoiceId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+        SupplierPayablesRepository.reversePaymentAllocation(
+            db, 1, supplierId, allocationId, 100.0, 1, "عكس جزئي سابق", "full-after-partial-100"
+        )
+        val full = SupplierPayablesRepository.reversePaymentAllocations(
+            db, 1, supplierId, paymentId, 1, "عكس الدفعة بالكامل بعد العكس الجزئي"
+        )
+        assertEquals(300.0, full.getDouble("reversed_amount"), 0.0001)
+        db.rawQuery(
+            "SELECT paid_amount,remaining_amount,status FROM supplier_invoices WHERE id=?",
+            arrayOf(invoiceId.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals(0.0, c.getDouble(0), 0.0001)
+            assertEquals(400.0, c.getDouble(1), 0.0001)
+            assertEquals("open", c.getString(2))
+        }
+        db.rawQuery(
+            "SELECT COUNT(*) FROM supplier_allocation_reversals WHERE allocation_id=? AND status='posted'",
+            arrayOf(allocationId.toString())
+        ).use { c -> check(c.moveToFirst()); assertEquals(0, c.getInt(0)) }
+        db.rawQuery(
+            "SELECT COUNT(*) FROM supplier_allocation_reversals WHERE allocation_id=? AND status='reversed'",
+            arrayOf(allocationId.toString())
+        ).use { c -> check(c.moveToFirst()); assertEquals(1, c.getInt(0)) }
     }
 
     @Test

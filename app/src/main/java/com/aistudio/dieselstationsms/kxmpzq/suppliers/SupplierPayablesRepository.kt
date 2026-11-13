@@ -161,6 +161,9 @@ object SupplierPayablesRepository {
             ON supplier_invoice_allocations(payment_id)
             WHERE supplier_invoice_id IS NULL AND allocation_kind='unapplied_legacy' AND status='posted' AND is_deleted=0
         """.trimIndent())
+        // Recreate the guard on every schema ensure so upgraded installations receive
+        // the net-of-reversals invariant, not a stale IF-NOT-EXISTS trigger body.
+        db.execSQL("DROP TRIGGER IF EXISTS trg_supplier_alloc_insert_guard")
         db.execSQL("""
             CREATE TRIGGER IF NOT EXISTS trg_supplier_alloc_insert_guard
             BEFORE INSERT ON supplier_invoice_allocations
@@ -182,9 +185,13 @@ object SupplierPayablesRepository {
                      WHERE a.payment_id=NEW.payment_id AND a.status='posted' AND a.is_deleted=0) + NEW.amount
                     > (SELECT amount FROM payments WHERE id=NEW.payment_id) + 0.01;
                 SELECT RAISE(ABORT,'supplier_invoice_overallocation') WHERE NEW.supplier_invoice_id IS NOT NULL AND
-                    (SELECT COALESCE(SUM(a.amount),0) FROM supplier_invoice_allocations a
-                     WHERE a.supplier_invoice_id=NEW.supplier_invoice_id AND a.status='posted' AND a.is_deleted=0) + NEW.amount
-                    > (SELECT total_amount FROM supplier_invoices WHERE id=NEW.supplier_invoice_id) + 0.01;
+                    ((SELECT COALESCE(SUM(a.amount),0) FROM supplier_invoice_allocations a
+                       WHERE a.supplier_invoice_id=NEW.supplier_invoice_id AND a.station_id=NEW.station_id
+                         AND a.status='posted' AND a.is_deleted=0)
+                     - (SELECT COALESCE(SUM(r.amount),0) FROM supplier_allocation_reversals r
+                        WHERE r.supplier_invoice_id=NEW.supplier_invoice_id AND r.station_id=NEW.station_id
+                          AND r.status='posted') + NEW.amount)
+                    > (SELECT total_amount FROM supplier_invoices WHERE id=NEW.supplier_invoice_id AND station_id=NEW.station_id) + 0.01;
             END
         """.trimIndent())
     }
@@ -597,7 +604,11 @@ object SupplierPayablesRepository {
                 put("status","posted");put("allocated_at",BusinessDay.currentDate());put("created_by",actorId)
             })
             val updated=db.rawQuery(
-                """SELECT COALESCE(SUM(a.amount),0) FROM supplier_invoice_allocations a
+                """SELECT MAX(0,COALESCE(SUM(a.amount),0) - COALESCE((
+                       SELECT SUM(r.amount) FROM supplier_allocation_reversals r
+                       WHERE r.station_id=a.station_id AND r.supplier_invoice_id=a.supplier_invoice_id
+                         AND r.status='posted'),0))
+                   FROM supplier_invoice_allocations a
                    WHERE a.supplier_invoice_id=? AND a.status='posted' AND a.is_deleted=0""",
                 arrayOf(invoice.id.toString())
             ).use { c -> c.moveToFirst();c.getDouble(0) }
@@ -833,6 +844,20 @@ object SupplierPayablesRepository {
             put("reversed_amount", 0.0); put("reopened_invoice_count", 0)
         }
 
+        // A full payment reversal supersedes earlier partial allocation reversals.
+        // Retire their active effect before deactivating the original allocation rows,
+        // while preserving the reversal records as an audit trail.
+        db.execSQL(
+            """UPDATE supplier_allocation_reversals
+               SET status='reversed'
+               WHERE station_id=? AND status='posted'
+                 AND allocation_id IN (
+                    SELECT id FROM supplier_invoice_allocations
+                    WHERE station_id=? AND supplier_id=? AND payment_id=?
+                      AND status='posted' AND is_deleted=0
+                 )""",
+            arrayOf(stationId.toString(), stationId.toString(), supplierId.toString(), paymentId.toString())
+        )
         val updated = db.update(
             "supplier_invoice_allocations",
             ContentValues().apply {
@@ -914,8 +939,12 @@ object SupplierPayablesRepository {
                       i.currency_id,i.total_amount,i.paid_amount,i.remaining_amount,i.status,
                       COALESCE(i.payment_terms_source_at_purchase,''),
                       COALESCE(p.commercial_name_ar,p.commercial_name,'') AS supplier_name,
-                      COALESCE((SELECT SUM(a.amount) FROM supplier_invoice_allocations a
-                        WHERE a.supplier_invoice_id=i.id AND a.status='posted' AND a.is_deleted=0),0) AS allocated_amount
+                      MAX(0,COALESCE((SELECT SUM(a.amount) FROM supplier_invoice_allocations a
+                        WHERE a.station_id=i.station_id AND a.supplier_invoice_id=i.id
+                          AND a.status='posted' AND a.is_deleted=0),0)
+                        - COALESCE((SELECT SUM(r.amount) FROM supplier_allocation_reversals r
+                          WHERE r.station_id=i.station_id AND r.supplier_invoice_id=i.id
+                            AND r.status='posted'),0)) AS allocated_amount
                FROM supplier_invoices i
                LEFT JOIN parties p ON p.id=i.supplier_id AND p.station_id=i.station_id AND p.is_deleted=0
                WHERE ${where.joinToString(" AND ")}
@@ -1124,8 +1153,12 @@ object SupplierPayablesRepository {
         var invoiced = 0.0; var allocated = 0.0; var outstanding = 0.0; var overdue = 0.0
         var openCount = 0; var overdueCount = 0
         db.rawQuery("""SELECT i.total_amount,
-                    COALESCE((SELECT SUM(a.amount) FROM supplier_invoice_allocations a
-                              WHERE a.supplier_invoice_id=i.id AND a.status='posted' AND a.is_deleted=0),0),
+                    MAX(0,COALESCE((SELECT SUM(a.amount) FROM supplier_invoice_allocations a
+                              WHERE a.station_id=i.station_id AND a.supplier_invoice_id=i.id
+                                AND a.status='posted' AND a.is_deleted=0),0)
+                              - COALESCE((SELECT SUM(r.amount) FROM supplier_allocation_reversals r
+                                WHERE r.station_id=i.station_id AND r.supplier_invoice_id=i.id
+                                  AND r.status='posted'),0)),
                     i.due_date, i.due_date_source, COALESCE(i.payment_terms_source_at_purchase,'')
              FROM supplier_invoices i JOIN parties p ON p.id=i.supplier_id AND p.station_id=i.station_id
               AND p.is_deleted=0 AND p.is_active=1
