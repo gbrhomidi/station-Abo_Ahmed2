@@ -12,6 +12,7 @@ const bridgeSource = fs.readFileSync(bridgePath, 'utf8');
 const databaseSource = fs.readFileSync(databasePath, 'utf8');
 const html = rawHtml.replace(/<script\s+src=[\s\S]*?<\/script>/gi, '');
 const calls = [];
+const leafletState = { layers: new Set() };
 const success = data => JSON.stringify({ success: true, data });
 
 const vehicles = [{ id: 101, vehicle_code: 'VEH-101', plate_number: 'A-101', brand: 'Toyota', model: 'Hilux' }];
@@ -53,6 +54,12 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
     runScripts: 'dangerously', url: 'https://vehicle-tracking.test/',
     beforeParse(window) {
       installBridge(window);
+      window.L = {
+        map() { return { setView() { return this; }, invalidateSize() {}, fitBounds() {}, removeLayer(layer) { leafletState.layers.delete(layer); } }; },
+        tileLayer() { return { addTo() { return this; } }; },
+        polyline(coords) { const layer = { kind: 'polyline', coords, addTo() { leafletState.layers.add(this); return this; } }; return layer; },
+        circleMarker(coords) { const layer = { kind: 'marker', coords, bindPopup() { return this; }, addTo() { leafletState.layers.add(this); return this; } }; return layer; }
+      };
       window.confirm = () => true;
       window.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {} });
       window.HTMLElement.prototype.scrollIntoView = () => {};
@@ -65,8 +72,8 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
 
   assert.deepEqual(calls.map(call => call[0]).sort(), ['locations', 'tracking', 'vehicles'], 'screen initialization must request locations, fleet records, and tracking status from Android');
   calls.forEach(([, payload]) => assert.equal(Object.hasOwn(payload, 'station_id'), false, 'WebView payload must not carry a selectable station id'));
-  assert.equal(window.document.querySelectorAll('#trackingMap circle.map-point').length, 2, 'map must ignore invalid persisted coordinates');
-  assert.equal(window.document.querySelectorAll('#trackingMap path.map-route').length, 1, 'map must draw a path only from two valid persisted points');
+  assert.equal([...leafletState.layers].filter(layer => layer.kind === 'marker').length, 2, 'geographic map must ignore invalid persisted coordinates');
+  assert.equal([...leafletState.layers].filter(layer => layer.kind === 'polyline').length, 1, 'geographic map must draw a route only from two valid persisted points');
   assert.match(window.document.getElementById('connectionTitle').textContent, /بيانات GPS حديثة/, 'GPS status must reflect Android tracking response');
 
   const vehicleFilter = window.document.getElementById('vehicleFilter');
@@ -89,7 +96,7 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   window.document.getElementById('refreshButton').click();
   await wait();
   assert.equal(window.document.getElementById('bridgeError').classList.contains('show'), true, 'invalid Android response must expose a bridge error instead of retaining map data');
-  assert.equal(window.document.querySelectorAll('#trackingMap circle.map-point').length, 0, 'failed Android response must clear previously rendered coordinates');
+  assert.equal([...leafletState.layers].filter(layer => layer.kind === 'marker').length, 0, 'failed Android response must clear previously rendered coordinates');
 
   window.AndroidInterface.getVehicleLocationRecords = () => success(locations.slice(0, 2));
   window.AndroidInterface.getVehicleTrackingStatus = () => success([{ ...tracking[0], connection_state: 'stale', last_location_time: '2025-01-01 00:00:00' }]);
@@ -103,7 +110,7 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   await wait();
   assert.match(window.document.getElementById('connectionTitle').textContent, /تعذر قراءة حالة اتصال GPS/, 'tracking failure must be distinguished from a valid no-data state');
   assert.equal(window.document.getElementById('bridgeError').classList.contains('show'), false, 'tracking-only failure must not hide valid persisted locations');
-  assert.equal(window.document.querySelectorAll('#trackingMap circle.map-point').length, 2, 'tracking-only failure must preserve valid persisted route points');
+  assert.equal([...leafletState.layers].filter(layer => layer.kind === 'marker').length, 2, 'tracking-only failure must preserve valid persisted route points');
 
   window.AndroidInterface.getVehicleTrackingStatus = () => success([{ ...tracking[0], connection_state: 'connected', device_name: 'GPS-101', last_communication: '2026-08-27 09:12:00' }]);
   window.document.getElementById('refreshButton').click();
@@ -120,7 +127,7 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   window.document.getElementById('refreshButton').click();
   await wait();
   assert.match(window.document.getElementById('connectionTitle').textContent, /تعذر قراءة حالة اتصال GPS/, 'malformed tracking JSON must not be silently rendered as a valid disconnected state');
-  assert.equal(window.document.querySelectorAll('#trackingMap circle.map-point').length, 2, 'malformed tracking JSON must preserve independently loaded SQLite locations');
+  assert.equal([...leafletState.layers].filter(layer => layer.kind === 'marker').length, 2, 'malformed tracking JSON must preserve independently loaded SQLite locations');
 
   window.AndroidInterface.getVehicleTrackingStatus = () => success(tracking);
   window.AndroidInterface.getVehicleRouteRecords = () => JSON.stringify({ success: false, error: 'تعذر قراءة مسار GPS' });
@@ -128,7 +135,7 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   vehicleFilter.dispatchEvent(new window.Event('change', { bubbles: true }));
   await wait();
   assert.equal(window.document.getElementById('bridgeError').classList.contains('show'), false, 'route failure must remain local to the route request');
-  assert.equal(window.document.querySelectorAll('#trackingMap circle.map-point').length, 2, 'route failure must retain valid persisted location points as the fallback view');
+  assert.equal([...leafletState.layers].filter(layer => layer.kind === 'marker').length, 2, 'route failure must retain valid persisted location points as the fallback view');
 
   window.AndroidInterface.getVehicleRouteRecords = () => success([]);
   vehicleFilter.value = '';
