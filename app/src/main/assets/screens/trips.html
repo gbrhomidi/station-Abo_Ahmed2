@@ -317,6 +317,7 @@
           (result.cacheHit ? ' · من الذاكرة المؤقتة' : '');
         toast('تم حساب المسافة من خدمة المسارات');
       } catch (error) {
+        routeSelection.result = null;
         $('routeEstimateStatus').textContent = error.message || 'تعذر حساب المسار';
         toast(error.message || 'تعذر حساب المسار؛ يمكنك إدخال المسافة يدوياً', true);
       }
@@ -376,6 +377,11 @@
     const bridge = () => window.AndroidInterface;
     const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' })[char]);
     const number = value => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
+    function businessDayDate() {
+      const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Aden', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+      const value = Object.fromEntries(parts.map(part => [part.type, part.value]));
+      return value.year + '-' + value.month + '-' + value.day;
+    }
     const optionalNumber = value => String(value ?? '').trim() === '' ? null : number(value);
     const formatNumber = (value, digits = 2) => number(value).toLocaleString('ar-YE', { maximumFractionDigits: digits, minimumFractionDigits: 0 });
     const formatDate = value => { const text = String(value || '').trim(); return text ? escapeHtml(text.slice(0, 10)) : 'غير مسجل'; };
@@ -493,8 +499,8 @@
     }
     function openTrip(row) {
       $('tripForm').reset(); $('tripId').value = row ? number(row.id) : '';
-      routeSelection.origin = row && Number.isFinite(Number(row.start_latitude)) && Number.isFinite(Number(row.start_longitude)) ? { latitude: Number(row.start_latitude), longitude: Number(row.start_longitude) } : null;
-      routeSelection.destination = row && Number.isFinite(Number(row.end_latitude)) && Number.isFinite(Number(row.end_longitude)) ? { latitude: Number(row.end_latitude), longitude: Number(row.end_longitude) } : null;
+      routeSelection.origin = row && row.start_latitude != null && row.start_longitude != null && Number.isFinite(Number(row.start_latitude)) && Number.isFinite(Number(row.start_longitude)) ? { latitude: Number(row.start_latitude), longitude: Number(row.start_longitude) } : null;
+      routeSelection.destination = row && row.end_latitude != null && row.end_longitude != null && Number.isFinite(Number(row.end_latitude)) && Number.isFinite(Number(row.end_longitude)) ? { latitude: Number(row.end_latitude), longitude: Number(row.end_longitude) } : null;
       routeSelection.pendingTarget = null; routeSelection.requestId = null;
       routeSelection.result = row && Number(row.route_distance_km) > 0 ? { distanceKm: Number(row.route_distance_km), durationSeconds: Number(row.route_duration_seconds || 0), provider: String(row.route_provider || 'OSRM'), encodedPolyline: String(row.route_encoded_polyline || ''), calculatedAt: String(row.route_calculated_at || '') } : null;
       $('routeEstimateStatus').textContent = routeSelection.result ? 'مسار محفوظ: ' + formatNumber(routeSelection.result.distanceKm) + ' كم · ' + escapeHtml(routeSelection.result.provider) : 'لم يُحفظ مسار قيادة لهذه الرحلة؛ يمكنك تحديد الطرفين وإعادة الحساب.';

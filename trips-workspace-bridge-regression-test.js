@@ -108,6 +108,11 @@ function installBridge(window) {
   window.document.getElementById('pickTripOrigin').click();
   window.onNativeMapLocationSelected(15.37, 44.20);
   assert.strictEqual(window.document.getElementById('distanceKm').value, '', 'changing a route endpoint must invalidate its previous distance estimate');
+  window.document.getElementById('pickTripDestination').click();
+  window.onNativeMapLocationSelected(15.40, 44.22);
+  window.document.getElementById('calculateTripRoute').click();
+  const recalculatedRouteCall = calls.filter(call => call[0] === 'calculateStationRoute').at(-1);
+  window.onNativeRouteResult(recalculatedRouteCall[5], JSON.stringify({ success: true, provider: 'OSRM', distanceKm: 12.34, durationSeconds: 900, encodedPolyline: 'encoded-road-route' }));
 
   window.document.getElementById('tripVehicleId').value = '101';
   window.document.getElementById('tripDate').value = '2026-08-27';
