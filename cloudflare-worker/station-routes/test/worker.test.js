@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import worker, { validCoordinate, validateRouteRequest } from '../src/index.js';
+import worker, { readBoundedBody, validCoordinate, validateRouteRequest } from '../src/index.js';
 
 test('health is public and identifies the routing provider', async () => {
   const response = await worker.fetch(new Request('https://worker/health'), {});
@@ -39,4 +39,46 @@ test('route contract rejects unsupported travel modes and invalid coordinates', 
   const destination = { latitude: 15.5, longitude: 44.3 };
   assert.equal(validateRouteRequest({ origin, destination, travelMode: 'WALK' }).status, 422);
   assert.equal(validateRouteRequest({ origin: { latitude: 999, longitude: 0 }, destination }).status, 400);
+});
+
+
+test('bounded body reader accepts payloads within the configured byte limit', async () => {
+  const body = JSON.stringify({ value: 'station' });
+  const request = new Request('https://worker/v1/routes', { method: 'POST', body });
+  assert.equal(await readBoundedBody(request), body);
+});
+
+test('bounded body reader rejects an oversized declared Content-Length before reading', async () => {
+  const request = new Request('https://worker/v1/routes', {
+    method: 'POST',
+    headers: { 'content-length': String(16 * 1024 + 1) },
+    body: '{}'
+  });
+  await assert.rejects(readBoundedBody(request), error => error.status === 413);
+});
+
+test('bounded body reader cancels a streamed payload as soon as it exceeds the limit', async () => {
+  let cancelled = false;
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('x'.repeat(12 * 1024)));
+      controller.enqueue(new TextEncoder().encode('x'.repeat(5 * 1024)));
+    },
+    cancel() { cancelled = true; }
+  });
+  const request = new Request('https://worker/v1/routes', {
+    method: 'POST',
+    body: stream,
+    duplex: 'half'
+  });
+  await assert.rejects(readBoundedBody(request), error => error.status === 413);
+  assert.equal(cancelled, true);
+});
+
+test('bounded body reader rejects malformed UTF-8', async () => {
+  const request = new Request('https://worker/v1/routes', {
+    method: 'POST',
+    body: new Uint8Array([0xc3, 0x28])
+  });
+  await assert.rejects(readBoundedBody(request), error => error.status === 400);
 });

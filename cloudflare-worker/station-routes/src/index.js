@@ -62,12 +62,54 @@ function makeOsrmUrl(baseUrl, origin, destination) {
   return `${base}/route/v1/driving/${coords}?overview=full&geometries=polyline&alternatives=true&steps=false`;
 }
 
+export async function readBoundedBody(request) {
+  const declaredLength = Number(request.headers.get('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+    throw Object.assign(new Error('Request body is too large'), { status: 413 });
+  }
+
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_BODY_BYTES) {
+        await reader.cancel('Request body exceeds configured limit');
+        throw Object.assign(new Error('Request body is too large'), { status: 413 });
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw Object.assign(new Error('Request body must be valid UTF-8'), { status: 400 });
+  }
+}
+
 async function getRoute(request, env) {
   await verifyAppCheck(request, env);
 
-  const rawBody = await request.text();
-  if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
-    return json({ error: 'Request body is too large' }, 413);
+  let rawBody;
+  try { rawBody = await readBoundedBody(request); }
+  catch (error) {
+    if (error.status === 413 || error.status === 400) {
+      return json({ error: error.status === 413 ? 'Request body is too large' : 'Invalid request encoding' }, error.status);
+    }
+    throw error;
   }
 
   let body;
