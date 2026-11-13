@@ -76,6 +76,21 @@ class SupplierPayablesRobolectricTest {
             put("created_at", "2026-11-05 10:00:00")
         })
 
+
+    @Test
+    fun supplierTaskSynchronizationRejectsInvalidOrNonCanonicalBusinessDates() {
+        val invalidDates = listOf("not-a-date", "2026-02-30", "2026-11-13T10:00:00", "2026-1-3")
+        invalidDates.forEach { invalid ->
+            var rejected = false
+            try {
+                SupplierPayablesRepository.synchronizeSupplierInvoiceTasks(db, 1, invalid)
+            } catch (_: IllegalArgumentException) {
+                rejected = true
+            }
+            assertTrue("Expected invalid business date to be rejected: $invalid", rejected)
+        }
+    }
+
     @Test
     fun fifoAllocationsUpdateInvoiceBalancesAndAreIdempotent() {
         val firstInvoice = SupplierPayablesRepository.createPurchaseInvoice(

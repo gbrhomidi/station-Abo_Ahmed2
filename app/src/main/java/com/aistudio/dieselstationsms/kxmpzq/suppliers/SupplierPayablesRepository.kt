@@ -207,7 +207,13 @@ object SupplierPayablesRepository {
         asOfDate: String = BusinessDay.currentDate()
     ): Int {
         require(stationId > 0) { "معرف المحطة غير صالح لمزامنة مهام الموردين" }
-        val asOf = parseDate(asOfDate) ?: LocalDate.now()
+        val asOf = try {
+            LocalDate.parse(asOfDate).also { parsed ->
+                require(parsed.toString() == asOfDate) { "تاريخ المزامنة يجب أن يكون بصيغة YYYY-MM-DD" }
+            }
+        } catch (error: DateTimeParseException) {
+            throw IllegalArgumentException("تاريخ المزامنة غير صالح؛ استخدم YYYY-MM-DD", error)
+        }
         data class Candidate(
             val invoiceId: Long,
             val supplierId: Long,
@@ -247,7 +253,7 @@ object SupplierPayablesRepository {
             }
         }
 
-        val now = asOfDate + " 00:00:00"
+        val now = asOf.toString() + " 00:00:00"
         val activeKeys = HashSet<String>()
         var changed = 0
         candidates.forEach { invoice ->
