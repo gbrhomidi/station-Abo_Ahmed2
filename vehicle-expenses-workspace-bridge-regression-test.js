@@ -70,6 +70,7 @@ const wait = () => new Promise(resolve => setTimeout(resolve, 35));
   assert.equal(save.vehicle_id, 101, 'save must retain selected vehicle ID internally');
   assert.equal(save.amount, 450.5, 'save must convert amount to number');
   assert.equal(save.currency_id, 1, 'save must send a real selected currency ID');
+  assert.match(pageSource, /!state\.editing&&\(!Number\.isSafeInteger\(Number\(result\)\)\|\|Number\(result\)<=0\)/, 'new expense save must require a positive persisted SQLite row ID before reporting success');
   assert.equal(Object.hasOwn(save, 'station_id'), false, 'save payload cannot override station authority');
 
   window.document.querySelector('[data-invoice="501"]').click();
