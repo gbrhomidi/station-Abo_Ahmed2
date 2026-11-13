@@ -24259,7 +24259,52 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         "مفتاح idempotency مطلوب لدفعات الموردين لمنع تكرار السداد"
                     }
                     val existingPaymentId = findFinancialIdempotency(db, "supplier_payment", stationScopeId, normalizedIdempotencyKey)
-                    if (existingPaymentId != null) return existingPaymentId
+                    if (existingPaymentId != null) {
+                        val requestedCurrencyId = data.optLong("currency_id", 0L)
+                        val requestedInvoiceId = data.optLong("supplier_invoice_id", 0L)
+                        val requestedPaymentType = data.optString("payment_type", "cash").trim().lowercase(Locale.ROOT)
+                        val requestedPaymentMethod = data.optString("payment_method", "cash").trim().lowercase(Locale.ROOT)
+                        val requestedNotes = data.optString("notes", "")
+                        val matches = db.rawQuery(
+                            """SELECT COALESCE(station_id,0),COALESCE(supplier_party_id,0),amount,
+                                      COALESCE(currency_id,0),COALESCE(cash_box_id,0),COALESCE(bank_account_id,0),
+                                      LOWER(TRIM(COALESCE(payment_type,''))),LOWER(TRIM(COALESCE(payment_method,''))),
+                                      COALESCE(notes,''),status,COALESCE(is_deleted,0)
+                               FROM payments WHERE id=? LIMIT 1""",
+                            arrayOf(existingPaymentId.toString())
+                        ).use { c ->
+                            c.moveToFirst() &&
+                                c.getInt(0) == stationScopeId &&
+                                c.getLong(1) == supplierId &&
+                                kotlin.math.abs(c.getDouble(2) - amount) <= 0.000001 &&
+                                c.getLong(3) == requestedCurrencyId &&
+                                c.getLong(4) == cashBoxId &&
+                                c.getLong(5) == bankAccountId &&
+                                c.getString(6) == requestedPaymentType &&
+                                c.getString(7) == requestedPaymentMethod &&
+                                c.getString(8) == requestedNotes &&
+                                c.getString(9) == "completed" &&
+                                c.getInt(10) == 0
+                        }
+                        require(matches) {
+                            "مفتاح دفعة المورد مستخدم مسبقاً لبيانات سداد مختلفة؛ لم تُنشأ دفعة جديدة"
+                        }
+                        if (requestedInvoiceId > 0L) {
+                            val invoiceMatches = db.rawQuery(
+                                """SELECT COUNT(*),COALESCE(SUM(amount),0)
+                                   FROM supplier_invoice_allocations
+                                   WHERE payment_id=? AND supplier_invoice_id=? AND is_deleted=0""",
+                                arrayOf(existingPaymentId.toString(), requestedInvoiceId.toString())
+                            ).use { c ->
+                                c.moveToFirst() && c.getInt(0) > 0 &&
+                                    kotlin.math.abs(c.getDouble(1) - amount) <= 0.01
+                            }
+                            require(invoiceMatches) {
+                                "مفتاح دفعة المورد مرتبط بفاتورة مختلفة؛ لم يُعَد استخدامه"
+                            }
+                        }
+                        return existingPaymentId
+                    }
                     require(reserveFinancialIdempotency(db, "supplier_payment", stationScopeId, normalizedIdempotencyKey)) {
                         "مفتاح دفعة المورد مستخدم مسبقاً أو قيد المعالجة"
                     }

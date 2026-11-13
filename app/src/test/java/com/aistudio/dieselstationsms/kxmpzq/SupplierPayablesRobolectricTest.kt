@@ -354,6 +354,26 @@ class SupplierPayablesRobolectricTest {
             assertEquals("COMPLETED", cursor.getString(0))
             assertEquals(results.first(), cursor.getLong(1))
         }
+
+        val reusedKeyWithDifferentAmount = JSONObject(request.toString()).put("amount", 9.0)
+        assertTrue(
+            "يجب رفض إعادة استخدام مفتاح الدفعة لمبلغ مختلف",
+            runCatching { helper.addPayment(reusedKeyWithDifferentAmount, 1, actorId) }.isFailure
+        )
+        assertEquals(
+            "يجب ألا ينشأ دفع أو قيد أو حركة نقدية إضافية عند تعارض المفتاح",
+            1,
+            db.rawQuery(
+                "SELECT COUNT(*) FROM payments WHERE station_id=1 AND supplier_party_id=? AND is_deleted=0",
+                arrayOf(supplierId.toString())
+            ).use { c -> check(c.moveToFirst()); c.getInt(0) }
+        )
+        assertEquals(
+            990.0,
+            db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=?", arrayOf(cashBoxId.toString()))
+                .use { c -> check(c.moveToFirst()); c.getDouble(0) },
+            0.0001
+        )
     }
 
     @Test
