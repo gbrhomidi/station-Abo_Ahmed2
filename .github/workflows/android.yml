@@ -344,6 +344,7 @@ jobs:
           node ./app/src/test/js/business-day.test.js
           node ./trips-workspace-bridge-regression-test.js
           node ./vehicle-tracking-map-bridge-regression-test.js
+          node ./delivery-map-regression-test.js
           python3 ./sqlite-query-plan-regression-test.py
 
       - name: Verify reports, pagination and Fuel Readings contracts

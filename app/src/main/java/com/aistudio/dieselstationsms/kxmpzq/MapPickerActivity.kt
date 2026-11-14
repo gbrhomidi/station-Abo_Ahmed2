@@ -162,12 +162,16 @@ class MapPickerActivity : AppCompatActivity() {
         val cached = providers.mapNotNull { provider ->
             runCatching { manager.getLastKnownLocation(provider) }.getOrNull()
         }.filter {
-            isValidCoordinate(it.latitude, it.longitude) &&
-                MapPickerLocationPolicy.isRecentCachedLocation(it, nowMillis)
+            MapPickerLocationPolicy.isRecentCachedLocation(it, nowMillis)
         }.maxByOrNull(Location::getTime)
         val listener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
-                if (delivered || !isValidCoordinate(location.latitude, location.longitude)) return
+                if (delivered || !MapPickerLocationPolicy.isUsableLocation(
+                        location,
+                        System.currentTimeMillis(),
+                        MapPickerLocationPolicy.MAX_FRESH_AGE_MILLIS
+                    )
+                ) return
                 delivered = true
                 locationTimeoutHandler.removeCallbacksAndMessages(null)
                 runCatching { manager.removeUpdates(this) }
@@ -215,7 +219,9 @@ class MapPickerActivity : AppCompatActivity() {
         if (mapPageReady) binding.mapWebView.evaluateJavascript(
             "window.setCurrentLocation($latitude,$longitude)", null
         )
-        showLocationUnavailable("تم التقاط موقع الجهاز فعلياً بدقة ${if (location.hasAccuracy()) location.accuracy.toInt() else -1} متر.")
+        showLocationUnavailable(
+            "تم التقاط موقع ${location.provider ?: "الجهاز"} بدقة ${location.accuracy.toInt()} متر."
+        )
     }
 
     private fun updateCoordinates(latitude: Double?, longitude: Double?) {
@@ -293,14 +299,29 @@ class MapPickerActivity : AppCompatActivity() {
 /** Reject stale/future cached fixes; cached coordinates are a fallback, never a substitute for GPS. */
 internal object MapPickerLocationPolicy {
     const val MAX_CACHED_AGE_MILLIS = 120_000L
+    const val MAX_FRESH_AGE_MILLIS = 30_000L
+    const val MAX_ACCEPTABLE_ACCURACY_METERS = 250f
 
     fun isRecentCachedLocation(
         location: Location,
         nowMillis: Long,
         maxAgeMillis: Long = MAX_CACHED_AGE_MILLIS
+    ): Boolean = isUsableLocation(location, nowMillis, maxAgeMillis)
+
+    /** Reject stale/future fixes, placeholder coordinates, and fixes too imprecise for a saved site. */
+    fun isUsableLocation(
+        location: Location,
+        nowMillis: Long,
+        maxAgeMillis: Long = MAX_FRESH_AGE_MILLIS,
+        maxAccuracyMeters: Float = MAX_ACCEPTABLE_ACCURACY_METERS
     ): Boolean {
-        if (maxAgeMillis < 0L) return false
+        if (maxAgeMillis < 0L || !maxAccuracyMeters.isFinite() || maxAccuracyMeters <= 0f) return false
         val ageMillis = nowMillis - location.time
-        return ageMillis in 0L..maxAgeMillis
+        val accuracy = location.accuracy
+        return location.latitude.isFinite() && location.longitude.isFinite() &&
+            location.latitude in -90.0..90.0 && location.longitude in -180.0..180.0 &&
+            !(location.latitude == 0.0 && location.longitude == 0.0) &&
+            ageMillis in 0L..maxAgeMillis &&
+            accuracy.isFinite() && accuracy > 0f && accuracy <= maxAccuracyMeters
     }
 }

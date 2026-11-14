@@ -4513,6 +4513,8 @@
         $('f_driver_display').value = '';
         $('f_latitude').value = '';
         $('f_longitude').value = '';
+        $('f_latitude').dataset.locationSource = '';
+        $('f_longitude').dataset.locationSource = '';
         $('deliveryCoordinatesStatus').textContent = 'إحداثيات التوصيل اختيارية ولا تُستنتج من نص العنوان.';
 
         setDeliveryFeeInput(0);
@@ -6268,6 +6270,19 @@
         $('f_delivery_date').value = toLocalInput(row.delivery_date);
         $('f_created_at').value = toLocalInput(row.created_at);
         $('f_location').value = row.delivery_location ?? row.location ?? '';
+        $('f_latitude').value = row.latitude == null ? '' : String(row.latitude);
+        $('f_longitude').value = row.longitude == null ? '' : String(row.longitude);
+        const hasSavedCoordinates = row.latitude != null && row.longitude != null;
+        const validSavedCoordinates = hasSavedCoordinates &&
+            Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)) &&
+            Number(row.latitude) >= -90 && Number(row.latitude) <= 90 &&
+            Number(row.longitude) >= -180 && Number(row.longitude) <= 180 &&
+            !(Number(row.latitude) === 0 && Number(row.longitude) === 0);
+        $('f_latitude').dataset.locationSource = validSavedCoordinates ? (row.location_source || 'manual') : '';
+        $('f_longitude').dataset.locationSource = $('f_latitude').dataset.locationSource;
+        $('deliveryCoordinatesStatus').textContent = validSavedCoordinates
+            ? 'إحداثيات موقع التوصيل المحفوظة: ' + Number(row.latitude).toFixed(7) + ', ' + Number(row.longitude).toFixed(7)
+            : 'لا توجد إحداثيات محفوظة لهذا التوصيل.';
         $('f_notes').value = row.notes ?? '';
 
         updateVehiclePreview(
@@ -6753,6 +6768,8 @@
             !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return;
         $('f_latitude').value = latitude.toFixed(7);
         $('f_longitude').value = longitude.toFixed(7);
+        $('f_latitude').dataset.locationSource = 'map_picker';
+        $('f_longitude').dataset.locationSource = 'map_picker';
         $('deliveryCoordinatesStatus').textContent = 'تم تحديد إحداثيات موقع التوصيل من الخريطة / GPS.';
         window.__stationMapTarget = null;
     };
@@ -6768,6 +6785,22 @@
     }
 
     function buildPayload() {
+        const latitudeText = $('f_latitude').value.trim();
+        const longitudeText = $('f_longitude').value.trim();
+        if ((latitudeText === '') !== (longitudeText === '')) {
+            throw new Error('أدخل خط العرض وخط الطول معاً أو اتركهما فارغين.');
+        }
+        const hasCoordinates = latitudeText !== '' && longitudeText !== '';
+        const latitude = hasCoordinates ? Number(latitudeText) : null;
+        const longitude = hasCoordinates ? Number(longitudeText) : null;
+        if (hasCoordinates && (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+            latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 ||
+            (latitude === 0 && longitude === 0))) {
+            throw new Error('إحداثيات موقع التوصيل غير صالحة.');
+        }
+        const locationSource = hasCoordinates
+            ? ($('f_latitude').dataset.locationSource || $('f_longitude').dataset.locationSource || 'manual')
+            : null;
 
         const payload = {
 
@@ -6804,9 +6837,9 @@
             cash_customer_name: $('f_cash_customer_name').value.trim(),
 
             location: $('f_location').value.trim(),
-            latitude: $('f_latitude').value.trim() === '' ? null : Number($('f_latitude').value),
-            longitude: $('f_longitude').value.trim() === '' ? null : Number($('f_longitude').value),
-            location_source: 'map_picker',
+            latitude,
+            longitude,
+            location_source: locationSource,
 
             status: $('f_status').value,
 
