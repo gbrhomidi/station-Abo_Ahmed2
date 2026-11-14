@@ -48,3 +48,10 @@ expect(source.includes('.due-bubble::after{content:'), 'فقاعة التأجي�
 expect(source.includes("dueReminderDeferred=false;document.getElementById('dueReminderBubble')?.classList.remove('show')"), 'إلغاء التذكير يجب أن يخفي فقاعة التأجيل');
 expect(source.includes("r.interaction_action==='deferred'"), 'يجب حصر فقاعة التأجيل في المستحقات المؤجلة الحالية');
 expect(source.includes('prefers-reduced-motion:reduce){.due-alert-btn,.due-bubble.show{animation:none!important'), 'يجب احترام تقليل الحركة في فقاعة التأجيل');
+
+assert.match(source, /--bg-primary:#f3eadb/);
+assert.match(source, /--bg-card:rgba\(255,250,241,.97\)/);
+assert.match(source, /\[data-theme="light"\] \.top-bar \{ background:rgba\(247,239,225,.94\)/);
+assert.match(source, /id="paymentCustomerGroup"/);
+assert.match(source, /if\(customerGroup\) customerGroup\.hidden=pendingPaymentInvoiceId>0/);
+assert.match(source, /if\(customerGroup\) customerGroup\.hidden=false/);

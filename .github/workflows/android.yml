@@ -319,6 +319,10 @@ jobs:
           set -e
 
           python3 ./screen-smoke-test.py
+          node ./customer-debts-modal-bridge-regression-test.js
+          node ./customer-debt-centralization-regression-test.js
+          node ./stage4-debt-unification-regression-test.js
+          node ./dashboard-reminder-throttle-test.js
 
       # The viewport acceptance suite drives real Chromium through DevTools.
       # Ubuntu runner images do not guarantee a Chrome binary; install a pinned

@@ -46,6 +46,26 @@
             --transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+        /* Warm beige light palette for customer debt workspace */
+        [data-theme="light"] {
+            --bg-primary:#f3eadb; --bg-secondary:#e8dcc9;
+            --bg-card:rgba(255,250,241,.97); --bg-glass:rgba(112,82,43,.055);
+            --bg-glass-light:rgba(112,82,43,.10); --text-primary:#403326;
+            --text-secondary:#705b43; --text-muted:#927d64; --border-color:#d8c7ad;
+            --border-glow:rgba(166,124,66,.22); --emerald-primary:#8a6841;
+            --emerald-dark:#70502f; --emerald-glow:0 0 24px rgba(138,104,65,.12);
+            --success:#66834d; --shadow-card:0 18px 44px rgba(82,59,30,.12);
+            --shadow-glow:0 0 36px rgba(138,104,65,.07);
+        }
+        [data-theme="light"] body {
+            background-image:radial-gradient(ellipse at 5% 15%,rgba(196,160,108,.13) 0%,transparent 55%),
+                radial-gradient(ellipse at 95% 85%,rgba(222,193,145,.16) 0%,transparent 55%);
+        }
+        [data-theme="light"] .top-bar { background:rgba(247,239,225,.94); }
+        [data-theme="light"] .top-title h2 {
+            background:linear-gradient(135deg,#725334,#a27b48); -webkit-background-clip:text;
+        }
+
         /* الوضع الفاتح */
         [data-theme="light"] {
             --bg-primary: #f4eee3;
@@ -2337,7 +2357,7 @@
                 </button>
             </div>
             <div class="modal-body">
-                <div class="form-group">
+                <div class="form-group" id="paymentCustomerGroup">
                     <label>العميل *</label>
                     <select id="pCustomerId">
                         <option value="">اختر العميل</option>
@@ -3569,6 +3589,8 @@ function updateDebtViewButtons() {
             pendingPaymentInvoiceId = 0;
             pendingPaymentInvoiceRemaining = 0;
             pendingPaymentInvoiceNumber = '';
+            const customerGroup=document.getElementById('paymentCustomerGroup');
+            if(customerGroup) customerGroup.hidden=false;
             document.getElementById('pCustomerId').value = '';
             document.getElementById('pAmount').value = '';
             document.getElementById('pMethod').value = 'cash';
@@ -3592,6 +3614,8 @@ function updateDebtViewButtons() {
             pendingPaymentInvoiceNumber = invoiceRow
                 ? String(invoiceRow.invoice_number || invoiceRow.sale_code || pendingPaymentInvoiceId)
                 : (pendingPaymentInvoiceId > 0 ? String(pendingPaymentInvoiceId) : '');
+            const customerGroup=document.getElementById('paymentCustomerGroup');
+            if(customerGroup) customerGroup.hidden=pendingPaymentInvoiceId>0;
             document.getElementById('pCustomerId').value = String(pendingPaymentCustomerId || '');
             document.getElementById('pAmount').value = remaining > 0 ? remaining : '';
             document.getElementById('pMethod').value = 'cash';
