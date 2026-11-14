@@ -365,6 +365,16 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Install root JavaScript regression dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Verify fleet, vehicle expenses and delivery-trip integration
+        run: |
+          set -e
+          node ./vehicle-expenses-workspace-bridge-regression-test.js
+          node ./vehicles-android-bridge-unit-test.js
+          node ./fleet-delivery-trip-expense-integration.test.js
+
       - name: Run Cloud Run routing service tests
         working-directory: cloud-run/station-routes
         run: |

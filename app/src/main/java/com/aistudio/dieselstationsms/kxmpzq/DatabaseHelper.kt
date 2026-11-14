@@ -1162,6 +1162,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_locations_vehicle_time ON vehicle_locations(vehicle_id, location_time)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_trips_vehicle_date ON vehicle_trips(vehicle_id, trip_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_expenses_vehicle_date ON vehicle_expenses(vehicle_id, expense_date)")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicle_expenses_idempotency_key ON vehicle_expenses(idempotency_key) WHERE idempotency_key IS NOT NULL AND trim(idempotency_key) <> ''")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_parties_location_station ON parties(station_id, latitude, longitude)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_station_location_date ON deliveries(station_id, latitude, longitude, delivery_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_trips_route_vehicle_date ON vehicle_trips(vehicle_id, trip_date, start_latitude, end_latitude)")
@@ -19278,23 +19279,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
             "vehicle_trips" -> OperationalTableSpec(
                 table = "vehicle_trips",
-                columns = listOf("vehicle_id", "driver_id", "trip_date", "start_location", "end_location", "distance_km", "fuel_consumed", "fuel_cost", "start_odometer", "end_odometer", "trip_purpose", "notes"),
+                columns = listOf("vehicle_id", "driver_id", "trip_date", "start_location", "end_location", "start_latitude", "start_longitude", "end_latitude", "end_longitude", "distance_km", "fuel_consumed", "fuel_cost", "start_odometer", "end_odometer", "route_distance_km", "route_duration_seconds", "route_provider", "route_encoded_polyline", "route_calculated_at", "trip_purpose", "notes"),
                 required = listOf("vehicle_id", "trip_date"),
                 searchColumns = listOf("start_location", "end_location", "trip_purpose", "notes"),
                 softDeleted = false,
                 hasUpdatedAt = false,
                 hasStatus = false,
-                numericColumns = listOf("distance_km", "fuel_consumed", "fuel_cost", "start_odometer", "end_odometer")
+                numericColumns = listOf("vehicle_id", "driver_id", "start_latitude", "start_longitude", "end_latitude", "end_longitude", "distance_km", "fuel_consumed", "fuel_cost", "start_odometer", "end_odometer", "route_distance_km", "route_duration_seconds")
             )
             "vehicle_expenses" -> OperationalTableSpec(
                 table = "vehicle_expenses",
-                columns = listOf("vehicle_id", "expense_type", "expense_date", "amount", "currency_id", "odometer_reading", "description", "invoice_path"),
+                columns = listOf("vehicle_id", "trip_id", "source_distance_km", "idempotency_key", "expense_type", "expense_date", "amount", "currency_id", "odometer_reading", "description", "invoice_path"),
                 required = listOf("vehicle_id", "expense_type", "expense_date", "amount"),
                 searchColumns = listOf("expense_type", "expense_date", "description"),
                 softDeleted = false,
                 hasUpdatedAt = false,
                 hasStatus = false,
-                numericColumns = listOf("amount", "odometer_reading")
+                numericColumns = listOf("vehicle_id", "trip_id", "source_distance_km", "amount", "currency_id", "odometer_reading")
             )
             "vehicle_maintenance" -> OperationalTableSpec(
                 table = "vehicle_maintenance",
@@ -19971,7 +19972,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 validateFleetDate(data, "location_time")
             }
             "vehicle_trips" -> {
-                listOf("distance_km", "fuel_consumed", "fuel_cost", "start_odometer", "end_odometer").forEach { validateFleetNumber(data, it) }
+                listOf("distance_km", "fuel_consumed", "fuel_cost", "start_odometer", "end_odometer", "route_distance_km", "route_duration_seconds").forEach { validateFleetNumber(data, it) }
+                validateFleetNumber(data, "start_latitude", -90.0, 90.0)
+                validateFleetNumber(data, "end_latitude", -90.0, 90.0)
+                validateFleetNumber(data, "start_longitude", -180.0, 180.0)
+                validateFleetNumber(data, "end_longitude", -180.0, 180.0)
                 validateFleetDate(data, "trip_date")
                 if (data.has("start_odometer") && data.has("end_odometer") && !data.isNull("start_odometer") && !data.isNull("end_odometer")) {
                     val start = data.optString("start_odometer", "").trim().toDoubleOrNull()
@@ -19982,6 +19987,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             "vehicle_expenses" -> {
                 validateFleetNumber(data, "amount", Double.MIN_VALUE)
                 validateFleetNumber(data, "odometer_reading")
+                validateFleetNumber(data, "source_distance_km", Double.MIN_VALUE)
+                if (data.has("trip_id") && !data.isNull("trip_id")) {
+                    val tripId = data.optString("trip_id", "").trim().toLongOrNull()
+                    require(tripId != null && tripId > 0L) { "معرف الرحلة المرتبطة غير صالح" }
+                }
+                if (data.has("idempotency_key") && !data.isNull("idempotency_key")) {
+                    val key = data.optString("idempotency_key", "").trim()
+                    require(key.length <= 128) { "مفتاح منع التكرار أطول من المسموح" }
+                    if (key.isBlank()) data.remove("idempotency_key") else data.put("idempotency_key", key)
+                }
                 validateFleetDate(data, "expense_date")
             }
             "vehicle_maintenance" -> {
@@ -20685,6 +20700,28 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     val driverId = data.optLong("driver_id", 0L)
                     if (driverId > 0L) requireDriverInStation(db, driverId, stationId)
                 }
+                if (screenKey == "vehicle_expenses") {
+                    val tripId = data.optLong("trip_id", 0L)
+                    if (tripId > 0L) {
+                        val sourceDistance = db.rawQuery("""
+                            SELECT COALESCE(NULLIF(t.route_distance_km, 0), t.distance_km)
+                            FROM vehicle_trips t
+                            JOIN vehicles v ON v.id = t.vehicle_id AND v.is_deleted = 0
+                            JOIN parties p ON p.id = v.party_id AND p.station_id = ? AND p.is_deleted = 0
+                            WHERE t.id = ? AND t.vehicle_id = ? AND t.trip_status = 'completed'
+                            LIMIT 1
+                        """.trimIndent(), arrayOf(stationId.toString(), tripId.toString(), data.optLong("vehicle_id").toString())).use { cursor ->
+                            require(cursor.moveToFirst()) { "الرحلة غير مكتملة أو لا تتبع المركبة ومحطة المستخدم" }
+                            cursor.getDouble(0).also { distance ->
+                                require(distance.isFinite() && distance > 0.0) { "مسافة الرحلة غير صالحة لربط المصروف" }
+                            }
+                        }
+                        data.put("source_distance_km", sourceDistance)
+                    } else {
+                        data.remove("trip_id")
+                        data.remove("source_distance_km")
+                    }
+                }
             }
         }
     }
@@ -20694,7 +20731,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val relationColumns = when (screenKey) {
             "vehicles" -> listOf("party_id", "vehicle_code")
             "drivers" -> listOf("party_id", "vehicle_id", "driver_code")
-            "vehicle_locations", "vehicle_expenses", "vehicle_maintenance", "vehicle_insurance" -> listOf("vehicle_id")
+            "vehicle_locations", "vehicle_maintenance", "vehicle_insurance" -> listOf("vehicle_id")
+            "vehicle_expenses" -> listOf("vehicle_id", "trip_id", "source_distance_km", "idempotency_key")
             "vehicle_trips" -> listOf("vehicle_id", "driver_id", "start_odometer", "end_odometer")
             else -> emptyList()
         }
@@ -21323,7 +21361,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val tripDateSql = if (tripDates.isEmpty()) "" else " AND ${tripDates.joinToString(" AND ")}"
         val vehicleLabel = "COALESCE(NULLIF(TRIM(COALESCE(v.brand, '') || ' ' || COALESCE(v.model, '')), ''), NULLIF(v.vehicle_code, ''), 'مركبة')"
         val detailsSql = """
-            SELECT e.id, e.vehicle_id, e.expense_type, e.expense_date, e.amount, e.currency_id, e.odometer_reading, e.description, e.invoice_path, e.created_at,
+            SELECT e.id, e.vehicle_id, e.trip_id, e.source_distance_km, e.expense_type, e.expense_date, e.amount, e.currency_id, e.odometer_reading, e.description, e.invoice_path, e.created_at,
                    $vehicleLabel AS vehicle_name, COALESCE(NULLIF(v.plate_number_ar, ''), NULLIF(v.plate_number, ''), v.vehicle_code) AS plate_number,
                    COALESCE(NULLIF(c.currency_name_ar, ''), c.currency_name, c.currency_code, '') AS currency_name, COALESCE(c.currency_code, '') AS currency_code, COALESCE(c.symbol, '') AS currency_symbol
             FROM vehicle_expenses e
@@ -21387,7 +21425,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             readableDatabase.rawQuery("""
-                SELECT e.id, e.vehicle_id, e.expense_type, e.expense_date, e.amount, e.currency_id, e.odometer_reading, e.description, e.invoice_path, e.created_at,
+                SELECT e.id, e.vehicle_id, e.trip_id, e.source_distance_km, e.expense_type, e.expense_date, e.amount, e.currency_id, e.odometer_reading, e.description, e.invoice_path, e.created_at,
                        COALESCE(NULLIF(TRIM(COALESCE(v.brand, '') || ' ' || COALESCE(v.model, '')), ''), NULLIF(v.vehicle_code, ''), 'مركبة') AS vehicle_name,
                        COALESCE(NULLIF(v.plate_number_ar, ''), NULLIF(v.plate_number, ''), v.vehicle_code) AS plate_number,
                        COALESCE(NULLIF(c.currency_name_ar, ''), c.currency_name, c.currency_code, '') AS currency_name, COALESCE(c.currency_code, '') AS currency_code, COALESCE(c.symbol, '') AS currency_symbol
