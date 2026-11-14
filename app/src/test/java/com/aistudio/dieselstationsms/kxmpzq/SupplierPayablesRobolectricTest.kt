@@ -717,6 +717,102 @@ class SupplierPayablesRobolectricTest {
         assertEquals(1000.0, allocation.getDouble("allocated_amount"), 0.0001)
     }
 
+
+    @Test
+    fun supplierPaymentScenario300Then200Reverse100Then600SettlesExactlyWithoutCashReversal() {
+        val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 93020, "SUPPLIER-RECON-1000", 1000.0, "2026-10-01", null, 1
+        )
+        val payment300 = createCompletedSupplierPayment(300.0, "RECON-300")
+        val payment200 = createCompletedSupplierPayment(200.0, "RECON-200")
+        val payment600 = createCompletedSupplierPayment(600.0, "RECON-600")
+
+        SupplierPayablesRepository.allocatePayment(db, 1, supplierId, payment300, 300.0, 1, invoiceId)
+        SupplierPayablesRepository.allocatePayment(db, 1, supplierId, payment200, 200.0, 1, invoiceId)
+        val secondAllocationId = db.rawQuery(
+            "SELECT id FROM supplier_invoice_allocations WHERE payment_id=? AND supplier_invoice_id=? AND status='posted' AND is_deleted=0",
+            arrayOf(payment200.toString(), invoiceId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+
+        val cashMovementCountBefore = db.rawQuery(
+            "SELECT COUNT(*) FROM cash_movements WHERE reference_type='payment_reversal'",
+            null
+        ).use { c -> check(c.moveToFirst()); c.getInt(0) }
+        SupplierPayablesRepository.reversePaymentAllocation(
+            db, 1, supplierId, secondAllocationId, 100.0, 1,
+            "عكس تخصيص جزئي دون عكس الدفعة النقدية", "supplier-recon-reverse-100"
+        )
+        SupplierPayablesRepository.allocatePayment(db, 1, supplierId, payment600, 600.0, 1, invoiceId)
+
+        db.rawQuery(
+            """SELECT i.total_amount,i.paid_amount,i.remaining_amount,i.status,
+                      COALESCE((SELECT SUM(a.amount) FROM supplier_invoice_allocations a
+                                WHERE a.supplier_invoice_id=i.id AND a.status='posted' AND a.is_deleted=0),0),
+                      COALESCE((SELECT SUM(r.amount) FROM supplier_allocation_reversals r
+                                WHERE r.supplier_invoice_id=i.id AND r.status='posted'),0),
+                      COALESCE((SELECT SUM(p.amount) FROM payments p
+                                WHERE p.supplier_party_id=i.supplier_id AND p.station_id=i.station_id
+                                  AND p.status='completed' AND p.is_deleted=0
+                                  AND p.id IN (?,?,?)),0)
+               FROM supplier_invoices i WHERE i.id=? AND i.station_id=? AND i.supplier_id=?""",
+            arrayOf(payment300.toString(), payment200.toString(), payment600.toString(),
+                invoiceId.toString(), "1", supplierId.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals(1000.0, c.getDouble(0), 0.000001)
+            assertEquals(1000.0, c.getDouble(1), 0.000001)
+            assertEquals(0.0, c.getDouble(2), 0.000001)
+            assertEquals("paid", c.getString(3))
+            assertEquals(1100.0, c.getDouble(4), 0.000001)
+            assertEquals(100.0, c.getDouble(5), 0.000001)
+            assertEquals(1100.0, c.getDouble(6), 0.000001)
+        }
+        val cashMovementCountAfter = db.rawQuery(
+            "SELECT COUNT(*) FROM cash_movements WHERE reference_type='payment_reversal'",
+            null
+        ).use { c -> check(c.moveToFirst()); c.getInt(0) }
+        assertEquals(cashMovementCountBefore, cashMovementCountAfter)
+    }
+
+    @Test
+    fun supplierAllocationRejectsEvenOneCentOverInvoiceAtRepositoryAndSqlGuard() {
+        val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 93021, "SUPPLIER-STRICT-100", 100.0, "2026-10-01", null, 1
+        )
+        val overPayment = createCompletedSupplierPayment(100.01, "STRICT-OVER")
+        assertTrue(runCatching {
+            SupplierPayablesRepository.allocatePayment(db, 1, supplierId, overPayment, 100.01, 1, invoiceId)
+        }.isFailure)
+        assertEquals(0, db.rawQuery(
+            "SELECT COUNT(*) FROM supplier_invoice_allocations WHERE payment_id=?",
+            arrayOf(overPayment.toString())
+        ).use { c -> check(c.moveToFirst()); c.getInt(0) })
+
+        assertTrue(runCatching {
+            db.insertOrThrow("supplier_invoice_allocations", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("station_id", 1)
+                put("supplier_id", supplierId)
+                put("supplier_invoice_id", invoiceId)
+                put("payment_id", overPayment)
+                put("allocation_kind", "invoice")
+                put("amount", 100.01)
+                put("status", "posted")
+                put("is_deleted", 0)
+                put("created_by", 1)
+            })
+        }.isFailure)
+        db.rawQuery(
+            "SELECT paid_amount,remaining_amount,status FROM supplier_invoices WHERE id=?",
+            arrayOf(invoiceId.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals(0.0, c.getDouble(0), 0.000001)
+            assertEquals(100.0, c.getDouble(1), 0.000001)
+            assertEquals("open", c.getString(2))
+        }
+    }
+
     @Test
     fun fullPaymentReversalAfterPartialAllocationReversalDoesNotDoubleSubtract() {
         val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(

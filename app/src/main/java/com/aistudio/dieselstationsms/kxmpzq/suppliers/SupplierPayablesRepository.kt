@@ -183,7 +183,7 @@ object SupplierPayablesRepository {
                 SELECT RAISE(ABORT,'supplier_payment_overallocation') WHERE
                     (SELECT COALESCE(SUM(a.amount),0) FROM supplier_invoice_allocations a
                      WHERE a.payment_id=NEW.payment_id AND a.status='posted' AND a.is_deleted=0) + NEW.amount
-                    > (SELECT amount FROM payments WHERE id=NEW.payment_id) + 0.01;
+                    > (SELECT amount FROM payments WHERE id=NEW.payment_id) + 0.000001;
                 SELECT RAISE(ABORT,'supplier_invoice_overallocation') WHERE NEW.supplier_invoice_id IS NOT NULL AND
                     ((SELECT COALESCE(SUM(a.amount),0) FROM supplier_invoice_allocations a
                        WHERE a.supplier_invoice_id=NEW.supplier_invoice_id AND a.station_id=NEW.station_id
@@ -191,7 +191,7 @@ object SupplierPayablesRepository {
                      - (SELECT COALESCE(SUM(r.amount),0) FROM supplier_allocation_reversals r
                         WHERE r.supplier_invoice_id=NEW.supplier_invoice_id AND r.station_id=NEW.station_id
                           AND r.status='posted') + NEW.amount)
-                    > (SELECT total_amount FROM supplier_invoices WHERE id=NEW.supplier_invoice_id AND station_id=NEW.station_id) + 0.01;
+                    > (SELECT total_amount FROM supplier_invoices WHERE id=NEW.supplier_invoice_id AND station_id=NEW.station_id) + 0.000001;
             END
         """.trimIndent())
     }
@@ -351,12 +351,12 @@ object SupplierPayablesRepository {
         val sql = when (sourceType) {
             "fuel_refill" -> """SELECT 1 FROM tank_refills
                 WHERE id=? AND station_id=? AND supplier_id=? AND status='completed'
-                  AND is_deleted=0 AND ABS(COALESCE(net_amount,0)-?)<=0.01 LIMIT 1"""
+                  AND is_deleted=0 AND ABS(COALESCE(net_amount,0)-?)<=0.000001 LIMIT 1"""
             "product_purchase" -> """SELECT 1 FROM inventory_movements
                 WHERE id=? AND station_id=? AND movement_type='in'
                   AND COALESCE(movement_subtype,'')='in' AND status='completed'
                   AND is_deleted=0 AND reference_id=?
-                  AND ABS(COALESCE(total_cost,0)-?)<=0.01 LIMIT 1"""
+                  AND ABS(COALESCE(total_cost,0)-?)<=0.000001 LIMIT 1"""
             else -> throw IllegalArgumentException("نوع مصدر فاتورة المورد غير مدعوم")
         }
         val args = arrayOf(sourceId.toString(), stationId.toString(), supplierId.toString(), amount.toString())
@@ -434,7 +434,7 @@ object SupplierPayablesRepository {
             val existingCurrency = existing.optLong("currency_id", 0L)
             val requestedCurrency = currencyId?.takeIf { it > 0L } ?: 0L
             require(existing.getLong("supplier_id") == supplierId &&
-                abs(existing.getDouble("amount") - amount) <= 0.01 &&
+                abs(existing.getDouble("amount") - amount) <= EPSILON &&
                 existing.optString("invoice_number") == normalizedNumber &&
                 existing.optString("invoice_date") == normalizedDate &&
                 existingCurrency == requestedCurrency) {
@@ -567,7 +567,7 @@ object SupplierPayablesRepository {
         require(payment.getString("status")=="completed" && payment.getInt("is_deleted")==0) {
             "لا يمكن تخصيص دفعة غير مكتملة أو محذوفة"
         }
-        require(abs(payment.getDouble("amount")-amount)<=0.01) { "مبلغ التخصيص لا يطابق مبلغ الدفعة" }
+        require(abs(payment.getDouble("amount")-amount)<=0.000001) { "مبلغ التخصيص لا يطابق مبلغ الدفعة" }
 
         data class ExistingAllocation(val exists: Boolean, val amount: Double)
 
@@ -584,7 +584,7 @@ object SupplierPayablesRepository {
             )
         }
         if (existing.exists) {
-            require(abs(existing.amount-amount)<=0.01) {
+            require(abs(existing.amount-amount)<=0.000001) {
                 "تم تخصيص الدفعة مسبقاً بمبلغ يختلف عن مبلغ الدفعة"
             }
             return JSONObject().apply {
@@ -617,7 +617,7 @@ object SupplierPayablesRepository {
 
         if(explicitInvoiceId>0L) {
             require(candidates.size==1) { "الفاتورة المحددة غير موجودة أو مسددة أو بعملة مختلفة" }
-            require(amount<=candidates.first().remaining+0.01) {
+            require(amount<=candidates.first().remaining+0.000001) {
                 "مبلغ الدفعة يتجاوز رصيد الفاتورة المحددة؛ وزع الدفعة دون تجاوز المتبقي"
             }
         }
@@ -649,7 +649,7 @@ object SupplierPayablesRepository {
                 "SELECT total_amount FROM supplier_invoices WHERE id=? AND station_id=? AND supplier_id=? AND is_deleted=0",
                 arrayOf(invoice.id.toString(),stationId.toString(),supplierId.toString())
             ).use { c -> require(c.moveToFirst()) { "فاتورة المورد غير موجودة أثناء التخصيص" };c.getDouble(0) }
-            require(updated<=total+0.01) { "إجمالي تخصيصات المورد يتجاوز قيمة الفاتورة" }
+            require(updated<=total+0.000001) { "إجمالي تخصيصات المورد يتجاوز قيمة الفاتورة" }
             val newRemaining=(total-updated).coerceAtLeast(0.0)
             val newStatus=when {
                 newRemaining<=EPSILON -> "paid"
@@ -777,7 +777,7 @@ object SupplierPayablesRepository {
         ).use { cursor -> cursor.moveToFirst(); cursor.getDouble(0) }
         val available = original.amount - alreadyReversed
         require(available > EPSILON) { "لا يوجد رصيد تخصيص متبقٍ للعكس" }
-        require(amount <= available + 0.01) { "مبلغ العكس يتجاوز المتبقي من التخصيص" }
+        require(amount <= available + EPSILON) { "مبلغ العكس يتجاوز المتبقي من التخصيص" }
         val paymentCurrency = db.rawQuery(
             "SELECT COALESCE(currency_id,0) FROM payments WHERE id=? AND station_id=? AND supplier_party_id=? AND status='completed' AND is_deleted=0",
             arrayOf(original.paymentId.toString(), stationId.toString(), supplierId.toString())
@@ -800,7 +800,7 @@ object SupplierPayablesRepository {
             "SELECT total_amount FROM supplier_invoices WHERE id=? AND station_id=? AND supplier_id=? AND is_deleted=0",
             arrayOf(original.invoiceId.toString(), stationId.toString(), supplierId.toString())
         ).use { cursor -> require(cursor.moveToFirst()) { "فاتورة المورد غير موجودة" }; cursor.getDouble(0) }
-        require(activePaid <= total + 0.01) { "رصيد تخصيصات الفاتورة غير صالح" }
+        require(activePaid <= total + EPSILON) { "رصيد تخصيصات الفاتورة غير صالح" }
         val remaining = (total - activePaid).coerceAtLeast(0.0)
         val status = when { remaining <= EPSILON -> "paid"; activePaid > EPSILON -> "partial"; else -> "open" }
         require(db.update(
@@ -924,7 +924,7 @@ object SupplierPayablesRepository {
             require(total.isFinite() && paid.isFinite() && total >= -EPSILON && paid >= -EPSILON) {
                 "أرصدة تخصيص فاتورة المورد غير صالحة"
             }
-            require(paid <= total + 0.01) { "تخصيصات الفاتورة المتبقية تتجاوز قيمتها الأصلية" }
+            require(paid <= total + EPSILON) { "تخصيصات الفاتورة المتبقية تتجاوز قيمتها الأصلية" }
             val remaining = (total - paid).coerceAtLeast(0.0)
             val status = when {
                 remaining <= EPSILON -> "paid"
