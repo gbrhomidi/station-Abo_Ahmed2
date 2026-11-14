@@ -31,11 +31,11 @@ expect(source.includes('const nativeDateFilter = dueInvoicesDrilldownActive'), '
 expect(source.includes('<option value="undated">غير محدد الاستحقاق</option>'), 'يجب إتاحة فلترة الديون التي لا تملك تاريخ استحقاق موثوقاً');
 console.log(`Customer debts modal async bridge regression PASS (${scriptBlocks.length} script block(s)).`);
 
-expect(source.includes('position:fixed;top:calc(env(safe-area-inset-top,0px) + 104px)'), 'يجب أن تكون شارة المستحقات المحققة عائمة وثابتة مع مراعاة safe-area');
-expect(source.includes('due-reminder-close') && source.includes('onclick="closeDueReminderNotice()"'), 'يجب توفير زر إغلاق مستقل لإشعار الاستحقاق');
+expect(source.includes('bottom:100px !important; right:28px !important;'), 'يجب أن تظهر شارة المستحقات المحققة عائمة أسفل الشاشة');
+expect(source.includes('due-reminder-close') && source.includes('aria-label="إغلاق" onclick="closeDueReminderNotice()"'), 'يجب توفير زر إغلاق مستقل لإشعار الاستحقاق');
 expect(source.includes('--bg-primary: #f3eadb') && source.includes('--bg-secondary: #e8dcc9'), 'يجب اعتماد لوحة بيج دافئة في الوضع الفاتح');
 expect(source.includes('pendingPaymentCustomerId || finiteNumber(sel.value)'), 'يجب عدم فقد العميل المحدد أثناء تحميل خيارات المودال غير المتزامن');
-expect(source.includes('<optgroup label="العروض الأساسية">') && source.includes('<optgroup label="عروض التحليل والمتابعة">'), 'يجب تنظيم خيارات العرض الافتراضي في مجموعات واضحة');
+expect(source.includes('<select id="debtSettingDefaultView">') && !source.includes('<optgroup label="العروض الأساسية">'), 'يجب عرض خيارات العرض الافتراضي في قائمة مسطحة واضحة');
 
 expect(source.includes('pendingPaymentInvoiceId') && source.includes('invoice_id: pendingPaymentInvoiceId'), 'يجب تمرير معرف الفاتورة المختارة إلى SQLite عبر الجسر');
 expect(source.includes('invoiceId: pendingPaymentInvoiceId'), 'يجب فصل مفتاح عدم التكرار بين فواتير العميل المختلفة');

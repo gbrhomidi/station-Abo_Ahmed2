@@ -6108,7 +6108,23 @@
             text-align: center;
         }
     
-</style>
+
+        /* Final interaction/layout refinements */
+        .top-title { justify-content: center; }
+        .debt-settings-stack { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+        .debt-settings-stack .debt-setting-row { min-width:0; border:1px solid var(--border-color); border-radius:12px; padding:12px; grid-template-columns:minmax(0,1fr); gap:8px; text-align:center; }
+        .debt-settings-stack .debt-setting-row select { width:100%; min-width:0; }
+        .due-alert-btn { top:auto !important; bottom:100px !important; right:28px !important; }
+        .due-reminder-close { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border:0; border-radius:50%; background:rgba(185,28,28,.10); color:#b91c1c; cursor:pointer; transition:background .18s ease,color .18s ease,transform .18s ease; }
+        .due-reminder-close:hover { background:#b91c1c; color:#fff; transform:scale(1.06); }
+        .row-selected { background:var(--row-selected-bg,rgba(184,135,58,.16)) !important; outline:2px solid var(--gold-primary); outline-offset:-2px; }
+        .table-wrapper { width:100%; border-inline:0; }
+        .table-section { padding-inline:0; }
+        .data-table th { font-size:.9rem; font-weight:900; }
+        .debt-view-toolbar { justify-content:center; margin-inline:24px; }
+        @media(max-width:520px){ .debt-settings-stack{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;} .debt-settings-stack .debt-setting-row{padding:8px 6px;} .due-alert-btn{right:16px !important;bottom:100px !important;} }
+        @media(prefers-reduced-motion:reduce){.debt-view-arrow,.debt-view-arrow::before{animation:none!important;}}
+        </style>
   <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
@@ -7783,7 +7799,7 @@ function updateDebtViewButtons() {
                 o.id = 'dueReminderOverlay';
                 o.className = 'due-reminder-overlay';
                 o.innerHTML = `<div class="due-reminder-card" style="position:relative">
-                    <button type="button" class="due-reminder-close" aria-label="إغلاق" onclick="cancelDueReminderNotice()">
+                    <button type="button" class="due-reminder-close" aria-label="إغلاق" onclick="closeDueReminderNotice()">
                         <i class="fas fa-times"></i>
                     </button>
                     <h3>🔔 مستحقات العملاء تقترب</h3>
