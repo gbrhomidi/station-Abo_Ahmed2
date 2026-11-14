@@ -48,16 +48,16 @@
 
         /* الوضع الفاتح */
         [data-theme="light"] {
-            --bg-primary: #ecfdf5;
-            --bg-secondary: #d1fae5;
-            --bg-card: rgba(255, 255, 255, 0.85);
-            --bg-glass: rgba(0, 0, 0, 0.03);
-            --bg-glass-light: rgba(0, 0, 0, 0.06);
-            --text-primary: #064e3b;
-            --text-secondary: #047857;
-            --text-muted: #6b9b82;
-            --border-color: #a7d7c0;
-            --shadow-card: 0 20px 50px rgba(0, 0, 0, 0.1);
+            --bg-primary: #f4eee3;
+            --bg-secondary: #e9dfcf;
+            --bg-card: rgba(255, 252, 246, 0.94);
+            --bg-glass: rgba(92, 72, 45, 0.045);
+            --bg-glass-light: rgba(92, 72, 45, 0.08);
+            --text-primary: #3f3428;
+            --text-secondary: #75614a;
+            --text-muted: #95836d;
+            --border-color: #d8c9b3;
+            --shadow-card: 0 20px 50px rgba(70, 52, 30, 0.12);
         }
         [data-theme="dark"] {
             --bg-primary: #0a1a12;
@@ -1849,20 +1849,23 @@
             }
         }
     
-        .due-alert-btn{position:relative;display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(239,68,68,.55);background:linear-gradient(135deg,#7f1d1d,#dc2626);color:#fff;border-radius:14px;padding:10px 15px;font-weight:800;cursor:pointer;box-shadow:0 0 0 0 rgba(239,68,68,.55);animation:duePulse 1.8s infinite;overflow:hidden}
+        .due-alert-btn{position:fixed;top:calc(env(safe-area-inset-top,0px) + 104px);right:16px;z-index:100003;display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(180,83,9,.48);background:linear-gradient(135deg,#92400e,#d97706);color:#fff;border-radius:16px;padding:10px 15px;font-weight:800;cursor:pointer;box-shadow:0 10px 28px rgba(120,72,20,.24);animation:duePulse 1.8s 2;overflow:hidden}
         .due-alert-btn .due-count{background:#fff;color:#b91c1c;border-radius:999px;min-width:22px;height:22px;display:grid;place-items:center;font-size:12px}
         @keyframes duePulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}50%{box-shadow:0 0 0 10px rgba(239,68,68,0)}}
         .due-reminder-overlay{position:fixed;inset:0;background:rgba(2,6,23,.68);backdrop-filter:blur(8px);z-index:100000;display:none;align-items:center;justify-content:center;padding:18px}
         .due-reminder-overlay.show{display:flex}
         .due-reminder-card{width:min(760px,96vw);max-height:88vh;overflow:auto;background:var(--card-bg,#fff);color:var(--text-primary,#111827);border:1px solid rgba(148,163,184,.28);border-radius:28px;box-shadow:0 30px 90px rgba(0,0,0,.35);padding:26px;position:relative}
-        .due-reminder-card h3{margin:0 0 8px;font-size:22px}.due-reminder-card p{line-height:1.8;color:var(--text-secondary,#64748b)}
+        .due-reminder-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}.due-reminder-card h3{margin:0;font-size:22px}.due-reminder-close{width:38px;height:38px;flex:0 0 38px;border:1px solid rgba(148,163,184,.35);border-radius:12px;background:rgba(148,163,184,.12);color:inherit;display:grid;place-items:center;cursor:pointer}.due-reminder-card p{line-height:1.8;color:var(--text-secondary,#64748b)}
         .due-reminder-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:20px}
         .due-reminder-actions button{border:0;border-radius:13px;padding:11px 18px;font-weight:800;cursor:pointer}
+        @media(max-width:560px){.due-reminder-overlay{padding:10px}.due-reminder-card{width:100%;max-height:92vh;padding:18px;border-radius:20px}.due-reminder-heading h3{font-size:18px}.due-reminder-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.due-reminder-actions button{width:100%;padding:11px 8px}}
         .due-ok{background:#059669;color:#fff}.due-cancel{background:#e5e7eb;color:#111827}.due-delay{background:#f59e0b;color:#fff}.due-view{background:#2563eb;color:#fff}
         .due-detail-modal{position:fixed;inset:0;z-index:100001;background:rgba(2,6,23,.7);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:16px}
         .due-detail-modal.show{display:flex}.due-detail-card{width:min(980px,97vw);max-height:88vh;overflow:auto;background:var(--card-bg,#fff);border-radius:24px;padding:20px;box-shadow:0 30px 90px rgba(0,0,0,.4)}
         .due-detail-table{width:100%;border-collapse:separate;border-spacing:0 8px}.due-detail-table th{font-size:12px;color:#64748b;text-align:right;padding:8px}.due-detail-table td{padding:12px;background:rgba(148,163,184,.09);border-top:1px solid rgba(148,163,184,.15);border-bottom:1px solid rgba(148,163,184,.15)}.due-detail-table td:first-child{border-radius:0 10px 10px 0}.due-detail-table td:last-child{border-radius:10px 0 0 10px}.due-red{color:#dc2626;font-weight:900}.due-blue{color:#2563eb;font-weight:900}
-        .due-bubble{position:fixed;top:82px;right:20px;z-index:100002;background:#dc2626;color:#fff;border-radius:999px;padding:10px 15px;display:none;align-items:center;gap:8px;box-shadow:0 12px 35px rgba(0,0,0,.28);cursor:pointer;font-weight:800}.due-bubble.show{display:flex}
+        .due-bubble{position:fixed;top:calc(env(safe-area-inset-top,0px) + 158px);right:16px;z-index:100002;background:linear-gradient(135deg,#7c3f12,#b7791f);color:#fff;border-radius:16px 16px 16px 4px;padding:10px 15px;display:none;align-items:center;gap:8px;box-shadow:0 12px 35px rgba(0,0,0,.22);cursor:pointer;font-weight:800}.due-bubble.show{display:flex}
+        @media(max-width:480px){.due-alert-btn,.due-bubble{right:10px;padding:9px 12px;font-size:.82rem}.due-alert-btn{top:calc(env(safe-area-inset-top,0px) + 92px)}.due-bubble{top:calc(env(safe-area-inset-top,0px) + 145px)}}
+        @media(prefers-reduced-motion:reduce){.due-alert-btn{animation:none!important;transition:none!important}}
         .due-auto-toggle{display:flex;align-items:flex-start;gap:10px;margin:14px 0 8px;padding:12px 14px;border:1px solid rgba(16,185,129,.35);border-radius:13px;background:rgba(16,185,129,.07);font-weight:800;line-height:1.7}
         .due-auto-toggle input{width:20px;height:20px;margin-top:2px;flex:0 0 auto;accent-color:#10b981}
 
@@ -1941,6 +1944,9 @@
 #settingsModal .debt-setting-row{padding:12px 10px;text-align:center;justify-items:center}
 #settingsModal .debt-setting-row>div{width:100%;text-align:center}
 #settingsModal .debt-setting-row input:not([type=checkbox]),#settingsModal .debt-setting-row select{max-width:none;text-align:center}
+#settingsModal .debt-setting-row select{width:100%;min-height:46px;padding:10px 12px;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-secondary);color:var(--text-primary);font:inherit;font-weight:700;white-space:normal}
+#settingsModal .debt-setting-row select optgroup{font-weight:900;color:var(--text-secondary)}
+#settingsModal .debt-setting-row select option{padding:8px}
 #settingsModal .debt-setting-check{justify-content:center}
 #settingsModal .report-panel>p{padding:0 10px;text-align:center}
 #reportsModal .report-filters{width:100%;min-width:0;padding:0 8px;grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -2737,6 +2743,7 @@
         let allDebtsData = [];
         let dueInvoicesDrilldownActive = false;
         let paymentInFlight = false;
+        let pendingPaymentCustomerId = 0;
         let paymentKeysByFingerprint = new Map();
         let paymentSettlementOptions = { cashBoxes: [], bankAccounts: [] };
         let paymentSettlementOptionsLoaded = false;
@@ -3541,6 +3548,7 @@ function updateDebtViewButtons() {
 
         function openPaymentModal() {
             clearPaymentFeedback();
+            pendingPaymentCustomerId = 0;
             document.getElementById('pCustomerId').value = '';
             document.getElementById('pAmount').value = '';
             document.getElementById('pMethod').value = 'cash';
@@ -3554,7 +3562,8 @@ function updateDebtViewButtons() {
 
         function openPaymentForCustomer(customerId, remaining) {
             clearPaymentFeedback();
-            document.getElementById('pCustomerId').value = customerId;
+            pendingPaymentCustomerId = finiteNumber(customerId);
+            document.getElementById('pCustomerId').value = String(pendingPaymentCustomerId || '');
             document.getElementById('pAmount').value = remaining > 0 ? remaining : '';
             document.getElementById('pMethod').value = 'cash';
             document.getElementById('pNotes').value = '';
@@ -3567,6 +3576,7 @@ function updateDebtViewButtons() {
 
         function closePaymentModal() {
             document.getElementById('paymentModal').classList.remove('show');
+            pendingPaymentCustomerId = 0;
             document.body.style.overflow = '';
         }
 
@@ -3575,7 +3585,7 @@ function updateDebtViewButtons() {
                 const result = await apiCall('getCustomers');
                 const sel = document.getElementById('pCustomerId');
                 if (result.success && result.data) {
-                    const currentVal = sel.value;
+                    const currentVal = pendingPaymentCustomerId || finiteNumber(sel.value);
                     sel.innerHTML = '<option value="">اختر العميل</option>';
                     result.data.forEach(c => {
                         const opt = document.createElement('option');
@@ -3583,7 +3593,12 @@ function updateDebtViewButtons() {
                         opt.textContent = c.commercial_name || c.name || 'عميل';
                         sel.appendChild(opt);
                     });
-                    if (currentVal) sel.value = currentVal;
+                    if (currentVal) {
+                        sel.value = String(currentVal);
+                        if (sel.value !== String(currentVal)) {
+                            console.warn('العميل المحدد غير موجود ضمن قائمة العملاء المحملة:', currentVal);
+                        }
+                    }
                 }
             } catch (e) { console.error('Error loading customers:', e); }
         }
@@ -3605,7 +3620,7 @@ function updateDebtViewButtons() {
             if (!document.getElementById('dueReminderOverlay')) {
                 const o=document.createElement('div'); o.id='dueReminderOverlay'; o.className='due-reminder-overlay';
                 o.innerHTML=`<div class="due-reminder-card">
-                    <h3>🔔 مستحقات العملاء تقترب</h3>
+                    <div class="due-reminder-heading"><h3>🔔 مستحقات العملاء تقترب</h3><button type="button" class="due-reminder-close" aria-label="إغلاق" onclick="closeDueReminderNotice()"><i class="fas fa-times"></i></button></div>
                     <p id="dueReminderText">يوجد عملاء لديهم فواتير آجلة اقترب موعد استحقاقها. يمكنك إرسال تذكير يدوي الآن أو تفعيل الإرسال الآلي المستمر.</p>
                     <label class="due-auto-toggle"><input id="dueAutoSmsEnabled" type="checkbox" onchange="setDueAutoSmsEnabled(this.checked)"><span>إرسال آلياً — إرسال تذكيرات SMS تلقائياً عند اقتراب الاستحقاق وفي يومه وبعد تجاوزه، طوال أيام الأسبوع.</span></label>
                     <div class="due-reminder-actions">
@@ -4375,7 +4390,7 @@ async function loadCustomerDebtSettings() {
             body.innerHTML='<div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> جاري تحميل إعدادات ديون العملاء...</div>';
             loadCustomerDebtSettings().then(function(value){
                 body.innerHTML='<div class="report-workspace"><section class="report-panel"><div class="report-panel-title"><i class="fas fa-sliders-h"></i> تفضيلات شاشة ديون العملاء</div><div class="debt-settings-stack">'+
-                    '<div class="debt-setting-row"><div><span class="debt-setting-label">طريقة العرض الافتراضية</span><span class="debt-setting-desc">اختر أسلوب عرض الديون الذي سيُطبّق تلقائياً عند فتح الشاشة.</span></div><select id="debtSettingDefaultView"><option value="table">جدول</option><option value="grid">شبكة</option><option value="cards">بطاقات</option><option value="kanban">كانبان</option><option value="gantt">جانت</option><option value="calendar">تقويم</option><option value="gallery">معرض</option><option value="map">خريطة</option><option value="dashboard">لوحة تحكم</option><option value="list">قائمة</option><option value="tree">شجرة (تجميع حسب العميل)</option></select></div>'+
+                    '<div class="debt-setting-row"><div><span class="debt-setting-label">طريقة العرض الافتراضية</span><span class="debt-setting-desc">اختر أسلوب عرض الديون الذي سيُطبّق تلقائياً عند فتح الشاشة.</span></div><select id="debtSettingDefaultView" aria-label="طريقة العرض الافتراضية"><optgroup label="العروض الأساسية"><option value="table">جدول تفصيلي</option><option value="list">قائمة مختصرة</option><option value="cards">بطاقات العملاء</option><option value="grid">شبكة البطاقات</option></optgroup><optgroup label="عروض التحليل والمتابعة"><option value="dashboard">لوحة مؤشرات</option><option value="kanban">كانبان حسب حالة الدين</option><option value="tree">شجرة مجمعة حسب العميل</option></optgroup><optgroup label="العروض الزمنية والمكانية"><option value="calendar">تقويم الاستحقاقات</option><option value="gantt">مخطط جانت الزمني</option><option value="gallery">معرض</option><option value="map">خريطة</option></optgroup></select></div>'+
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">حالة الديون الافتراضية</span><span class="debt-setting-desc">فلتر اختياري عند فتح الشاشة، ويمكن تغييره من شريط الفلاتر.</span></div><select id="debtSettingDefaultStatus"><option value="">جميع الحالات</option><option value="current">غير متأخر</option><option value="undated">غير محدد الاستحقاق</option><option value="overdue">متأخر</option><option value="doubtful">مشكوك في تحصيله</option><option value="partial">مدفوع جزئياً</option></select></div>'+
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">نافذة تذكير الاستحقاق بالأيام</span><span class="debt-setting-desc">نطاق قائمة تنبيهات الديون القريبة في هذه الشاشة.</span></div><input id="debtSettingDueDays" type="number" min="1" max="365" step="1" value="'+value.dueSoonDays+'"></div>'+
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">التقرير الافتراضي</span><span class="debt-setting-desc">التقرير الذي يظهر أولاً عند فتح التقارير.</span></div><select id="debtSettingDefaultReport"><option value="balances">أرصدة ديون العملاء</option><option value="overdue">الديون المتأخرة</option><option value="doubtful">الديون المشكوك في تحصيلها</option><option value="aging">أعمار الديون</option><option value="customers">ملخص حسب العميل</option><option value="invoices">الفواتير ذات الرصيد المتبقي</option><option value="payments">عمليات التحصيل والتسديد</option><option value="statement">كشف حركة عميل</option></select></div>'+

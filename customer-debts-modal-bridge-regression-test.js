@@ -30,3 +30,9 @@ expect(source.includes('row.created_at || row.transaction_date || row.business_d
 expect(source.includes('const nativeDateFilter = dueInvoicesDrilldownActive'), 'يجب إبقاء قيد الاستحقاق الأصلي لمسار تفصيل مؤشر لوحة المعلومات');
 expect(source.includes('<option value="undated">غير محدد الاستحقاق</option>'), 'يجب إتاحة فلترة الديون التي لا تملك تاريخ استحقاق موثوقاً');
 console.log(`Customer debts modal async bridge regression PASS (${scriptBlocks.length} script block(s)).`);
+
+expect(source.includes('position:fixed;top:calc(env(safe-area-inset-top,0px) + 104px)'), 'يجب أن تكون شارة المستحقات المحققة عائمة وثابتة مع مراعاة safe-area');
+expect(source.includes('due-reminder-close') && source.includes('onclick="closeDueReminderNotice()"'), 'يجب توفير زر إغلاق مستقل لإشعار الاستحقاق');
+expect(source.includes('--bg-primary: #f4eee3') && source.includes('--bg-secondary: #e9dfcf'), 'يجب اعتماد لوحة بيج دافئة في الوضع الفاتح');
+expect(source.includes('pendingPaymentCustomerId || finiteNumber(sel.value)'), 'يجب عدم فقد العميل المحدد أثناء تحميل خيارات المودال غير المتزامن');
+expect(source.includes('<optgroup label="العروض الأساسية">') && source.includes('<optgroup label="عروض التحليل والمتابعة">'), 'يجب تنظيم خيارات العرض الافتراضي في مجموعات واضحة');
