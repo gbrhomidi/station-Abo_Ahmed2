@@ -41,3 +41,10 @@ expect(source.includes('pendingPaymentInvoiceId') && source.includes('invoice_id
 expect(source.includes('invoiceId: pendingPaymentInvoiceId'), 'يجب فصل مفتاح عدم التكرار بين فواتير العميل المختلفة');
 expect(source.includes('تسديد كامل قيمة الفاتورة رقم') && source.includes('تسديد جزئي من قيمة الفاتورة رقم'), 'يجب تسجيل وصف التسديد الكامل أو الجزئي مع الحفاظ على ملاحظات المستخدم');
 expect(source.includes('openPaymentForCustomer(') && source.includes('finiteNumber(item.id)'), 'يجب تمرير معرف الفاتورة من أزرار التسديد على مستوى الفاتورة');
+
+expect(source.includes('animation:dueReminderBubbleWave 1.5s ease-out 2'), 'موجة فقاعة التأجيل يجب أن تنتهي بعد ثلاث ثوانٍ');
+expect(source.includes('--due-bubble-wave:rgba(26,35,126,.95)') && source.includes('--due-bubble-wave:rgba(255,215,0,.98)'), 'لون موجة فقاعة التأجيل يجب أن يتغير بين الوضعين الفاتح والمظلم');
+expect(source.includes('.due-bubble::after{content:'), 'فقاعة التأجيل يجب أن تعرض ذيلاً واضحاً');
+expect(source.includes("dueReminderDeferred=false;document.getElementById('dueReminderBubble')?.classList.remove('show')"), 'إلغاء التذكير يجب أن يخفي فقاعة التأجيل');
+expect(source.includes("r.interaction_action==='deferred'"), 'يجب حصر فقاعة التأجيل في المستحقات المؤجلة الحالية');
+expect(source.includes('prefers-reduced-motion:reduce){.due-alert-btn,.due-bubble.show{animation:none!important'), 'يجب احترام تقليل الحركة في فقاعة التأجيل');
