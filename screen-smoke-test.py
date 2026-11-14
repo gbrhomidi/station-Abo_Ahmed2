@@ -430,15 +430,15 @@ else:
         print(f'FAIL custody/workshop preflight: runner exited {preflight.returncode}')
         failed += 1
 
-# Execute the explicit SQLite/business-day integration suite and browser-based viewport acceptance matrix.
-for acceptance_name, acceptance_script in (
-    ('business-day SQLite integration', PROJECT_ROOT / 'business_day_boundary_integration_test.py'),
-    ('responsive viewport acceptance', PROJECT_ROOT / 'responsive-viewport-acceptance.py'),
-):
-    if not acceptance_script.exists():
-        print(f'FAIL {acceptance_name}: runner missing')
-        failed += 1
-        continue
+# Run the SQLite/business-day integration here. Responsive viewport acceptance
+# has its own workflow step after setup-chrome installs and exports CHROME_BIN;
+# running it here would launch before that dependency is available.
+acceptance_name = 'business-day SQLite integration'
+acceptance_script = PROJECT_ROOT / 'business_day_boundary_integration_test.py'
+if not acceptance_script.exists():
+    print(f'FAIL {acceptance_name}: runner missing')
+    failed += 1
+else:
     acceptance = subprocess.run(
         [sys.executable, str(acceptance_script)],
         cwd=PROJECT_ROOT,
