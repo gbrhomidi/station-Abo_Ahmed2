@@ -1897,4 +1897,44 @@ class SupplierPayablesRobolectricTest {
         }
     }
 
+
+    @Test
+    fun partialAllocationReversalRejectsNonPositiveAndNonFiniteAmounts() {
+        val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 93005, "MAN-INVALID-REVERSAL", 100.0, "2026-10-01", null, 1
+        )
+        val paymentId = createCompletedSupplierPayment(100.0, "INVALID-REVERSAL")
+        SupplierPayablesRepository.allocatePayment(db, 1, supplierId, paymentId, 100.0, 1, invoiceId)
+        val allocationId = db.rawQuery(
+            "SELECT id FROM supplier_invoice_allocations WHERE station_id=1 AND supplier_id=? AND payment_id=? AND status='posted' AND is_deleted=0",
+            arrayOf(supplierId.toString(), paymentId.toString())
+        ).use { cursor -> check(cursor.moveToFirst()); cursor.getLong(0) }
+
+        listOf(0.0, -0.01, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY).forEachIndexed { index, invalid ->
+            assertTrue("Invalid reversal amount must be rejected: $invalid", runCatching {
+                SupplierPayablesRepository.reversePaymentAllocation(
+                    db, 1, supplierId, allocationId, invalid, 1, "Invalid amount", "invalid-reversal-$index"
+                )
+            }.isFailure)
+        }
+
+        db.rawQuery(
+            "SELECT COUNT(*),COALESCE(SUM(amount),0) FROM supplier_allocation_reversals WHERE station_id=1 AND allocation_id=? AND status='posted'",
+            arrayOf(allocationId.toString())
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+            assertEquals(0.0, cursor.getDouble(1), 0.0001)
+        }
+        db.rawQuery(
+            "SELECT paid_amount,remaining_amount,status FROM supplier_invoices WHERE id=? AND station_id=1",
+            arrayOf(invoiceId.toString())
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            assertEquals(100.0, cursor.getDouble(0), 0.0001)
+            assertEquals(0.0, cursor.getDouble(1), 0.0001)
+            assertEquals("paid", cursor.getString(2))
+        }
+    }
+
 }
