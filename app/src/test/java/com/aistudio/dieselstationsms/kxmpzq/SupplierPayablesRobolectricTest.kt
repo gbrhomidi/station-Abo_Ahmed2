@@ -1852,4 +1852,49 @@ class SupplierPayablesRobolectricTest {
         }.isFailure)
     }
 
+
+    @Test
+    fun supplierProfileTermsRoundTripCashNetFifteenAndUnknownWithoutDefaulting() {
+        data class Case(val input: String, val expectedDays: Int?, val expectedCode: String?)
+        val cases = listOf(
+            Case("Cash", 0, "SUPPLIER_CASH"),
+            Case("NET 15", 15, "SUPPLIER_NET_15"),
+            Case("custom terms pending confirmation", null, null)
+        )
+
+        cases.forEach { case ->
+            DebtDueDateRepository.persistPartyTerms(helper, supplierId, 1, case.input)
+            db.rawQuery(
+                """SELECT COALESCE(payment_terms,''),payment_terms_days,
+                          COALESCE(payment_terms_source,''),COALESCE(payment_terms_id,0)
+                   FROM parties WHERE id=? AND station_id=1 AND is_deleted=0""",
+                arrayOf(supplierId.toString())
+            ).use { c ->
+                check(c.moveToFirst())
+                assertEquals(case.input, c.getString(0))
+                if (case.expectedDays == null) {
+                    assertTrue(c.isNull(1))
+                    assertEquals("", c.getString(2))
+                    assertEquals(0L, c.getLong(3))
+                } else {
+                    assertEquals(case.expectedDays, c.getInt(1))
+                    assertEquals("explicit_text", c.getString(2))
+                    assertTrue(c.getLong(3) > 0L)
+                }
+            }
+
+            if (case.expectedCode != null) {
+                db.rawQuery(
+                    "SELECT code,applies_to,days FROM payment_terms WHERE id=(SELECT payment_terms_id FROM parties WHERE id=?)",
+                    arrayOf(supplierId.toString())
+                ).use { c ->
+                    check(c.moveToFirst())
+                    assertEquals(case.expectedCode, c.getString(0))
+                    assertEquals("supplier", c.getString(1))
+                    assertEquals(case.expectedDays, c.getInt(2))
+                }
+            }
+        }
+    }
+
 }
