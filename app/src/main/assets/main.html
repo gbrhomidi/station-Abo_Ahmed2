@@ -1332,12 +1332,12 @@
            Bubbles — Chat notifications with a lightweight golden wave
         ================================================================ */
         @keyframes goldenBubbleWave {
-            0% { transform: scale(.88); opacity: .78; }
-            75%, 100% { transform: scale(1.42); opacity: 0; }
+            0% { transform: scale(.88); opacity: .82; }
+            75%, 100% { transform: scale(1.48); opacity: 0; }
         }
         .bubble-container {
             position: fixed;
-            top: 225px;
+            top: 245px;
             left: 10px;
             display: flex;
             flex-direction: row;
@@ -1377,11 +1377,11 @@
             position: absolute;
             z-index: -1;
             inset: -4px;
-            border: 2px solid rgba(212,168,106,.95);
+            border: 2px solid var(--bubble-wave-color, rgba(26,35,126,.95));
             border-radius: 15px 15px 15px 5px;
-            box-shadow: 0 0 8px rgba(212,168,106,.55);
+            box-shadow: 0 0 8px var(--bubble-wave-glow, rgba(26,35,126,.55)), 0 0 16px var(--bubble-wave-glow, rgba(26,35,126,.35));
             pointer-events: none;
-            animation: goldenBubbleWave 1.8s ease-out infinite;
+            animation: goldenBubbleWave 1.5s ease-out 2;
         }
         .notification-bubble::after {
             content: '';
@@ -1390,24 +1390,26 @@
             bottom: -6px;
             width: 0;
             height: 0;
-            border-top: 7px solid currentColor;
+            border-top: 7px solid var(--bubble-color, #3D8BC4);
             border-right: 7px solid transparent;
             filter: drop-shadow(0 1px 1px rgba(0,0,0,.16));
             pointer-events: none;
         }
         .notification-bubble:hover { transform: scale(1.08); }
         .notification-bubble:active { transform: scale(.94); }
-        .bubble-info { background: #3D8BC4; }
-        .bubble-warning { background: var(--warning); }
-        .bubble-danger { background: var(--danger); }
-        .bubble-returned { background: #6F42C1; }
-        .bubble-damaged { background: #EA580C; }
+        .bubble-info { background: var(--bubble-color, #3D8BC4); }
+        .bubble-warning { background: var(--bubble-color, #F59E0B); }
+        .bubble-danger { background: var(--bubble-color, #FF4757); }
+        .bubble-returned { background: var(--bubble-color, #6F42C1); }
+        .bubble-damaged { background: var(--bubble-color, #EA580C); }
+        [data-theme="dark"] .notification-bubble { --bubble-wave-color: rgba(255,215,0,.98); --bubble-wave-glow: rgba(255,215,0,.62); }
+        html:not([data-theme="dark"]) .notification-bubble { --bubble-wave-color: rgba(26,35,126,.95); --bubble-wave-glow: rgba(26,35,126,.52); }
         @media (max-width: 767px) {
-            .bubble-container { top: 205px; left: 10px; gap: 7px; }
+            .bubble-container { top: 225px; left: 10px; gap: 7px; }
             .notification-bubble { width: 34px; height: 34px; min-width: 34px; flex-basis: 34px; font-size: 14px; }
         }
         @media (max-width: 480px) {
-            .bubble-container { top: 185px; left: 8px; gap: 6px; max-width: calc(100vw - 16px); }
+            .bubble-container { top: 205px; left: 8px; gap: 6px; max-width: calc(100vw - 16px); }
             .notification-bubble { width: 32px; height: 32px; min-width: 32px; flex-basis: 32px; font-size: 13px; }
         }
         @media (max-width: 360px) {
@@ -3777,7 +3779,8 @@
                 }
                 const modes=window.__debtReminderModes||{};
                 const deferred=mainDueReminderRows.some(r=>r.interaction_action==='deferred');
-                if(deferred)document.getElementById('mainDueReminderBubble')?.classList.add('show');
+                const reminderBubble=document.getElementById('mainDueReminderBubble');
+                if(reminderBubble)reminderBubble.classList.toggle('show',deferred);
                 if (dueSoon.length && !mainDueReminderDeferred && (modes.manual||modes.local) &&
                     sessionStorage.getItem('mainDueReminderShownDate') !== new Date().toISOString().slice(0, 10)) {
                     sessionStorage.setItem('mainDueReminderShownDate', new Date().toISOString().slice(0, 10));
@@ -4060,9 +4063,7 @@
         // ================================================================
         // Notifications — six dashboard bubbles
         // ================================================================
-        const DOUBLE_CLICK_THRESHOLD = 400;
         const REENABLE_DELAY = 3000;
-        let lastClick = 0;
 
         function showRealNotifications(stats) {
             if (!stats || !notificationsEnabled) return;
@@ -4130,7 +4131,9 @@
             if (!notification || activeBubbles.has(notification.type)) return;
             const container = document.getElementById('bubbleContainer') || createBubbleContainer();
             const bubble = document.createElement('div');
+            const bubbleColors = { low_stock:'#FF4757', due_invoices:'#3D8BC4', damaged_products:'#EA5808', returned_products:'#6F42C1', expiry_soon:'#F59E0B', pending_tasks:'#14B8A6' };
             bubble.className = `notification-bubble bubble-${notification.color}`;
+            bubble.style.setProperty('--bubble-color', bubbleColors[notification.type] || '#3D8BC4');
             bubble.dataset.target = notification.targetCard;
             bubble.dataset.type = notification.type;
             bubble.title = notification.message;
@@ -4147,6 +4150,25 @@
             });
             container.appendChild(bubble);
             activeBubbles.set(notification.type, { element: bubble });
+            animateBubbleFromCard(bubble);
+        }
+
+        function animateBubbleFromCard(bubble) {
+            if (!bubble || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+            const source = document.getElementById(bubble.dataset.target);
+            if (!source || typeof bubble.getBoundingClientRect !== 'function') { bubble.style.opacity = '1'; return; }
+            const from = source.getBoundingClientRect(), to = bubble.getBoundingClientRect();
+            const dx = from.left + from.width / 2 - (to.left + to.width / 2);
+            const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+            if (typeof bubble.animate === 'function') {
+                try {
+                    const animation = bubble.animate([{ transform:`translate(${dx}px,${dy}px) scale(.18)`, opacity:.15 },{ transform:'translate(0,0) scale(1)', opacity:1 }], { duration:900, easing:'cubic-bezier(.2,.75,.25,1)', fill:'both' });
+                    animation.onfinish = () => { bubble.style.opacity='1'; bubble.style.transform='none'; };
+                    return;
+                } catch (_) { /* older WebView fallback */ }
+            }
+            bubble.style.transition='none'; bubble.style.transform=`translate(${dx}px,${dy}px) scale(.18)`; bubble.style.opacity='.15';
+            setTimeout(() => { bubble.style.transition='transform 900ms cubic-bezier(.2,.75,.25,1), opacity 900ms ease'; bubble.style.transform='translate(0,0) scale(1)'; bubble.style.opacity='1'; },30);
         }
 
         function handleBubbleClick(bubble) {
@@ -4196,12 +4218,6 @@
                 notificationsReenableTimer = null;
             }, REENABLE_DELAY);
         }
-
-        document.addEventListener('click', function () {
-            const now = Date.now();
-            if (now - lastClick < DOUBLE_CLICK_THRESHOLD) hideAllBubbles();
-            lastClick = now;
-        });
 
         // ================================================================
         // Card Double Click
@@ -4342,13 +4358,6 @@
             initCardDoubleClick();
 
             updateThemeButton(document.documentElement.getAttribute('data-theme') === 'dark');
-
-            let lastClick = 0;
-            document.addEventListener('click', function() {
-                const now = Date.now();
-                if (now - lastClick < 300) hideAllBubbles();
-                lastClick = now;
-            });
 
             if (currentUser) updateUserInfo(currentUser);
 
