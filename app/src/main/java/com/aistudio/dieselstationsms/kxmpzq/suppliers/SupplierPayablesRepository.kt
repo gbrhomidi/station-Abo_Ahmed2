@@ -1342,36 +1342,90 @@ object SupplierPayablesRepository {
         }
     }
 
-    /** Read-only reconciliation workpaper; it classifies differences and never repairs data. */
+    /** Read-only reconciliation workpaper. Scalar control ledgers cannot be compared safely
+     * with invoice balances until their currency basis and historical FX snapshots are provable.
+     */
     fun reconcileSupplier(db: SQLiteDatabase, stationId: Int, supplierId: Long, asOfDate: String? = null): JSONObject {
         requireSupplierScope(db, supplierId, stationId)
         val aging = getSupplierAging(db, stationId, supplierId, asOfDate)
+        val currencyTotals = aging.getJSONArray("currency_totals")
+        val legacyOffsets = aging.getJSONArray("legacy_payment_offsets_by_currency")
+
+        val ledger = db.rawQuery(
+            "SELECT COALESCE(SUM(credit-debit),0) FROM supplier_ledger WHERE party_id=?",
+            arrayOf(supplierId.toString())
+        ).use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
+        val party = db.rawQuery(
+            "SELECT current_balance,total_due,total_payments FROM parties WHERE id=? AND station_id=? AND is_deleted=0",
+            arrayOf(supplierId.toString(), stationId.toString())
+        ).use { c ->
+            require(c.moveToFirst()) { "المورد غير موجود" }
+            JSONObject().apply {
+                put("current_balance", c.getDouble(0))
+                put("total_due", c.getDouble(1))
+                put("total_payments", c.getDouble(2))
+            }
+        }
+        val gl = db.rawQuery(
+            """SELECT COALESCE(SUM(ji.credit-ji.debit),0)
+               FROM journal_entry_items ji
+               JOIN journal_entries je ON je.id=ji.journal_entry_id
+               WHERE ji.supplier_party_id=? AND je.station_id=? AND je.status='posted'
+                 AND COALESCE(je.is_deleted,0)=0""",
+            arrayOf(supplierId.toString(), stationId.toString())
+        ).use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
+
         val exceptions = JSONArray()
-        var openInvoices = 0.0
-        for (i in 0 until aging.getJSONArray("currency_totals").length()) openInvoices += aging.getJSONArray("currency_totals").getJSONObject(i).optDouble("open_balance", 0.0)
-        var unapplied = 0.0
-        db.rawQuery("""SELECT
-                COALESCE((SELECT SUM(amount) FROM supplier_invoice_allocations
-                          WHERE station_id=? AND supplier_id=? AND supplier_invoice_id IS NULL
-                            AND status='posted' AND is_deleted=0),0)
-                + COALESCE((SELECT SUM(r.amount)
-                            FROM supplier_allocation_reversals r
-                            JOIN supplier_invoice_allocations a
-                              ON a.id=r.allocation_id AND a.station_id=r.station_id AND a.supplier_id=r.supplier_id
-                            WHERE r.station_id=? AND r.supplier_id=? AND r.status='posted'
-                              AND a.status='posted' AND a.is_deleted=0),0)""",
-            arrayOf(stationId.toString(),supplierId.toString(),stationId.toString(),supplierId.toString())
-        ).use { if (it.moveToFirst()) unapplied = it.getDouble(0).coerceAtLeast(0.0) }
-        val expected = openInvoices - unapplied
-        val ledger = db.rawQuery("SELECT COALESCE(SUM(credit-debit),0) FROM supplier_ledger WHERE party_id=?", arrayOf(supplierId.toString())).use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
-        val party = db.rawQuery("SELECT current_balance,total_due,total_payments FROM parties WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(supplierId.toString(), stationId.toString())).use { c -> require(c.moveToFirst()) { "المورد غير موجود" }; JSONObject().apply { put("current_balance", c.getDouble(0)); put("total_due", c.getDouble(1)); put("total_payments", c.getDouble(2)) } }
-        val gl = db.rawQuery("SELECT COALESCE(SUM(ji.credit-ji.debit),0) FROM journal_entry_items ji JOIN journal_entries je ON je.id=ji.journal_entry_id WHERE ji.supplier_party_id=? AND je.station_id=? AND je.status='posted' AND COALESCE(je.is_deleted,0)=0", arrayOf(supplierId.toString(), stationId.toString())).use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
-        fun exception(code: String, amount: Double, message: String) { exceptions.put(JSONObject().apply { put("code", code); put("amount", amount); put("message", message); put("supplier_id", supplierId); put("station_id", stationId) }) }
-        if (abs(expected - ledger) > 0.01) exception("ledger_balance_mismatch", expected - ledger, "الرصيد المتوقع لا يطابق دفتر المورد")
-        if (abs(expected - party.optDouble("current_balance")) > 0.01) exception("party_balance_mismatch", expected - party.optDouble("current_balance"), "الرصيد المتوقع لا يطابق رصيد الطرف")
-        if (abs(expected - gl) > 0.01) exception("gl_control_balance_mismatch", expected - gl, "الرصيد المتوقع لا يطابق حساب الأستاذ")
-        db.rawQuery("SELECT COUNT(*) FROM supplier_invoice_allocations a LEFT JOIN supplier_invoices i ON i.id=a.supplier_invoice_id WHERE a.station_id=? AND a.supplier_id=? AND a.supplier_invoice_id IS NOT NULL AND (i.id IS NULL OR i.station_id<>a.station_id OR i.supplier_id<>a.supplier_id)", arrayOf(stationId.toString(), supplierId.toString())).use { if (it.moveToFirst() && it.getInt(0) > 0) exception("orphan_allocation", it.getInt(0).toDouble(), "تخصيصات تشير إلى فواتير غير صالحة") }
-        return JSONObject().apply { put("station_id", stationId); put("supplier_id", supplierId); put("as_of_date", asOfDate ?: BusinessDay.currentDate()); put("open_invoice_balance", openInvoices); put("unapplied_supplier_credits", unapplied); put("expected_control_balance", expected); put("supplier_ledger_balance", ledger); put("party_balance", party); put("gl_control_balance", gl); put("exceptions", exceptions); put("status", if (exceptions.length() == 0) "reconciled" else "reconciliation_required"); put("repairs_performed", false) }
+        fun exception(code: String, amount: Double?, message: String) {
+            exceptions.put(JSONObject().apply {
+                put("code", code)
+                if (amount == null) put("amount", JSONObject.NULL) else put("amount", amount)
+                put("message", message)
+                put("supplier_id", supplierId)
+                put("station_id", stationId)
+            })
+        }
+
+        // supplier_ledger and party aggregate balances do not carry a provable currency
+        // dimension. Journal lines also require a consistent functional-currency basis and
+        // historical FX policy before they can be compared to the invoice subledger.
+        exception(
+            "currency_basis_unverifiable",
+            null,
+            "تعذرت المطابقة الرقمية: دفتر المورد وأرصدة الطرف لا يثبتان أساس العملة، ولا يجوز جمع العملات أو مقارنتها دون مبالغ وظيفية وأسعار صرف موثقة"
+        )
+
+        db.rawQuery(
+            """SELECT COUNT(*) FROM supplier_invoice_allocations a
+               LEFT JOIN supplier_invoices i ON i.id=a.supplier_invoice_id
+               WHERE a.station_id=? AND a.supplier_id=? AND a.supplier_invoice_id IS NOT NULL
+                 AND (i.id IS NULL OR i.station_id<>a.station_id OR i.supplier_id<>a.supplier_id)""",
+            arrayOf(stationId.toString(), supplierId.toString())
+        ).use {
+            if (it.moveToFirst() && it.getInt(0) > 0) {
+                exception("orphan_allocation", it.getInt(0).toDouble(), "تخصيصات تشير إلى فواتير غير صالحة")
+            }
+        }
+
+        return JSONObject().apply {
+            put("station_id", stationId)
+            put("supplier_id", supplierId)
+            put("as_of_date", asOfDate ?: BusinessDay.currentDate())
+            put("open_invoice_balances_by_currency", currencyTotals)
+            put("unapplied_supplier_credits_by_currency", legacyOffsets)
+            // Deprecated scalar fields remain present but NULL: cross-currency sums are invalid.
+            put("open_invoice_balance", JSONObject.NULL)
+            put("unapplied_supplier_credits", JSONObject.NULL)
+            put("expected_control_balance", JSONObject.NULL)
+            put("supplier_ledger_balance", ledger)
+            put("party_balance", party)
+            put("gl_control_balance", gl)
+            put("control_balances_comparable", false)
+            put("comparison_block_reason", "currency_basis_unverifiable")
+            put("exceptions", exceptions)
+            put("status", if (exceptions.length() > 1) "reconciliation_required" else "reconciliation_unverifiable")
+            put("repairs_performed", false)
+        }
     }
 
     private fun requireSupplierScope(db: SQLiteDatabase, supplierId: Long, stationId: Int) {
