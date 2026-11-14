@@ -19,3 +19,14 @@ assert.match(refreshBlock[1], /return true;/);
 assert.match(refreshBlock[1], /return false;/);
 
 console.log('Dashboard debt-reminder 15-minute throttle contract PASS.');
+
+// Main dashboard due-reminder interaction and deferred chat-bubble contracts.
+const dashboardHtml = fs.readFileSync(path.join(__dirname, 'app/src/main/assets/main.html'), 'utf8');
+assert.match(dashboardHtml, /mainDueReminderTitle/);
+assert.match(dashboardHtml, /aria-label="إغلاق" onclick="closeMainDueReminderNotice\(\)"/);
+assert.match(dashboardHtml, /event\.target===o\)closeMainDueReminderNotice\(\)/);
+assert.match(dashboardHtml, /async function cancelMainDueReminderNotice\(\)[\\s\\S]*?persistMainDueReminderDecision\('dismissed'/);
+assert.match(dashboardHtml, /async function deferMainDueReminder\(\)[\\s\\S]*?bubble\.classList\.add\('show'\)/);
+assert.match(dashboardHtml, /dueBubbleWave 1\.5s ease-out 2/);
+assert.match(dashboardHtml, /fa-comment-dots/);
+assert.match(dashboardHtml, /prefers-reduced-motion:reduce[\\s\\S]*?due-bubble::before/);
