@@ -8208,6 +8208,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val notes = data.optString("notes", "").trim()
                 val cashBoxId = data.optLong("cash_box_id", 0L)
                 val bankAccountId = data.optLong("bank_account_id", 0L)
+                val targetSaleId = data.optLong("invoice_id", 0L)
                 val idempotencyKey = data.optString("idempotency_key", "").trim()
                     .ifBlank { UUID.randomUUID().toString() }
                 if (customerId <= 0 || amount <= 0) return errorResponse("بيانات غير صالحة")
@@ -8215,7 +8216,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val paymentId = db.processPayment(
                     customerId, amount, method, operator, notes, stationId,
-                    idempotencyKey, activity.currentUserId, cashBoxId, bankAccountId
+                    idempotencyKey, activity.currentUserId, cashBoxId, bankAccountId, targetSaleId
                 )
                 if (paymentId > 0L) {
                     val sms = queuePaymentSms(db, paymentId, stationId, activity.currentUserId)

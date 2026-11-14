@@ -2,6 +2,7 @@ package com.aistudio.dieselstationsms.kxmpzq
 
 import com.aistudio.dieselstationsms.kxmpzq.utils.IsoCivilDate
 import com.aistudio.dieselstationsms.kxmpzq.suppliers.SupplierPayablesRepository
+import com.aistudio.dieselstationsms.kxmpzq.CustomerReceivablesRepository
 
 import com.aistudio.dieselstationsms.kxmpzq.sms.DebtDueDateRepository
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsOutboxSchema
@@ -56,7 +57,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 61
+        const val VERSION = 62
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -255,6 +256,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureOpenCompatibilitySchema(db)
             DebtDueDateRepository.ensureSchema(db)
             SupplierPayablesRepository.ensureSchema(db)
+            CustomerReceivablesRepository.ensureSchema(db)
             SmsOutboxSchema.ensureSchema(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
@@ -315,6 +317,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     53 -> SupplierPayablesRepository.ensureSchema(db)
                     58 -> DebtDueDateRepository.migrateV58ToV59(db)
                     59 -> DebtDueDateRepository.migrateV59ToV60(db)
+                    61 -> CustomerReceivablesRepository.ensureSchema(db)
                 }
             }
             ensureModule006Schema(db)
@@ -335,6 +338,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureOpenCompatibilitySchema(db)
             DebtDueDateRepository.ensureSchema(db)
             SupplierPayablesRepository.ensureSchema(db)
+            CustomerReceivablesRepository.ensureSchema(db)
             // Apply the idempotent SMS attempt schema for every upgraded database,
             // including installations previously opened at V57 before the Stage 6 schema repair completed.
             SmsOutboxSchema.ensureSchema(db)
@@ -16744,9 +16748,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         idempotencyKey: String? = null,
         actorId: Long = 0L,
         cashBoxId: Long = 0L,
-        bankAccountId: Long = 0L
+        bankAccountId: Long = 0L,
+        targetSaleId: Long = 0L
     ): Long {
         require(customerId > 0) { "معرف العميل غير صالح" }
+        require(targetSaleId >= 0L) { "معرف الفاتورة غير صالح" }
         require(amount > 0.0 && amount.isFinite()) { "مبلغ التسديد غير صالح" }
         val normalizedMethod = method.trim().lowercase(Locale.ROOT)
         require(normalizedMethod in VALID_PAYMENT_TYPES) { "نوع الدفع غير صالح: $method" }
@@ -16763,6 +16769,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(normalizedIdempotencyKey.isNotBlank()) { "مفتاح التسديد الفريد مطلوب لمنع تكرار العملية" }
         val partyScopeClause = " AND station_id = ?"
         val salesScopeClause = " AND station_id = ?"
+        val targetSaleClause = if (targetSaleId > 0L) " AND id = ?" else ""
 
         dbLock.lock()
         try {
@@ -16821,15 +16828,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
 
                 var unapplied = amount
+                val paymentAllocations = mutableListOf<CustomerReceivablesRepository.PaymentAllocation>()
+                val invoiceQueryArgs = mutableListOf(customerId.toString(), paymentStationId.toString())
+                if (targetSaleId > 0L) invoiceQueryArgs += targetSaleId.toString()
                 db.rawQuery(
                     """SELECT id, COALESCE(remaining_amount, 0)
                        FROM sales_transactions
-                       WHERE customer_party_id = ? AND remaining_amount > 0 AND is_deleted = 0$salesScopeClause
+                       WHERE customer_party_id = ? AND remaining_amount > 0 AND is_deleted = 0$salesScopeClause$targetSaleClause
                          AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(payment_method,'')),' ',''),'-','_'))
                              IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')
                          AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded','void','reversed')
                        ORDER BY CASE WHEN due_date IS NULL OR due_date='' THEN 1 ELSE 0 END, due_date ASC, id ASC""",
-                    arrayOf(customerId.toString(), paymentStationId.toString())
+                    invoiceQueryArgs.toTypedArray()
                 ).use { cursor ->
                     while (cursor.moveToNext() && unapplied > 0.000001) {
                         val invoiceId = cursor.getLong(0)
@@ -16850,6 +16860,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                             bindLong(6, paymentStationId.toLong())
                         }.executeUpdateDelete()
                         if (updated != 1) throw IllegalStateException("تعذر تحديث الفاتورة $invoiceId")
+                        paymentAllocations += CustomerReceivablesRepository.PaymentAllocation(invoiceId, applied)
                         unapplied -= applied
                     }
                 }
@@ -16895,6 +16906,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("created_by", actorId)
                 }
                 val paymentId = db.insertOrThrow("payments", null, paymentValues)
+                CustomerReceivablesRepository.recordPaymentAllocations(
+                    db, paymentStationId, customerId, paymentId, actorId, paymentAllocations
+                )
 
                 if (cashBoxId > 0L) {
                     val cashAfter = cashBalanceBefore + amount

@@ -2532,6 +2532,7 @@
                         cash_box_id: toId(p.cash_box_id),
                         bank_account_id: toId(p.bank_account_id),
                         idempotency_key: String(p.idempotency_key ?? ''),
+                        invoice_id: toId(p.invoice_id),
                         operator: String(p.operator ?? 'WebView'),
                         notes: String(p.notes ?? '')
                     }));
@@ -2744,6 +2745,9 @@
         let dueInvoicesDrilldownActive = false;
         let paymentInFlight = false;
         let pendingPaymentCustomerId = 0;
+        let pendingPaymentInvoiceId = 0;
+        let pendingPaymentInvoiceRemaining = 0;
+        let pendingPaymentInvoiceNumber = '';
         let paymentKeysByFingerprint = new Map();
         let paymentSettlementOptions = { cashBoxes: [], bankAccounts: [] };
         let paymentSettlementOptionsLoaded = false;
@@ -2966,7 +2970,7 @@ function updateDebtViewButtons() {
                 const due=IsoCivilDate.isValidIsoDate(item.due_date)?item.due_date:'غير محدد';
                 const customer=escapeHtml(item.customer_name||'عميل غير مسمى');
                 const invoice=escapeHtml(item.invoice_number||item.sale_code||('فاتورة #'+(item.id||'')));
-                return '<article class="debt-advanced-card"><strong>'+customer+'</strong><span class="debt-advanced-meta">'+invoice+'</span><span>المتبقي: '+formatCurrency(remaining)+'</span><span class="debt-advanced-meta">الاستحقاق: '+due+' · '+escapeHtml(getStatusLabel(item.status))+'</span><div class="debt-advanced-actions"><button class="btn-action pay" onclick="openPaymentForCustomer('+id+','+remaining+')" title="تسديد"><i class="fas fa-money-bill-wave"></i></button><button class="btn-action view" onclick="viewCustomerDetails('+id+')" title="تفاصيل"><i class="fas fa-eye"></i></button><button class="btn-action history" onclick="viewHistory('+id+')" title="السجل"><i class="fas fa-history"></i></button></div></article>';
+                return '<article class="debt-advanced-card"><strong>'+customer+'</strong><span class="debt-advanced-meta">'+invoice+'</span><span>المتبقي: '+formatCurrency(remaining)+'</span><span class="debt-advanced-meta">الاستحقاق: '+due+' · '+escapeHtml(getStatusLabel(item.status))+'</span><div class="debt-advanced-actions"><button class="btn-action pay" onclick="openPaymentForCustomer('+id+','+remaining+','+finiteNumber(item.id)+')" title="تسديد"><i class="fas fa-money-bill-wave"></i></button><button class="btn-action view" onclick="viewCustomerDetails('+id+')" title="تفاصيل"><i class="fas fa-eye"></i></button><button class="btn-action history" onclick="viewHistory('+id+')" title="السجل"><i class="fas fa-history"></i></button></div></article>';
             };
             if(!rows.length){host.innerHTML='<div class="empty-state">لا توجد ديون مطابقة للفلاتر الحالية.</div>';return;}
             if(debtViewMode==='kanban'){
@@ -3024,7 +3028,7 @@ function updateDebtViewButtons() {
                     '<div class="debt-card-value"><small>المتبقي</small><strong style="color:' + (remaining>0?'var(--danger)':'var(--success)') + '">' + formatCurrency(remaining) + '</strong></div>' +
                     '<div class="debt-card-value"><small>تاريخ الاستحقاق</small><strong>' + escapeHtml(due) + '</strong></div></div>' +
                     '<div class="debt-card-actions">' +
-                    '<button class="btn-action pay" onclick="openPaymentForCustomer(' + id + ',' + remaining + ')" title="تسديد"><i class="fas fa-money-bill-wave"></i></button>' +
+                    '<button class="btn-action pay" onclick="openPaymentForCustomer(' + id + ',' + remaining + ',' + finiteNumber(item.id) + ')" title="تسديد"><i class="fas fa-money-bill-wave"></i></button>' +
                     '<button class="btn-action view" onclick="viewCustomerDetails(' + id + ')" title="تفاصيل العميل"><i class="fas fa-eye"></i></button>' +
                     '<button class="btn-action history" onclick="viewHistory(' + id + ')" title="سجل المعاملات"><i class="fas fa-history"></i></button>' +
                     '</div></article>';
@@ -3056,7 +3060,7 @@ function updateDebtViewButtons() {
                     return '<div class="debt-tree-item"><div class="debt-tree-item-main"><strong>' + escapeHtml(invoice) + '</strong>' +
                         '<small>الاستحقاق: ' + escapeHtml(due) + ' · الحالة: ' + escapeHtml(getStatusLabel(item.status)) + '</small>' +
                         '<strong>المتبقي: ' + formatCurrency(item.remaining_amount) + '</strong></div>' +
-                        '<div class="debt-card-actions"><button class="btn-action pay" onclick="openPaymentForCustomer(' + group.id + ',' + finiteNumber(item.remaining_amount) + ')" title="تسديد"><i class="fas fa-money-bill-wave"></i></button>' +
+                        '<div class="debt-card-actions"><button class="btn-action pay" onclick="openPaymentForCustomer(' + group.id + ',' + finiteNumber(item.remaining_amount) + ',' + finiteNumber(item.id) + ')" title="تسديد"><i class="fas fa-money-bill-wave"></i></button>' +
                         '<button class="btn-action view" onclick="viewCustomerDetails(' + group.id + ')" title="تفاصيل العميل"><i class="fas fa-eye"></i></button>' +
                         '<button class="btn-action history" onclick="viewHistory(' + group.id + ')" title="السجل"><i class="fas fa-history"></i></button></div></div>';
                 }).join('');
@@ -3095,7 +3099,7 @@ function updateDebtViewButtons() {
                             <td>${dueDate}</td>
                             <td>${getStatusBadge(item.status)}</td>
                             <td>
-                                <button class="btn-action pay" onclick="openPaymentForCustomer(${item.customer_id}, ${remaining})" title="تسديد">
+                                <button class="btn-action pay" onclick="openPaymentForCustomer(${item.customer_party_id ?? item.customer_id}, ${remaining}, ${finiteNumber(item.id)})" title="تسديد">
                                     <i class="fas fa-money-bill-wave"></i>
                                 </button>
                                 <button class="btn-action view" onclick="viewCustomerDetails(${item.customer_id})" title="تفاصيل">
@@ -3485,8 +3489,14 @@ function updateDebtViewButtons() {
             const customerId = finiteNumber(document.getElementById('pCustomerId').value);
             const amount = finiteNumber(document.getElementById('pAmount').value);
             const method = document.getElementById('pMethod').value;
-            const notes = document.getElementById('pNotes').value.trim();
+            let notes = document.getElementById('pNotes').value.trim();
             const currentRemaining = finiteNumber(document.getElementById('pCurrentRemaining').textContent.replace(/,/g, ''));
+            if (pendingPaymentInvoiceId > 0) {
+                const complete = amount + 0.000001 >= pendingPaymentInvoiceRemaining;
+                const invoiceNote = (complete ? 'تسديد كامل قيمة الفاتورة رقم "' : 'تسديد جزئي من قيمة الفاتورة رقم "') +
+                    pendingPaymentInvoiceNumber + '"';
+                if (!notes.includes(invoiceNote)) notes = notes ? notes + ' — ' + invoiceNote : invoiceNote;
+            }
             const settlementValue = document.getElementById('pSettlementId').value;
             const [settlementType, settlementIdText] = String(settlementValue || '').split(':');
             const settlementId = finiteNumber(settlementIdText);
@@ -3507,7 +3517,7 @@ function updateDebtViewButtons() {
                 return;
             }
 
-            const fingerprint = JSON.stringify({ customerId, amount, method, notes, settlementType, settlementId });
+            const fingerprint = JSON.stringify({ customerId, amount, method, notes, invoiceId: pendingPaymentInvoiceId, settlementType, settlementId });
             let idempotencyKey = paymentKeysByFingerprint.get(fingerprint);
             if (!idempotencyKey) {
                 idempotencyKey = createPaymentIdempotencyKey();
@@ -3523,6 +3533,7 @@ function updateDebtViewButtons() {
                     payment_method: method,
                     cash_box_id: settlementType === 'cash' ? settlementId : 0,
                     bank_account_id: settlementType === 'bank' ? settlementId : 0,
+                    invoice_id: pendingPaymentInvoiceId,
                     idempotency_key: idempotencyKey,
                     operator: 'WebView',
                     notes
@@ -3549,6 +3560,9 @@ function updateDebtViewButtons() {
         function openPaymentModal() {
             clearPaymentFeedback();
             pendingPaymentCustomerId = 0;
+            pendingPaymentInvoiceId = 0;
+            pendingPaymentInvoiceRemaining = 0;
+            pendingPaymentInvoiceNumber = '';
             document.getElementById('pCustomerId').value = '';
             document.getElementById('pAmount').value = '';
             document.getElementById('pMethod').value = 'cash';
@@ -3560,9 +3574,18 @@ function updateDebtViewButtons() {
             loadCustomersForPayment();
         }
 
-        function openPaymentForCustomer(customerId, remaining) {
+        function openPaymentForCustomer(customerId, remaining, invoiceId = 0) {
             clearPaymentFeedback();
             pendingPaymentCustomerId = finiteNumber(customerId);
+            pendingPaymentInvoiceId = finiteNumber(invoiceId);
+            pendingPaymentInvoiceRemaining = pendingPaymentInvoiceId > 0 ? Math.max(0, finiteNumber(remaining)) : 0;
+            const invoiceRow = pendingPaymentInvoiceId > 0
+                ? [...(runtimeState.rawDebts || []), ...(runtimeState.visibleDebts || [])]
+                    .find(row => finiteNumber(row && row.id) === pendingPaymentInvoiceId)
+                : null;
+            pendingPaymentInvoiceNumber = invoiceRow
+                ? String(invoiceRow.invoice_number || invoiceRow.sale_code || pendingPaymentInvoiceId)
+                : (pendingPaymentInvoiceId > 0 ? String(pendingPaymentInvoiceId) : '');
             document.getElementById('pCustomerId').value = String(pendingPaymentCustomerId || '');
             document.getElementById('pAmount').value = remaining > 0 ? remaining : '';
             document.getElementById('pMethod').value = 'cash';
@@ -3577,6 +3600,9 @@ function updateDebtViewButtons() {
         function closePaymentModal() {
             document.getElementById('paymentModal').classList.remove('show');
             pendingPaymentCustomerId = 0;
+            pendingPaymentInvoiceId = 0;
+            pendingPaymentInvoiceRemaining = 0;
+            pendingPaymentInvoiceNumber = '';
             document.body.style.overflow = '';
         }
 

@@ -36,3 +36,8 @@ expect(source.includes('due-reminder-close') && source.includes('onclick="closeD
 expect(source.includes('--bg-primary: #f4eee3') && source.includes('--bg-secondary: #e9dfcf'), 'يجب اعتماد لوحة بيج دافئة في الوضع الفاتح');
 expect(source.includes('pendingPaymentCustomerId || finiteNumber(sel.value)'), 'يجب عدم فقد العميل المحدد أثناء تحميل خيارات المودال غير المتزامن');
 expect(source.includes('<optgroup label="العروض الأساسية">') && source.includes('<optgroup label="عروض التحليل والمتابعة">'), 'يجب تنظيم خيارات العرض الافتراضي في مجموعات واضحة');
+
+expect(source.includes('pendingPaymentInvoiceId') && source.includes('invoice_id: pendingPaymentInvoiceId'), 'يجب تمرير معرف الفاتورة المختارة إلى SQLite عبر الجسر');
+expect(source.includes('invoiceId: pendingPaymentInvoiceId'), 'يجب فصل مفتاح عدم التكرار بين فواتير العميل المختلفة');
+expect(source.includes('تسديد كامل قيمة الفاتورة رقم') && source.includes('تسديد جزئي من قيمة الفاتورة رقم'), 'يجب تسجيل وصف التسديد الكامل أو الجزئي مع الحفاظ على ملاحظات المستخدم');
+expect(source.includes('openPaymentForCustomer(') && source.includes('finiteNumber(item.id)'), 'يجب تمرير معرف الفاتورة من أزرار التسديد على مستوى الفاتورة');
