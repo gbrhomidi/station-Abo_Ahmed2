@@ -190,6 +190,48 @@ class CustomerReceivablesAllocationRobolectricTest {
     }
 
     @Test
+    fun failedLedgerWriteRollsBackToSavepointWhenCallerCommitsOuterTransaction() {
+        db.execSQL("""
+            CREATE TRIGGER fail_customer_allocation_reversal_ledger_outer
+            BEFORE INSERT ON customer_ledger
+            WHEN NEW.transaction_type='payment_allocation_reversal'
+            BEGIN SELECT RAISE(ABORT,'forced_customer_allocation_ledger_failure_outer'); END
+        """.trimIndent())
+        db.beginTransaction()
+        var reversalFailed = false
+        try {
+            try {
+                CustomerReceivablesRepository.reversePaymentAllocation(
+                    db, 1, customerId.toInt(), allocationId, 5.0, 1L,
+                    "اختبار عزل نقطة الحفظ", "customer-reversal-savepoint-${UUID.randomUUID()}"
+                )
+            } catch (_: Exception) {
+                reversalFailed = true
+            }
+            // Deliberately commit the caller transaction after handling the operation error.
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+            db.execSQL("DROP TRIGGER IF EXISTS fail_customer_allocation_reversal_ledger_outer")
+        }
+        assertTrue(reversalFailed)
+        assertEquals(80.0, db.rawQuery(
+            "SELECT total_due FROM parties WHERE id=?", arrayOf(customerId.toString())
+        ).use { cursor -> assertTrue(cursor.moveToFirst()); cursor.getDouble(0) }, 0.000001)
+        assertEquals(20.0, db.rawQuery(
+            "SELECT paid_amount FROM sales_transactions WHERE id=?", arrayOf(invoiceId.toString())
+        ).use { cursor -> assertTrue(cursor.moveToFirst()); cursor.getDouble(0) }, 0.000001)
+        assertEquals(0, db.rawQuery(
+            "SELECT COUNT(*) FROM customer_payment_allocation_reversals",
+            null
+        ).use { cursor -> assertTrue(cursor.moveToFirst()); cursor.getInt(0) })
+        assertEquals(0, db.rawQuery(
+            "SELECT COUNT(*) FROM customer_ledger WHERE transaction_type='payment_allocation_reversal'",
+            null
+        ).use { cursor -> assertTrue(cursor.moveToFirst()); cursor.getInt(0) })
+    }
+
+    @Test
     fun allocationGuardsRejectPaymentAndInvoiceOverAllocation() {
         val secondInvoiceId = db.insertOrThrow("sales_transactions", null, ContentValues().apply {
             put("uuid", UUID.randomUUID().toString())

@@ -191,9 +191,27 @@ object CustomerReceivablesRepository {
         require(amount.isFinite() && amount > EPSILON) { "مبلغ العكس الجزئي غير صالح" }
         val key = idempotencyKey.trim()
         require(key.isNotBlank()) { "مفتاح عكس التخصيص مطلوب لمنع التكرار" }
-        if (db.inTransaction()) return reverseWithinTransaction(
-            db, stationId, customerId, allocationId, amount, actorId, reason, key
-        )
+        if (db.inTransaction()) {
+            // A caller may catch a failed reversal and still commit its outer transaction.
+            // Isolate this multi-table operation so a late ledger failure cannot leave the
+            // allocation reversal or balance updates partially persisted.
+            val savepoint = "customer_receivables_allocation_reverse"
+            db.execSQL("SAVEPOINT $savepoint")
+            try {
+                val result = reverseWithinTransaction(
+                    db, stationId, customerId, allocationId, amount, actorId, reason, key
+                )
+                db.execSQL("RELEASE SAVEPOINT $savepoint")
+                return result
+            } catch (error: Throwable) {
+                try {
+                    db.execSQL("ROLLBACK TO SAVEPOINT $savepoint")
+                } finally {
+                    db.execSQL("RELEASE SAVEPOINT $savepoint")
+                }
+                throw error
+            }
+        }
         db.beginTransaction()
         try {
             val result = reverseWithinTransaction(db, stationId, customerId, allocationId, amount, actorId, reason, key)
