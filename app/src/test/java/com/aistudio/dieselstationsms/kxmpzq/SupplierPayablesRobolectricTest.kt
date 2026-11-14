@@ -978,8 +978,19 @@ class SupplierPayablesRobolectricTest {
             assertEquals(2000.0, summary.getDouble("total_allocated"), 0.0001)
             assertEquals(0.0, summary.getDouble("total_supplier_payables"), 0.0001)
             val reconciliation = SupplierPayablesRepository.reconcileSupplier(db, stationId, targetSupplierId, "2026-11-14")
-            assertEquals(200.0, reconciliation.getDouble("unapplied_supplier_credits"), 0.0001)
-            assertEquals(-200.0, reconciliation.getDouble("expected_control_balance"), 0.0001)
+            // Reconciliation deliberately refuses scalar totals when the supplier control
+            // ledgers do not prove a single functional-currency basis.
+            assertTrue(reconciliation.isNull("unapplied_supplier_credits"))
+            assertTrue(reconciliation.isNull("expected_control_balance"))
+            assertFalse(reconciliation.getBoolean("control_balances_comparable"))
+            assertEquals("currency_basis_unverifiable",
+                reconciliation.getString("comparison_block_reason"))
+            assertEquals("reconciliation_unverifiable", reconciliation.getString("status"))
+            val currencyOffsets = reconciliation.getJSONArray("unapplied_supplier_credits_by_currency")
+            assertEquals(2, currencyOffsets.length())
+            assertEquals(200.0, (0 until currencyOffsets.length()).sumOf {
+                currencyOffsets.getJSONObject(it).getDouble("amount")
+            }, 0.0001)
         }
     }
 
