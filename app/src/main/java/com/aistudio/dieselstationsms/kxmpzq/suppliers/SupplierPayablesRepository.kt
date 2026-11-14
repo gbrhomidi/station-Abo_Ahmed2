@@ -809,6 +809,8 @@ object SupplierPayablesRepository {
             "id=? AND station_id=? AND supplier_id=? AND is_deleted=0",
             arrayOf(original.invoiceId.toString(), stationId.toString(), supplierId.toString())
         ) == 1) { "تعذر تحديث فاتورة المورد بعد العكس الجزئي" }
+        // Keep the operational due task synchronized with the invoice balance in this same transaction.
+        synchronizeSupplierInvoiceTasks(db, stationId)
         return JSONObject().apply {
             put("success", true); put("idempotent", false); put("reversed_amount", amount); put("allocation_id", allocationId)
             put("payment_id", original.paymentId); put("supplier_invoice_id", original.invoiceId)
@@ -942,6 +944,8 @@ object SupplierPayablesRepository {
             )
             require(rows == 1) { "تعذر إعادة فتح فاتورة المورد بعد عكس التخصيص" }
         }
+        // Re-open/update supplier due tasks after all affected invoice balances are restored.
+        synchronizeSupplierInvoiceTasks(db, stationId)
         return JSONObject().apply {
             put("success", true); put("idempotent", false)
             put("reversed_amount", active.sumOf { it.amount })

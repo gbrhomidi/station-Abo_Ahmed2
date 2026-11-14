@@ -1937,4 +1937,52 @@ class SupplierPayablesRobolectricTest {
         }
     }
 
+
+    @Test
+    fun supplierDueTaskReopensAndTracksBalanceAfterPartialAndFullPaymentReversal() {
+        val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 97301, "TASK-REVERSAL-REOPEN",
+            100.0, "2026-11-01", null, 1
+        )
+        val taskId = db.rawQuery(
+            "SELECT id FROM supplier_invoice_tasks WHERE station_id=1 AND supplier_invoice_id=? AND is_deleted=0",
+            arrayOf(invoiceId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+        val paymentId = createCompletedSupplierPayment(100.0, "TASK-REVERSAL")
+        SupplierPayablesRepository.allocatePayment(db, 1, supplierId, paymentId, 100.0, 1, invoiceId)
+
+        db.rawQuery(
+            "SELECT is_resolved,amount FROM supplier_invoice_tasks WHERE id=?",
+            arrayOf(taskId.toString())
+        ).use { c -> check(c.moveToFirst()); assertEquals(1, c.getInt(0)); assertEquals(0.0, c.getDouble(1), 0.0001) }
+
+        val allocationId = db.rawQuery(
+            "SELECT id FROM supplier_invoice_allocations WHERE payment_id=? AND supplier_invoice_id=? AND status='posted' AND is_deleted=0",
+            arrayOf(paymentId.toString(), invoiceId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+        SupplierPayablesRepository.reversePaymentAllocation(
+            db, 1, supplierId, allocationId, 40.0, 1, "عكس جزئي لاختبار المهمة", "task-reversal-partial"
+        )
+        db.rawQuery(
+            "SELECT is_resolved,amount FROM supplier_invoice_tasks WHERE id=?",
+            arrayOf(taskId.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals("يجب إعادة فتح المهمة بعد عكس التخصيص الجزئي", 0, c.getInt(0))
+            assertEquals(40.0, c.getDouble(1), 0.0001)
+        }
+
+        SupplierPayablesRepository.reversePaymentAllocations(
+            db, 1, supplierId, paymentId, 1, "عكس الدفعة بالكامل بعد العكس الجزئي"
+        )
+        db.rawQuery(
+            "SELECT is_resolved,amount FROM supplier_invoice_tasks WHERE id=?",
+            arrayOf(taskId.toString())
+        ).use { c ->
+            check(c.moveToFirst())
+            assertEquals("يجب أن تعكس المهمة كامل الرصيد بعد عكس الدفعة", 0, c.getInt(0))
+            assertEquals(100.0, c.getDouble(1), 0.0001)
+        }
+    }
+
 }
