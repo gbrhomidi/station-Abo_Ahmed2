@@ -21,7 +21,7 @@ assert.match(refreshBlock[1], /return false;/);
 console.log('Dashboard debt-reminder 15-minute throttle contract PASS.');
 
 // Main dashboard due-reminder interaction and deferred chat-bubble contracts.
-const dashboardHtml = fs.readFileSync(path.join(__dirname, 'app/src/main/assets/main.html'), 'utf8');
+const dashboardHtml = source;
 assert.match(dashboardHtml, /mainDueReminderTitle/);
 assert.match(dashboardHtml, /aria-label="إغلاق" onclick="closeMainDueReminderNotice\(\)"/);
 assert.match(dashboardHtml, /event\.target===o\)closeMainDueReminderNotice\(\)/);
