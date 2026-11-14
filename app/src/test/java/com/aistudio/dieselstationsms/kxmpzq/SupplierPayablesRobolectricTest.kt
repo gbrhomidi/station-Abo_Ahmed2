@@ -967,8 +967,10 @@ class SupplierPayablesRobolectricTest {
                 assertEquals(1100.0, stationCurrencyPayments.sumOf { it.getDouble("amount") }, 0.0001)
                 assertEquals(100.0, stationCurrencyPayments.sumOf { it.getDouble("reversed_amount") }, 0.0001)
                 assertEquals(1000.0, stationCurrencyPayments.sumOf {
-                    it.getDouble("allocated_amount") - it.getDouble("reversed_amount")
+                    it.getDouble("net_allocated_amount")
                 }, 0.0001)
+                assertEquals(1100.0, stationCurrencyPayments.sumOf { it.getDouble("allocated_amount") }, 0.0001)
+                assertEquals(100.0, stationCurrencyPayments.sumOf { it.getDouble("reversed_amount") }, 0.0001)
             }
 
             val summary = SupplierPayablesRepository.getSupplierPayablesSummary(db, stationId, "2026-11-14")

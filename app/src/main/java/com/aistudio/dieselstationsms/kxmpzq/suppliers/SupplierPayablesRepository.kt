@@ -1070,8 +1070,12 @@ object SupplierPayablesRepository {
                     put("id",paymentId);put("supplier_id",c.getLong(1));put("payment_code",c.getString(2))
                     put("amount",c.getDouble(3));put("payment_method",c.getString(4));put("status",c.getString(5))
                     put("date",c.getString(6).orEmpty());put("currency_id",if(c.isNull(7)) JSONObject.NULL else c.getLong(7))
-                    put("supplier_name",c.getString(8).orEmpty());put("allocated_amount",c.getDouble(9))
+                    put("supplier_name",c.getString(8).orEmpty())
+                    // allocated_amount is the historical gross allocation; net is explicit
+                    // so callers cannot mistake the pre-reversal amount for active coverage.
+                    put("allocated_amount",c.getDouble(9))
                     put("reversed_amount",c.getDouble(10))
+                    put("net_allocated_amount",(c.getDouble(9)-c.getDouble(10)).coerceAtLeast(0.0))
                 }
                 val allocationRows = JSONArray()
                 db.rawQuery(
