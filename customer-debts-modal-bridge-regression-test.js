@@ -49,9 +49,9 @@ expect(source.includes("dueReminderDeferred=false;document.getElementById('dueRe
 expect(source.includes("r.interaction_action==='deferred'"), 'يجب حصر فقاعة التأجيل في المستحقات المؤجلة الحالية');
 expect(source.includes('prefers-reduced-motion:reduce){.due-alert-btn,.due-bubble.show{animation:none!important'), 'يجب احترام تقليل الحركة في فقاعة التأجيل');
 
-assert.match(source, /--bg-primary:#f3eadb/);
-assert.match(source, /--bg-card:rgba\(255,250,241,.97\)/);
-assert.match(source, /\[data-theme="light"\] \.top-bar \{ background:rgba\(247,239,225,.94\)/);
-assert.match(source, /id="paymentCustomerGroup"/);
-assert.match(source, /if\(customerGroup\) customerGroup\.hidden=pendingPaymentInvoiceId>0/);
-assert.match(source, /if\(customerGroup\) customerGroup\.hidden=false/);
+expect(source.includes("--bg-primary: #f3eadb"), "يجب تطبيق لوحة البيج على كتلة الوضع الفاتح الفعلية");
+expect(source.includes("--bg-card: rgba(255, 250, 241, 0.97)"), "يجب أن تستخدم البطاقات خلفية بيج فاتحة");
+expect(source.includes('[data-theme="light"] .top-bar { background:rgba(247,239,225,.94); }'), "يجب تنسيق الشريط العلوي مع لوحة البيج");
+expect(source.includes('id="paymentCustomerGroup"'), "يجب تعريف حاوية اختيار العميل");
+expect(source.includes("if(customerGroup) customerGroup.hidden=pendingPaymentInvoiceId>0"), "يجب إخفاء اختيار العميل عند التسديد من فاتورة");
+expect(source.includes("if(customerGroup) customerGroup.hidden=false"), "يجب إظهار اختيار العميل في التسديد العام");
