@@ -191,6 +191,8 @@ class DebtDueDatePolicyTest {
     @Test fun parsesOnlyExplicitEnglishArabicAndZeroTerms() {
         assertEquals(30,DebtDueDateRepository.parseTermsDays("50% مقدم، صافي 30 يوم"))
         assertEquals(30,DebtDueDateRepository.parseTermsDays("NET 30"))
+        assertEquals(7,DebtDueDateRepository.parseTermsDays("NET_7"))
+        assertEquals(30,DebtDueDateRepository.parseTermsDays("NET_30"))
         assertEquals(30,DebtDueDateRepository.parseTermsDays("صافي ٣٠ يوم"))
         assertEquals(15,DebtDueDateRepository.parseTermsDays("خلال 15 يوماً"))
         assertEquals(0,DebtDueDateRepository.parseTermsDays("صافي 0 يوم"))

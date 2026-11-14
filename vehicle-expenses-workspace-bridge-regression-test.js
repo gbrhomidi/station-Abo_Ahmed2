@@ -51,6 +51,7 @@ const wait = () => new Promise(resolve => setTimeout(resolve, 35));
   assert.doesNotMatch(expenseWorkspaceSource, /t\.trip_status <> 'cancelled'/, 'scheduled and active trip estimates must not inflate actual cost-per-kilometer');
   assert.doesNotMatch(pageSource, /station_id\s*[:=]/, 'WebView must not select station_id');
   assert.doesNotMatch(pageSource, /Math\.random|fetch\(/, 'screen must not create records or use external data feeds');
+  assert.match(pageSource, /function createExpenseIdempotencyKey\(\)[\s\S]*getRandomValues/, 'expense idempotency keys must use a cryptographically secure fallback');
   assert.doesNotMatch(pageSource, /window\.confirm\(/, 'screen must use its in-page confirmation modal rather than browser prompts');
 
   const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'https://vehicle-expenses.test/', beforeParse(window) { installBridge(window); window.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {} }); window.HTMLElement.prototype.scrollIntoView = () => {}; } });

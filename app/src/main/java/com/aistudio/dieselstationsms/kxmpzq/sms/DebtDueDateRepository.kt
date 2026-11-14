@@ -1414,7 +1414,7 @@ object DebtDueDateRepository {
         if(normalized.isBlank()) return TermsParseResult.Unknown("empty_terms")
         if(normalized in setOf("cash","نقد","نقدي","نقداً","فوري","فوراً","عند الاستلام","upon receipt","immediate")) return TermsParseResult.Known(0)
         if(normalized in setOf("بعد يوم", "بعد يوم واحد", "after 1 day", "after one day")) return TermsParseResult.Known(1)
-        val explicit=Regex("""(?:net|صافي|خلال|within|بعد|after)\s*(\d{1,3})(?:\s*(?:days?|يوم(?:اً|ًا|ين)?|أيام))?""")
+        val explicit=Regex("""(?:net[\s_-]*|صافي|خلال|within|بعد|after)\s*(\d{1,3})(?:\s*(?:days?|يوم(?:اً|ًا|ين)?|أيام))?""")
             .findAll(normalized).mapNotNull { it.groupValues.getOrNull(1)?.toIntOrNull() }.toList()
         val exactDays=Regex("""^(\d{1,3})\s*(?:days?|يوم(?:اً|ًا|ين)?|أيام)$""")
             .matchEntire(normalized)?.groupValues?.getOrNull(1)?.toIntOrNull()
