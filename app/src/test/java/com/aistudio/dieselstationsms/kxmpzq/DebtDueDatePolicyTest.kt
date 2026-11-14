@@ -413,7 +413,7 @@ class DebtDueDatePolicyTest {
         DatabaseHelper.closeInstance()
         helper = DatabaseHelper.getInstance(context)
         val migratedDb = helper.writableDatabase
-        assertEquals("The V59 -> V61 upgrade must execute for existing installations", 61, migratedDb.version)
+        assertEquals("The V59 -> current upgrade must execute for existing installations", DatabaseHelper.VERSION, migratedDb.version)
 
         val rows = DebtDueDateRepository.getPaymentTerms(helper, 1, "customer")
         assertEquals(8, rows.length())

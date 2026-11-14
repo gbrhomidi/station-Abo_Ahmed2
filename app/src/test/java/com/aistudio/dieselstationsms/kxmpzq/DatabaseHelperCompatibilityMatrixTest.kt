@@ -106,7 +106,7 @@ class DatabaseHelperCompatibilityMatrixTest {
             assertSmsAttemptSchema(upgraded)
 
             // Model an already-installed V59 database with the old BOTH scope, then execute
-            // the SQLiteOpenHelper V59->V61 upgrade path, including the V60->V61 supplier additions.
+            // the SQLiteOpenHelper V59->V62 upgrade path, including the V60->V61 supplier additions and V61->V62 receivables ledger.
             upgraded.execSQL(
                 """UPDATE payment_terms SET applies_to='both'
                    WHERE station_id IS NULL
@@ -116,7 +116,7 @@ class DatabaseHelperCompatibilityMatrixTest {
             DatabaseHelper.closeInstance()
 
             val migratedV61 = DatabaseHelper.getInstance(context).writableDatabase
-            assertEquals("V60 must upgrade to the current schema version", 61, migratedV61.version)
+            assertEquals("V60 must upgrade to the current schema version", DatabaseHelper.VERSION, migratedV61.version)
             assertEquals(DatabaseHelper.VERSION, migratedV61.version)
             assertSmsAttemptSchema(migratedV61)
             val legacyBuiltInScopeCount = migratedV61.rawQuery(

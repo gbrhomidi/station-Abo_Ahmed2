@@ -34,7 +34,7 @@ class CustomerReceivablesAllocationRobolectricTest {
         db = helper.writableDatabase
         CustomerReceivablesRepository.ensureSchema(db)
         val customerTypeId = db.rawQuery(
-            "SELECT id FROM party_types WHERE type_code='CUSTOMER' AND is_deleted=0 LIMIT 1",
+            "SELECT id FROM party_types ORDER BY id LIMIT 1",
             null
         ).use { cursor -> check(cursor.moveToFirst()); cursor.getLong(0) }
         customerId = helper.insertParty(
