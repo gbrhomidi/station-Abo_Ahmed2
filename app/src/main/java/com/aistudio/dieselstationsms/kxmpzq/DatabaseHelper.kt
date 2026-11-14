@@ -16837,7 +16837,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        WHERE customer_party_id = ? AND remaining_amount > 0 AND is_deleted = 0$salesScopeClause$targetSaleClause
                          AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(payment_method,'')),' ',''),'-','_'))
                              IN ('credit','credit_sale','credit_account','on_account','آجل','اجل','بيعآجل','علىالحساب')
-                         AND LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded','void','reversed')
+                         AND status = 'completed'
                        ORDER BY CASE WHEN due_date IS NULL OR due_date='' THEN 1 ELSE 0 END, due_date ASC, id ASC""",
                     invoiceQueryArgs.toTypedArray()
                 ).use { cursor ->

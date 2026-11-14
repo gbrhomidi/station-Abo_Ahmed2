@@ -24,6 +24,10 @@ assert.ok(repository.includes('val summary = buildCustomerDebtSummary(rows, stat
 assert.ok(repository.includes('readDebts(helper.readableDatabase, stationId)'), 'summary must use the invoice-level canonical read');
 assert.ok(repository.includes('val remainingExpr = if ("remaining_amount" in s)'), 'saved SQLite remaining balance remains the preferred balance source');
 assert.ok(repository.includes('val today = LocalDate.parse(asOfDate)'), 'maturity classification must use one explicit as-of date');
+const databasePaymentSource = read('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt');
+const customerSettlement = databasePaymentSource.slice(databasePaymentSource.indexOf('fun processPayment('), databasePaymentSource.indexOf('fun ', databasePaymentSource.indexOf('fun processPayment(') + 5));
+assert.ok(customerSettlement.includes("AND status = 'completed'"), 'customer payment allocation must select only completed credit invoices, matching the SQLite allocation trigger');
+
 
 assert.ok(database.includes('DebtDueDateRepository.getCustomerDebtSummary(this, stationId, today)'), 'dashboard debt KPIs must use the central repository');
 assert.ok(database.includes('val reportRows = when (reportType)'), 'CRM report result must be decorated from one report projection');

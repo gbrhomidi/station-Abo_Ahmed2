@@ -656,6 +656,55 @@ class SupplierPayablesRobolectricTest {
     }
 
     @Test
+    fun partialSupplierAllocationReversalRollsBackToSavepointWhenCallerCommitsOuterTransaction() {
+        val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
+            db, 1, supplierId, "manual", 93001, "SAVEPOINT-PARTIAL-REVERSAL", 100.0, "2026-10-01", null, 1
+        )
+        val paymentId = createCompletedSupplierPayment(100.0, "SAVEPOINT-PARTIAL")
+        SupplierPayablesRepository.allocatePayment(db, 1, supplierId, paymentId, 100.0, 1, invoiceId)
+        val allocationId = db.rawQuery(
+            "SELECT id FROM supplier_invoice_allocations WHERE payment_id=? AND supplier_invoice_id=? AND status='posted' AND is_deleted=0",
+            arrayOf(paymentId.toString(), invoiceId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+        db.execSQL("""
+            CREATE TRIGGER fail_supplier_invoice_reopen_savepoint
+            BEFORE UPDATE ON supplier_invoices
+            BEGIN SELECT RAISE(ABORT,'forced_supplier_invoice_reopen_failure'); END
+        """.trimIndent())
+        var failed = false
+        db.beginTransaction()
+        try {
+            try {
+                SupplierPayablesRepository.reversePaymentAllocation(
+                    db, 1, supplierId, allocationId, 25.0, 1,
+                    "اختبار ذرية نقطة الحفظ", "supplier-savepoint-partial-${UUID.randomUUID()}"
+                )
+            } catch (_: Exception) {
+                failed = true
+            }
+            // Simulate a caller handling the error but committing its wider transaction.
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+            db.execSQL("DROP TRIGGER IF EXISTS fail_supplier_invoice_reopen_savepoint")
+        }
+        assertTrue(failed)
+        assertEquals(0, db.rawQuery(
+            "SELECT COUNT(*) FROM supplier_allocation_reversals WHERE allocation_id=? AND status='posted'",
+            arrayOf(allocationId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+        db.rawQuery(
+            "SELECT paid_amount,remaining_amount,status FROM supplier_invoices WHERE id=?",
+            arrayOf(invoiceId.toString())
+        ).use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(100.0, c.getDouble(0), 0.0001)
+            assertEquals(0.0, c.getDouble(1), 0.0001)
+            assertEquals("paid", c.getString(2))
+        }
+    }
+
+    @Test
     fun partialAllocationReversalKeepsOriginalAndReverses300Then200Then500WithoutCashJournal() {
         val invoiceId = SupplierPayablesRepository.createPurchaseInvoice(
             db, 1, supplierId, "manual", 93002, "MAN-PARTIAL-REVERSAL", 1000.0, "2026-10-01", null, 1

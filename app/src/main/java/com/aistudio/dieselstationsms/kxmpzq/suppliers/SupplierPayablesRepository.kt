@@ -724,7 +724,22 @@ object SupplierPayablesRepository {
         val key = idempotencyKey.trim()
         require(key.isNotBlank()) { "مفتاح عكس التخصيص مطلوب لمنع التكرار" }
         if (db.inTransaction()) {
-            return reversePaymentAllocationWithinTransaction(db, stationId, supplierId, allocationId, amount, actorId, reason, key)
+            val savepoint = "supplier_allocation_partial_reverse"
+            db.execSQL("SAVEPOINT $savepoint")
+            try {
+                val result = reversePaymentAllocationWithinTransaction(
+                    db, stationId, supplierId, allocationId, amount, actorId, reason, key
+                )
+                db.execSQL("RELEASE SAVEPOINT $savepoint")
+                return result
+            } catch (error: Throwable) {
+                try {
+                    db.execSQL("ROLLBACK TO SAVEPOINT $savepoint")
+                } finally {
+                    db.execSQL("RELEASE SAVEPOINT $savepoint")
+                }
+                throw error
+            }
         }
         db.beginTransaction()
         try {
@@ -835,7 +850,22 @@ object SupplierPayablesRepository {
             "بيانات عكس تخصيص دفعة المورد غير صالحة"
         }
         if (db.inTransaction()) {
-            return reversePaymentAllocationsWithinTransaction(db, stationId, supplierId, paymentId, actorId, reason)
+            val savepoint = "supplier_payment_allocations_full_reverse"
+            db.execSQL("SAVEPOINT $savepoint")
+            try {
+                val result = reversePaymentAllocationsWithinTransaction(
+                    db, stationId, supplierId, paymentId, actorId, reason
+                )
+                db.execSQL("RELEASE SAVEPOINT $savepoint")
+                return result
+            } catch (error: Throwable) {
+                try {
+                    db.execSQL("ROLLBACK TO SAVEPOINT $savepoint")
+                } finally {
+                    db.execSQL("RELEASE SAVEPOINT $savepoint")
+                }
+                throw error
+            }
         }
         db.beginTransaction()
         try {
