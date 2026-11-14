@@ -50,7 +50,16 @@
     const num=value=>{const n=Number(value);return Number.isFinite(n)?n:null};
     const money=(value,currency='')=>{const n=num(value);return n==null?'—':new Intl.NumberFormat('ar-YE',{maximumFractionDigits:2}).format(n)+(currency?' '+currency:'')};
     const quantity=value=>{const n=num(value);return n==null?'غير متاح':new Intl.NumberFormat('ar-YE',{maximumFractionDigits:2}).format(n)+' كم'};
-    const today=()=>businessDayDate();
+    const today=()=>{
+      try{
+        const current=dataOf(bridge?.getCurrentBusinessDay?.());
+        const businessDate=String(current?.business_day||'').trim();
+        if(/^\d{4}-\d{2}-\d{2}$/.test(businessDate))return businessDate;
+      }catch(_){}
+      const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Aden',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+      const values=Object.fromEntries(parts.filter(part=>part.type!=='literal').map(part=>[part.type,part.value]));
+      return values.year+'-'+values.month+'-'+values.day;
+    };
     const rowsOf=raw=>{const value=dataOf(raw);if(Array.isArray(value))return value;if(Array.isArray(value?.rows))return value.rows;return[]};
     const dataOf=raw=>{if(raw==null)throw new Error('لم يرجع Android Bridge نتيجة');const value=typeof raw==='string'?JSON.parse(raw):raw;if(value?.success===false)throw new Error(value.error||value.message||'فشلت العملية');return Object.prototype.hasOwnProperty.call(value||{},'data')?value.data:value};
     const invoke=(method,args=[])=>new Promise((resolve,reject)=>{if(!bridge||typeof bridge[method]!=='function'){reject(new Error('العقد '+method+' غير متاح في Android Bridge'));return}try{resolve(dataOf(bridge[method](...args)))}catch(error){reject(error)}});

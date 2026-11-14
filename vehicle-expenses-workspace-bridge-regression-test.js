@@ -16,6 +16,7 @@ const workspace = { rows: [row], summary: { record_count: 1, total_expenses: 320
 
 function installBridge(window) {
   window.AndroidInterface = {
+    getCurrentBusinessDay() { return ok({ business_day: '2026-08-26', timezone: 'Asia/Aden' }); },
     getVehicleExpenseWorkspace(payload) { calls.push(['workspace', JSON.parse(payload)]); return ok(workspace); },
     getVehicleExpenseDetails(id) { calls.push(['details', id]); return ok({ ...row, id }); },
     saveVehicleExpenseRecord(payload) { calls.push(['save', JSON.parse(payload)]); return ok(502); },
@@ -71,6 +72,7 @@ const wait = () => new Promise(resolve => setTimeout(resolve, 35));
   assert.equal(Object.hasOwn(filterCall, 'station_id'), false, 'filter payload must retain native station authority');
 
   window.document.getElementById('addButton').click();
+  assert.equal(window.document.getElementById('formDate').value, '2026-08-26', 'new expense date must use the native Asia/Aden business-day bridge');
   window.document.getElementById('formVehicle').value = '101';
   window.document.getElementById('formType').value = 'صيانة';
   window.document.getElementById('formDate').value = '2026-08-27';
