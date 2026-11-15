@@ -49,14 +49,17 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   assert.doesNotMatch(routeFunction, /date\(location_time\)|datetime\(location_time\)/, 'route query must not wrap the indexed timestamp column');
   assert.match(databaseSource, /migrateV31ToV32[\s\S]{0,500}replace\(location_time, 'T', ' '\)/, 'V32 must normalize older WebView timestamp values before index ordering is used');
   assert.doesNotMatch(rawHtml, /station_id\s*[:=]/, 'WebView must not select the operational station');
-  assert.doesNotMatch(rawHtml, /Math\.random|fetch\(|https?:\/\/.*(?:tiles|maps)/i, 'map must not use invented positions or an external live-map feed');
+  assert.doesNotMatch(rawHtml, /Math\.random|fetch\(/i, 'map must not invent positions or fetch untrusted live vehicle feeds');
+  assert.match(rawHtml, /server\.arcgisonline\.com\/ArcGIS\/rest\/services\/World_Imagery/, 'satellite basemap must use the declared imagery tile service');
+  assert.match(rawHtml, /opentopomap\.org/, 'terrain basemap must use the declared terrain tile service');
 
   const dom = new JSDOM(html, {
     runScripts: 'dangerously', url: 'https://vehicle-tracking.test/',
     beforeParse(window) {
       installBridge(window);
       window.L = {
-        map() { return { setView() { return this; }, invalidateSize() {}, fitBounds() {}, removeLayer(layer) { leafletState.layers.delete(layer); } }; },
+        map() { return { setView() { return this; }, invalidateSize() {}, fitBounds() {}, hasLayer() { return false; }, removeLayer(layer) { leafletState.layers.delete(layer); } }; },
+        control: { layers() { return { addTo() { return this; } }; } },
         tileLayer() { return { addTo() { return this; } }; },
         polyline(coords) { const layer = { kind: 'polyline', coords, addTo() { leafletState.layers.add(this); return this; } }; return layer; },
         circleMarker(coords) { const layer = { kind: 'marker', coords, bindPopup() { return this; }, addTo() { leafletState.layers.add(this); return this; } }; return layer; }
