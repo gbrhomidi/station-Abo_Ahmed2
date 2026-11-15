@@ -45,7 +45,9 @@ expect(source.includes('openPaymentForCustomer(') && source.includes('finiteNumb
 expect(source.includes('animation:dueReminderBubbleWave 1.5s ease-out 2'), 'موجة فقاعة التأجيل يجب أن تنتهي بعد ثلاث ثوانٍ');
 expect(source.includes('--due-bubble-wave:rgba(26,35,126,.95)') && source.includes('--due-bubble-wave:rgba(255,215,0,.98)'), 'لون موجة فقاعة التأجيل يجب أن يتغير بين الوضعين الفاتح والمظلم');
 expect(source.includes('.due-bubble::after{content:'), 'فقاعة التأجيل يجب أن تعرض ذيلاً واضحاً');
-expect(source.includes("dueReminderDeferred=false;document.getElementById('dueReminderBubble')?.classList.remove('show')"), 'إلغاء التذكير يجب أن يخفي فقاعة التأجيل');
+const cancelReminderFunction = source.match(/async function cancelDueReminderNotice\(\)\s*\{([\s\S]*?)\n\s*\}\s*async function deferDueReminder\(/);
+expect(cancelReminderFunction, 'تعذر تحديد دالة إلغاء تذكير الاستحقاق');
+expect(/dueReminderDeferred\s*=\s*false[\s\S]*?dueReminderBubble[\s\S]*?classList\.remove\(['"]show['"]\)/.test(cancelReminderFunction[1]), 'إلغاء التذكير يجب أن يمسح حالة التأجيل ويخفي الفقاعة');
 expect(source.includes("r.interaction_action==='deferred'"), 'يجب حصر فقاعة التأجيل في المستحقات المؤجلة الحالية');
 expect(source.includes('prefers-reduced-motion:reduce){.due-alert-btn,.due-bubble.show{animation:none!important'), 'يجب احترام تقليل الحركة في فقاعة التأجيل');
 

@@ -276,7 +276,7 @@ class MainActivity : AppCompatActivity() {
                 val wv = webViewRef?.get() ?: return
                 val escaped = message.replace("\\", "\\\\")
                     .replace("\"", "\\\"")
-                    .replace("\n", "\\n")
+                    .replace("\n", "\n")
                 val js = """
                     (function() {
                         if (typeof vConsole !== 'undefined' && vConsole) {
@@ -2493,7 +2493,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         val rootId = DocumentsContract.getTreeDocumentId(selectedTree)
                         val parentUri = DocumentsContract.buildDocumentUriUsingTree(selectedTree, rootId)
-                        val safeName = fileName.replace(Regex("[\\\\/:*?\"<>|\\r\\n\\u0000-\\u001F]"), "_").take(160).ifBlank { "export" }
+                        val safeName = fileName.replace(Regex("[\\\\/:*?\"<>|\\r\n\\u0000-\\u001F]"), "_").take(160).ifBlank { "export" }
                         val target = DocumentsContract.createDocument(contentResolver, parentUri, mimeType ?: "application/octet-stream", safeName)
                             ?: throw IllegalStateException("تعذر إنشاء الملف داخل المجلد المحدد")
                         val output = contentResolver.openOutputStream(target, "wt")
@@ -11834,7 +11834,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun printCurrentPageWithTitle(title: String = "طباعة"): String {
             val safeTitle = title.trim().take(120).ifBlank { "طباعة" }
-            val documentTitle = safeTitle.replace(Regex("[\\r\\n\\u0000-\\u001F]"), " ")
+            val documentTitle = safeTitle.replace(Regex("[\\r\n\\u0000-\\u001F]"), " ")
             return scheduleWebViewPrint(documentTitle, safeTitle)
         }
 
@@ -14654,7 +14654,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val dueAmount = row.optDouble("due_soon_amount", total)
             val message = if (days < 0) {
                 val overdueDays = kotlin.math.abs(days.toLong())
-                "السلام عليكم، نحيطكم علماً بأن موعد سداد الفاتورة المستحقة بتاريخ ($dueDate) قد تجاوز موعده منذ $overdueDays يوم، ولم يُسجّل سداد المبلغ المستحق حتى الآن.\\nالمبلغ المتأخر: ${formatYER(dueAmount)}\\nإجمالي رصيدكم القائم: ${formatYER(total)}\\nنرجو التكرم بالسداد في أقرب وقت، أو التواصل معنا لتأكيد السداد إن تم."
+                "السلام عليكم، نحيطكم علماً بأن موعد سداد الفاتورة المستحقة بتاريخ ($dueDate) قد تجاوز موعده منذ $overdueDays يوم، ولم يُسجّل سداد المبلغ المستحق حتى الآن.\nالمبلغ المتأخر: ${formatYER(dueAmount)}\nإجمالي رصيدكم القائم: ${formatYER(total)}\nنرجو التكرم بالسداد في أقرب وقت، أو التواصل معنا لتأكيد السداد إن تم."
             } else if (days == 1) {
                 "مرحبا 🙋\nنذكّركم بأن موعد استحقاق الدين يوم غد ($dueDate).\nالمبلغ المستحق: ${formatYER(dueAmount)}\nإجمالي الرصيد عليكم: ${formatYER(total)}"
             } else if (days == 0) {
