@@ -8039,7 +8039,7 @@ function updateDebtViewButtons() {
             setDueReminderFeedback('');
             try {
                 // Dismiss only this app's local reminder state; never enqueue or send SMS.
-                await persistDueReminderDecision('dismissed','local');
+                await persistDueReminderDecision('dismissed','manual');
                 dueReminderDeferred=false;
                 document.getElementById('dueReminderBubble')?.classList.remove('show');
                 await closeDueReminderNotice();
@@ -8051,7 +8051,7 @@ function updateDebtViewButtons() {
         async function deferDueReminder(){
             setDueReminderFeedback('');
             try {
-                await persistDueReminderDecision('deferred','local');
+                await persistDueReminderDecision('deferred','manual');
                 dueReminderDeferred=true;
                 await closeDueReminderNotice();
                 const bubble=document.getElementById('dueReminderBubble');
