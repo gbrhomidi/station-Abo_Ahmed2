@@ -6187,6 +6187,253 @@ body{background:var(--bg-primary);color:var(--text-primary);background-image:rad
 .debt-view-toolbar{gap:8px;padding:12px 14px;margin:0 14px 14px;border:1.5px solid var(--border-color);border-radius:var(--radius-card);background:var(--bg-card);box-shadow:var(--shadow-outline)}.debt-view-caption{color:var(--text-muted);font-weight:900}.debt-view-button{padding:9px 13px;border-radius:11px;border:1.5px solid var(--border-color);background:var(--bg-glass);color:var(--text-primary);font-family:inherit;font-weight:800;transition:var(--transition);box-shadow:var(--shadow-outline)}.debt-view-button:hover{border-color:var(--emerald-primary);color:var(--emerald-primary);background:var(--bg-glass-light)}.debt-view-button.active{background:linear-gradient(135deg,var(--emerald-primary),var(--emerald-dark));border-color:var(--emerald-primary);color:#fff;box-shadow:var(--shadow-emerald)}
 .table-wrapper{background:var(--bg-card);border-top:1.5px solid var(--border-color);border-bottom:1.5px solid var(--border-color);box-shadow:var(--shadow-outline)}.data-table th{background:var(--bg-glass-light);color:var(--emerald-primary);border-bottom:2px solid var(--border-color-strong);font-weight:900}.data-table td{color:var(--text-secondary);border-bottom:1px solid rgba(201,178,150,.35)}[data-theme="dark"] .data-table td{border-bottom-color:rgba(230,185,135,.25)}.data-table tr:hover td{background:var(--bg-glass-light);color:var(--text-primary)}.data-table tr.row-selected td{background:var(--row-selected-bg)!important;color:var(--text-primary)!important;border-bottom-color:var(--emerald-primary)!important}
 .due-alert-btn{position:static!important;inset:auto!important;display:none;align-items:center;gap:7px;padding:9px 13px;border-radius:var(--radius-small);border:1.5px solid var(--gold-primary);background:var(--tint-warning);color:var(--gold-primary);font:800 .8rem inherit;box-shadow:var(--shadow-outline);white-space:nowrap}.due-alert-btn .due-count{display:inline-flex;min-width:21px;height:21px;align-items:center;justify-content:center;border-radius:50%;background:var(--gold-primary);color:#fff;font-size:.7rem}@media(max-width:560px){.due-alert-btn{font-size:.68rem!important;padding:8px 9px!important}.debt-view-toolbar{margin-inline:8px;padding:10px}.top-title h2{font-size:1.15rem}}
+
+/* ================================================================
+   Customer Debts – Warm Beige / Gold visual system
+   Scoped presentation overrides; business logic and bridge untouched.
+   ================================================================ */
+:root,
+[data-theme="light"] {
+    color-scheme: light;
+    --bg-primary: #f9f3e9;
+    --bg-secondary: #f3ead9;
+    --bg-card: rgba(255,252,247,.97);
+    --bg-glass: rgba(120,80,45,.05);
+    --bg-glass-light: rgba(120,80,45,.10);
+    --text-primary: #3d2817;
+    --text-secondary: #6b4c33;
+    --text-muted: #a08064;
+    --border-color: #c9b296;
+    --border-color-strong: #b8a07e;
+    --border-glow: rgba(184,160,126,.35);
+    --gold-primary: #b8873a;
+    --gold-dark: #96702e;
+    --gold-glow: 0 0 30px rgba(184,135,58,.15);
+    --emerald-primary: #a86b3d;
+    --emerald-dark: #8a5330;
+    --emerald-glow: 0 0 30px rgba(168,107,61,.18);
+    --success: #7a8b47;
+    --danger: #b34132;
+    --warning: #c99232;
+    --doubtful: #8b3a5d;
+    --undated: #a08064;
+    --tint-success: rgba(122,139,71,.12);
+    --tint-success-strong: rgba(122,139,71,.18);
+    --tint-danger: rgba(179,65,50,.12);
+    --tint-warning: rgba(201,146,50,.12);
+    --tint-emerald: rgba(168,107,61,.12);
+    --tint-doubtful: rgba(139,58,93,.13);
+    --tint-undated: rgba(160,128,100,.12);
+    --row-selected-bg: rgba(168,107,61,.20);
+    --topbar-bg: rgba(249,243,233,.97);
+    --navbar-bg: rgba(249,243,233,.97);
+    --modal-overlay-bg: rgba(61,40,23,.55);
+    --loading-overlay-bg: rgba(61,40,23,.45);
+    --shadow-card: 0 20px 50px rgba(61,40,23,.12);
+    --shadow-glow: 0 0 60px rgba(168,107,61,.08);
+    --shadow-emerald: 0 4px 20px rgba(168,107,61,.22);
+    --shadow-emerald-hover: 0 8px 35px rgba(168,107,61,.32);
+    --shadow-success: 0 4px 20px rgba(122,139,71,.22);
+    --shadow-success-hover: 0 8px 35px rgba(122,139,71,.32);
+    --shadow-danger: 0 4px 20px rgba(179,65,50,.22);
+    --shadow-danger-hover: 0 8px 35px rgba(179,65,50,.32);
+    --shadow-outline: 0 1px 4px rgba(184,160,126,.35),0 0 0 1px rgba(184,160,126,.15);
+}
+[data-theme="dark"] {
+    color-scheme: dark;
+    --bg-primary: #1f1610;
+    --bg-secondary: #2a1e14;
+    --bg-card: rgba(45,32,22,.94);
+    --bg-glass: rgba(240,226,208,.045);
+    --bg-glass-light: rgba(240,226,208,.085);
+    --text-primary: #f0e2d0;
+    --text-secondary: #c9ac85;
+    --text-muted: #8a6e50;
+    --border-color: rgba(230,185,135,.62);
+    --border-color-strong: rgba(230,185,135,.85);
+    --border-glow: rgba(230,185,135,.45);
+    --gold-primary: #d4a455;
+    --gold-dark: #b8882e;
+    --gold-glow: 0 0 30px rgba(212,164,85,.18);
+    --emerald-primary: #d4915a;
+    --emerald-dark: #b37440;
+    --emerald-glow: 0 0 30px rgba(212,145,90,.20);
+    --success: #9aab5f;
+    --danger: #d45345;
+    --warning: #d9a84a;
+    --doubtful: #c9698d;
+    --undated: #8a6e50;
+    --tint-success: rgba(154,171,95,.15);
+    --tint-success-strong: rgba(154,171,95,.22);
+    --tint-danger: rgba(212,83,69,.15);
+    --tint-warning: rgba(217,168,74,.15);
+    --tint-emerald: rgba(212,145,90,.15);
+    --tint-doubtful: rgba(201,105,141,.15);
+    --tint-undated: rgba(138,110,80,.15);
+    --row-selected-bg: rgba(212,145,90,.28);
+    --topbar-bg: rgba(31,22,16,.97);
+    --navbar-bg: rgba(31,22,16,.97);
+    --modal-overlay-bg: rgba(0,0,0,.82);
+    --loading-overlay-bg: rgba(0,0,0,.80);
+    --shadow-card: 0 20px 50px rgba(0,0,0,.6);
+    --shadow-glow: 0 0 60px rgba(212,145,90,.10);
+    --shadow-emerald: 0 4px 20px rgba(212,145,90,.25);
+    --shadow-emerald-hover: 0 8px 35px rgba(212,145,90,.35);
+    --shadow-success: 0 4px 20px rgba(154,171,95,.25);
+    --shadow-success-hover: 0 8px 35px rgba(154,171,95,.35);
+    --shadow-danger: 0 4px 20px rgba(212,83,69,.25);
+    --shadow-danger-hover: 0 8px 35px rgba(212,83,69,.35);
+    --shadow-outline: 0 1px 4px rgba(0,0,0,.4),0 0 0 1px rgba(230,185,135,.18);
+}
+body {
+    background-color: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+    background-image:
+        radial-gradient(circle at 15% 18%, rgba(200,165,125,.045) 0%, transparent 48%),
+        radial-gradient(circle at 85% 82%, rgba(210,180,140,.035) 0%, transparent 52%) !important;
+}
+[data-theme="dark"] body {
+    background-image:
+        radial-gradient(circle at 15% 18%, rgba(212,145,90,.08) 0%, transparent 48%),
+        radial-gradient(circle at 85% 82%, rgba(212,164,85,.06) 0%, transparent 52%) !important;
+}
+.top-bar,
+[data-theme="light"] .top-bar,
+[data-theme="dark"] .top-bar {
+    background: var(--topbar-bg) !important;
+    color: var(--text-primary) !important;
+    border-bottom: 2px solid var(--border-color) !important;
+}
+.header-top {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 10px;
+}
+.top-title {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    text-align: right;
+    direction: rtl;
+}
+.top-title h2 {
+    justify-content: flex-start;
+    text-align: right;
+    min-width: 0;
+    font-size: clamp(1rem, 4.3vw, 1.5rem);
+}
+.top-title .debt-title-icon {
+    flex: 0 0 auto;
+    margin: 0;
+    color: var(--gold-primary);
+}
+.header-actions { flex: 0 0 auto; gap: 8px; }
+.debt-view-toolbar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    overflow: visible !important;
+    padding: 12px;
+    margin-inline: 0;
+}
+.debt-view-arrow { display: none !important; }
+.debt-view-button {
+    flex: 0 0 auto;
+    min-width: max-content;
+    white-space: nowrap;
+}
+#debtViewTable {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+.table-section {
+    padding-inline: 0 !important;
+    margin-inline: 0 !important;
+    width: 100%;
+}
+.table-wrapper {
+    width: 100%;
+    margin-inline: 0 !important;
+    border-radius: 0 !important;
+    border-inline: 0 !important;
+}
+.table-scroll {
+    position: relative;
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: min(65vh, 620px);
+    overscroll-behavior: contain;
+}
+.data-table,
+.table-section table,
+.table-wrapper table {
+    width: 100%;
+    border-collapse: separate !important;
+    border-spacing: 3px 0 !important;
+}
+.data-table { min-width: 1200px; }
+.data-table thead,
+.table-section table thead,
+.table-wrapper table thead {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+}
+.data-table th,
+.table-section table th,
+.table-wrapper table th {
+    position: sticky;
+    top: 0;
+    z-index: 31;
+    padding: 13px 14px !important;
+    min-height: 46px;
+    background: #e8d8bd !important;
+    color: #553a20 !important;
+    font-size: .9rem !important;
+    font-weight: 900 !important;
+    line-height: 1.45;
+    white-space: nowrap !important;
+    border: 1.5px solid #b99b70 !important;
+    border-radius: 10px !important;
+    box-shadow: inset 0 -2px 0 rgba(120,80,45,.10), 0 2px 5px rgba(61,40,23,.06);
+}
+[data-theme="dark"] .data-table th,
+[data-theme="dark"] .table-section table th,
+[data-theme="dark"] .table-wrapper table th {
+    background: #493625 !important;
+    color: #f0dfc6 !important;
+    border-color: #a98155 !important;
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.18);
+}
+.data-table td,
+.table-section table td,
+.table-wrapper table td {
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+}
+.data-table tr { transition: background-color .18s ease; }
+@media (max-width: 560px) {
+    .top-bar { padding: 10px 12px !important; }
+    .header-top { gap: 7px; }
+    .top-title { gap: 6px; }
+    .top-title h2 { font-size: 1rem; }
+    .header-actions .icon-btn { width: 38px; height: 38px; }
+    .debt-view-toolbar { gap: 6px; padding: 10px 8px; }
+    .debt-view-button { padding: 8px 10px; font-size: .76rem; }
+}
+
 </style>
   <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
@@ -6216,7 +6463,7 @@ body{background:var(--bg-primary);color:var(--text-primary);background-image:rad
                 <i class="fas fa-hand-holding-usd debt-title-icon" aria-hidden="true"></i><h2>إدارة ديون العملاء</h2>
             </div>
             <div class="header-actions">
-                <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات" aria-label="التنبيهات"><i class="fas fa-bell"></i></button>
+                
                 <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
                     <i class="fas fa-moon" id="themeIcon"></i>
                 </button>
@@ -6382,7 +6629,7 @@ body{background:var(--bg-primary);color:var(--text-primary);background-image:rad
             <button type="button" class="debt-view-button" id="debtViewGantt" onclick="setDebtView('gantt')"><i class="fas fa-stream"></i> جانت</button>
             <button type="button" class="debt-view-button" id="debtViewCalendar" onclick="setDebtView('calendar')"><i class="fas fa-calendar-alt"></i> تقويم</button>
             <button type="button" class="debt-view-button" id="debtViewGallery" onclick="setDebtView('gallery')"><i class="fas fa-images"></i> معرض</button>
-            <button type="button" class="debt-view-button" id="debtViewMap" onclick="setDebtView('map')"><i class="fas fa-map-marked-alt"></i> خريطة</button>
+            
             <button type="button" class="debt-view-button" id="debtViewDashboard" onclick="setDebtView('dashboard')"><i class="fas fa-chart-pie"></i> لوحة تحكم</button>
             <button type="button" class="debt-view-button" id="debtViewList" onclick="setDebtView('list')"><i class="fas fa-list"></i> قائمة</button>
         </div>
@@ -6931,11 +7178,15 @@ body{background:var(--bg-primary);color:var(--text-primary);background-image:rad
         }
 
         function loadSavedTheme() {
-            // إجبار الوضع الفاتح (البيج) لضمان المظهر المطلوب دائمًا
-            document.documentElement.setAttribute('data-theme', 'light');
+            // احترم تفضيل المستخدم المحفوظ، واجعل البيج الفاتح هو الوضع الافتراضي.
+            let savedTheme = 'light';
+            try {
+                const storedTheme = localStorage.getItem('theme');
+                if (storedTheme === 'light' || storedTheme === 'dark') savedTheme = storedTheme;
+            } catch (_) {}
+            document.documentElement.setAttribute('data-theme', savedTheme);
             const icon = document.getElementById('themeIcon');
-            if (icon) icon.className = 'fas fa-moon';
-            try { localStorage.setItem('theme', 'light'); } catch (_) {}
+            if (icon) icon.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
         }
 
         // ===================================================================
