@@ -9,7 +9,7 @@
 html,body,#map{height:100%;width:100%;margin:0;padding:0;background:#e8edf0}
 .leaflet-control-attribution{font-size:10px}
 .map-hint{position:absolute;z-index:1000;top:calc(12px + 8.5em);left:12px;right:12px;max-width:440px;margin:auto;padding:9px 12px;border-radius:10px;background:#ffffffed;color:#263445;font:14px sans-serif;text-align:center;box-shadow:0 2px 10px #0002;pointer-events:none}
-.map-error{position:absolute;z-index:1001;bottom:12px;left:12px;right:12px;padding:10px;border-radius:10px;background:#fff0f0;color:#9b1c1c;font:13px sans-serif;text-align:center;display:none}
+.map-error{position:absolute;z-index:1001;bottom:12px;left:12px;right:12px;padding:10px;border-radius:10px;background:#fff0f0;color:#9b1c1c;font:13px sans-serif;text-align:center;display:none}.map-hint{border:1px solid #d4e3ef}.leaflet-control-zoom a{width:42px!important;height:42px!important;line-height:42px!important;font-size:20px!important}.leaflet-control-attribution{background:#fffffff0;padding:3px 6px!important;border-radius:6px}
 </style>
 </head>
 <body>
@@ -22,14 +22,22 @@ html,body,#map{height:100%;width:100%;margin:0;padding:0;background:#e8edf0}
 'use strict';
 var errorBox=document.getElementById('mapError');
 if(!window.L){errorBox.style.display='block';errorBox.textContent='تعذر تحميل مكوّن الخريطة. تحقق من اتصال الإنترنت.';return;}
-var map=L.map('map',{zoomControl:true,attributionControl:true});
-map.fitWorld(); // No station/customer coordinates are preselected or fabricated.
+var map=L.map('map',{zoomControl:true,attributionControl:true,preferCanvas:true});
+map.setView([15.5,47.5],6); // Start near Yemen's operating area without inventing a selected point.
 var marker=null;
-var tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
- maxZoom:19,
- attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+var tileSources=[
+ 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+ 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+ 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+];
+var tileIndex=0,fallbackPending=false;
+var tiles=L.tileLayer(tileSources[tileIndex],{maxZoom:19,attribution:'&copy; CARTO, Esri, OpenStreetMap contributors'});
+tiles.on('tileerror',function(){
+ if(fallbackPending)return;
+ if(tileIndex>=tileSources.length-1){errorBox.style.display='block';errorBox.textContent='تعذر الوصول إلى مزودي الخرائط. الإحداثيات لا تزال قابلة للإدخال يدويًا.';return;}
+ fallbackPending=true;errorBox.style.display='block';errorBox.textContent='جارٍ تجربة مصدر خرائط بديل…';
+ window.setTimeout(function(){tiles.setUrl(tileSources[++tileIndex]);window.setTimeout(function(){fallbackPending=false;},7000);},600);
 });
-tiles.on('tileerror',function(){errorBox.style.display='block';});
 tiles.on('tileload',function(){errorBox.style.display='none';});
 tiles.addTo(map);
 function report(lat,lon){

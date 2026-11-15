@@ -52,6 +52,8 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   assert.doesNotMatch(rawHtml, /Math\.random|fetch\(/i, 'map must not invent positions or fetch untrusted live vehicle feeds');
   assert.match(rawHtml, /server\.arcgisonline\.com\/ArcGIS\/rest\/services\/World_Imagery/, 'satellite basemap must use the declared imagery tile service');
   assert.match(rawHtml, /opentopomap\.org/, 'terrain basemap must use the declared terrain tile service');
+  assert.match(rawHtml, /data-map-layer="satellite">قمر صناعي/, 'map layers must use clear Arabic labels');
+  assert.doesNotMatch(rawHtml, /L\.control\.layers/, 'redundant collapsed layer controls must not compete with the visible map toolbar');
   assert.match(rawHtml, /assets-local\/vendor\/leaflet\/leaflet\.js/, 'Leaflet runtime must be packaged locally so the map initializes without an external CDN');
   assert.match(rawHtml, /basemaps\.cartocdn\.com[\s\S]{0,500}World_Street_Map[\s\S]{0,500}tile\.openstreetmap\.org/, 'street tiles must fail over across independent providers');
   assert.doesNotMatch(rawHtml, /<script src=\"https?:\/\/unpkg\.com\/leaflet/, 'the tracking map must not require an external Leaflet script CDN');
@@ -88,6 +90,8 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   assert.equal([...leafletState.layers].filter(layer => layer.kind === 'marker').length, 2, 'geographic map must ignore invalid persisted coordinates');
   assert.equal([...leafletState.layers].filter(layer => layer.kind === 'polyline').length, 1, 'geographic map must draw a route only from two valid persisted points');
   assert.match(window.document.getElementById('connectionTitle').textContent, /بيانات GPS حديثة/, 'GPS status must reflect Android tracking response');
+  assert.match(rawHtml, /height:clamp\(410px,68vh,760px\)/, 'tracking map must scale its height for mobile and desktop viewports');
+  assert.ok(window.document.getElementById('mapTileStatus'), 'map must expose tile-provider readiness to the user');
 
   const vehicleFilter = window.document.getElementById('vehicleFilter');
   vehicleFilter.value = '101';
@@ -98,6 +102,17 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   assert.equal(routeCall[1].vehicle_id, 101, 'route identifier must be numeric');
   assert.equal(Object.hasOwn(routeCall[1], 'station_id'), false, 'route station scope must remain native');
   assert.equal(window.document.getElementById('mapEmpty').classList.contains('show'), false, 'valid route records must not render the empty map state');
+  assert.match(window.document.getElementById('mapLegend').textContent, /Toyota Hilux/, 'map legend must identify the real selected vehicle');
+  window.document.getElementById('mapFitButton').click();
+  const fullscreenButton=window.document.getElementById('mapFullscreenButton'); fullscreenButton.click();
+  assert.equal(window.document.getElementById('mapWrap').classList.contains('map-fullscreen'), true, 'map fullscreen control must expand the map container');
+  assert.equal(fullscreenButton.getAttribute('aria-pressed'), 'true', 'fullscreen state must be exposed accessibly');
+  window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(window.document.getElementById('mapWrap').classList.contains('map-fullscreen'), false, 'Escape key must close fullscreen map view');
+  fullscreenButton.click();
+  assert.equal(window.document.getElementById('mapWrap').classList.contains('map-fullscreen'), true, 'map should be expandable again after Escape');
+  fullscreenButton.click();
+  assert.equal(window.document.getElementById('mapWrap').classList.contains('map-fullscreen'), false, 'fullscreen control must return to the normal dashboard');
   assert.match(window.document.getElementById('selectedVehicleDetails').textContent, /15\.37/, 'selecting a vehicle must immediately render its valid persisted coordinates');
   const searchInput = window.document.getElementById('searchInput'); searchInput.value = 'no-match'; searchInput.dispatchEvent(new window.Event('input', { bubbles: true })); await new Promise(resolve => setTimeout(resolve, 300));
   assert.equal(window.document.getElementById('mapEmpty').classList.contains('show'), false, 'list search filters must not hide the explicitly selected vehicle from the map');
