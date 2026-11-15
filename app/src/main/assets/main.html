@@ -3876,7 +3876,7 @@
                 mainDueReminderDeferred=true;
                 closeMainDueReminderNotice();
                 const bubble=document.getElementById('mainDueReminderBubble');
-                if(bubble){bubble.classList.remove('deferred-pulse');void bubble.offsetWidth;bubble.classList.add('deferred-pulse');}
+                if(bubble){bubble.classList.remove('deferred-pulse');void bubble.offsetWidth;bubble.classList.add('deferred-pulse');bubble.classList.add('show');}
             } catch(e) { setMainDueReminderFeedback(e.message||'تعذر تأجيل التذكير'); }
             finally { buttons.forEach(button=>button.disabled=false); }
         }
