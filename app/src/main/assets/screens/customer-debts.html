@@ -6124,7 +6124,16 @@
         .debt-view-toolbar { justify-content:center; margin-inline:24px; }
         @media(max-width:520px){ .debt-settings-stack{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;} .debt-settings-stack .debt-setting-row{padding:8px 6px;} .due-alert-btn{right:16px !important;bottom:100px !important;} }
         @media(prefers-reduced-motion:reduce){.debt-view-arrow,.debt-view-arrow::before{animation:none!important;}}
-        </style>
+        
+/* Warm Beige / Gold reference theme: light + dark */
+:root,[data-theme="light"]{--bg-primary:#f9f3e9;--bg-secondary:#f3ead9;--bg-card:rgba(255,252,247,.96);--bg-glass:rgba(120,80,45,.05);--bg-glass-light:rgba(120,80,45,.10);--text-primary:#3d2817;--text-secondary:#6b4c33;--text-muted:#a08064;--border-color:#c9b296;--border-color-strong:#b8a07e;--border-glow:rgba(184,160,126,.35);--gold-primary:#b8873a;--gold-dark:#96702e;--emerald-primary:#a86b3d;--emerald-dark:#8a5330;--success:#7a8b47;--danger:#b34132;--warning:#c99232;--doubtful:#8b3a5d;--undated:#a08064;--tint-success:rgba(122,139,71,.12);--tint-success-strong:rgba(122,139,71,.18);--tint-danger:rgba(179,65,50,.12);--tint-warning:rgba(201,146,50,.12);--tint-emerald:rgba(168,107,61,.12);--tint-doubtful:rgba(139,58,93,.13);--tint-undated:rgba(160,128,100,.12);--row-selected-bg:rgba(168,107,61,.20);--topbar-bg:rgba(249,243,233,.96);--navbar-bg:rgba(249,243,233,.96);--modal-overlay-bg:rgba(61,40,23,.55);--loading-overlay-bg:rgba(61,40,23,.45);--shadow-card:0 20px 50px rgba(61,40,23,.12);--shadow-glow:0 0 60px rgba(168,107,61,.08);--shadow-emerald:0 4px 20px rgba(168,107,61,.22);--shadow-emerald-hover:0 8px 35px rgba(168,107,61,.32);--shadow-outline:0 1px 4px rgba(184,160,126,.35),0 0 0 1px rgba(184,160,126,.15);--radius-card:24px;--radius-small:14px;--transition:all .35s cubic-bezier(.4,0,.2,1)}
+[data-theme="dark"]{--bg-primary:#1f1610;--bg-secondary:#2a1e14;--bg-card:rgba(45,32,22,.85);--bg-glass:rgba(240,226,208,.045);--bg-glass-light:rgba(240,226,208,.085);--text-primary:#f0e2d0;--text-secondary:#c9ac85;--text-muted:#8a6e50;--border-color:rgba(230,185,135,.62);--border-color-strong:rgba(230,185,135,.85);--border-glow:rgba(230,185,135,.45);--gold-primary:#d4a455;--gold-dark:#b8882e;--emerald-primary:#d4915a;--emerald-dark:#b37440;--success:#9aab5f;--danger:#d45345;--warning:#d9a84a;--doubtful:#c9698d;--undated:#8a6e50;--tint-success:rgba(154,171,95,.15);--tint-success-strong:rgba(154,171,95,.22);--tint-danger:rgba(212,83,69,.15);--tint-warning:rgba(217,168,74,.15);--tint-emerald:rgba(212,145,90,.15);--tint-doubtful:rgba(201,105,141,.15);--tint-undated:rgba(138,110,80,.15);--row-selected-bg:rgba(212,145,90,.28);--topbar-bg:rgba(31,22,16,.94);--navbar-bg:rgba(31,22,16,.94);--modal-overlay-bg:rgba(0,0,0,.82);--loading-overlay-bg:rgba(0,0,0,.80);--shadow-card:0 20px 50px rgba(0,0,0,.6);--shadow-glow:0 0 60px rgba(212,145,90,.10);--shadow-emerald:0 4px 20px rgba(212,145,90,.25);--shadow-emerald-hover:0 8px 35px rgba(212,145,90,.35);--shadow-outline:0 1px 4px rgba(0,0,0,.4),0 0 0 1px rgba(230,185,135,.18)}
+body{background:var(--bg-primary);color:var(--text-primary);background-image:radial-gradient(circle at 15% 18%,rgba(200,165,125,.045) 0%,transparent 48%),radial-gradient(circle at 85% 82%,rgba(210,180,140,.035) 0%,transparent 52%),linear-gradient(180deg,rgba(243,234,217,.15) 0%,transparent 40%,rgba(243,234,217,.08) 100%);background-attachment:fixed}[data-theme="dark"] body{background-image:radial-gradient(circle at 15% 18%,rgba(212,145,90,.08) 0%,transparent 48%),radial-gradient(circle at 85% 82%,rgba(212,164,85,.06) 0%,transparent 52%),linear-gradient(180deg,rgba(42,30,20,.4) 0%,transparent 40%,rgba(42,30,20,.22) 100%)}
+.top-bar{background:var(--topbar-bg);border-bottom:2px solid var(--border-color);box-shadow:0 4px 30px rgba(61,40,23,.10)}.top-title h2{background:linear-gradient(135deg,var(--emerald-primary),var(--gold-primary));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;font-weight:900;letter-spacing:-.5px}.debt-title-icon{color:var(--emerald-primary)!important;-webkit-text-fill-color:initial}.icon-btn{width:42px;height:42px;border-radius:14px;border:1.5px solid var(--border-color);background:var(--bg-glass);color:var(--text-secondary);box-shadow:var(--shadow-outline);transition:var(--transition)}.icon-btn:hover{background:var(--bg-glass-light);border-color:var(--emerald-primary);color:var(--emerald-primary);transform:translateY(-3px);box-shadow:var(--shadow-emerald)}
+.debt-view-toolbar{gap:8px;padding:12px 14px;margin:0 14px 14px;border:1.5px solid var(--border-color);border-radius:var(--radius-card);background:var(--bg-card);box-shadow:var(--shadow-outline)}.debt-view-caption{color:var(--text-muted);font-weight:900}.debt-view-button{padding:9px 13px;border-radius:11px;border:1.5px solid var(--border-color);background:var(--bg-glass);color:var(--text-primary);font-family:inherit;font-weight:800;transition:var(--transition);box-shadow:var(--shadow-outline)}.debt-view-button:hover{border-color:var(--emerald-primary);color:var(--emerald-primary);background:var(--bg-glass-light)}.debt-view-button.active{background:linear-gradient(135deg,var(--emerald-primary),var(--emerald-dark));border-color:var(--emerald-primary);color:#fff;box-shadow:var(--shadow-emerald)}
+.table-wrapper{background:var(--bg-card);border-top:1.5px solid var(--border-color);border-bottom:1.5px solid var(--border-color);box-shadow:var(--shadow-outline)}.data-table th{background:var(--bg-glass-light);color:var(--emerald-primary);border-bottom:2px solid var(--border-color-strong);font-weight:900}.data-table td{color:var(--text-secondary);border-bottom:1px solid rgba(201,178,150,.35)}[data-theme="dark"] .data-table td{border-bottom-color:rgba(230,185,135,.25)}.data-table tr:hover td{background:var(--bg-glass-light);color:var(--text-primary)}.data-table tr.row-selected td{background:var(--row-selected-bg)!important;color:var(--text-primary)!important;border-bottom-color:var(--emerald-primary)!important}
+.due-alert-btn{position:static!important;inset:auto!important;display:none;align-items:center;gap:7px;padding:9px 13px;border-radius:var(--radius-small);border:1.5px solid var(--gold-primary);background:var(--tint-warning);color:var(--gold-primary);font:800 .8rem inherit;box-shadow:var(--shadow-outline);white-space:nowrap}.due-alert-btn .due-count{display:inline-flex;min-width:21px;height:21px;align-items:center;justify-content:center;border-radius:50%;background:var(--gold-primary);color:#fff;font-size:.7rem}@media(max-width:560px){.due-alert-btn{font-size:.68rem!important;padding:8px 9px!important}.debt-view-toolbar{margin-inline:8px;padding:10px}.top-title h2{font-size:1.15rem}}
+</style>
   <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
 <body>
@@ -6372,13 +6381,6 @@
     </div>
 
     <!-- ===================================================================
-    الزر العائم (تسديد)
-    =================================================================== -->
-    <button class="fab" onclick="openPaymentModal()" title="تسديد دين">
-        <i class="fas fa-money-bill-wave"></i>
-    </button>
-
-    <!-- ===================================================================
     القائمة الجانبية (مكبّرة)
     =================================================================== -->
     <div class="sidebar-toggle" id="sidebarToggle">
@@ -6460,7 +6462,7 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>المبلغ *</label>
-                        <input id="pAmount" type="number" step="0.01" placeholder="أدخل المبلغ" />
+                        <input id="pAmount" type="number" step="0.01" placeholder="أدخل المبلغ" oninput="updatePaymentInvoiceNote()" />
                     </div>
                     <div class="form-group">
                         <label>طريقة الدفع</label>
@@ -7740,11 +7742,35 @@ function updateDebtViewButtons() {
             document.getElementById('pAmount').value = remaining > 0 ? remaining : '';
             document.getElementById('pMethod').value = 'cash';
             document.getElementById('pNotes').value = '';
+            document.getElementById('pNotes').dataset.autoInvoiceNote = '';
+            updatePaymentInvoiceNote();
             document.getElementById('pCurrentRemaining').textContent = formatCurrency(remaining);
             document.getElementById('paymentModal').classList.add('show');
             loadPaymentSettlementOptions();
             document.body.style.overflow = 'hidden';
             loadCustomersForPayment();
+        }
+
+        function updatePaymentInvoiceNote() {
+            const amountField = document.getElementById('pAmount');
+            const notesField = document.getElementById('pNotes');
+            if (!amountField || !notesField || !pendingPaymentInvoiceId || !pendingPaymentInvoiceNumber) return;
+            const amount = finiteNumber(amountField.value);
+            const invoiceRow = [...(runtimeState.rawDebts || []), ...(runtimeState.visibleDebts || [])]
+                .find(row => finiteNumber(row && row.id) === pendingPaymentInvoiceId);
+            const invoiceTotal = invoiceRow ? finiteNumber(invoiceRow.net_amount ?? invoiceRow.total_amount ?? invoiceRow.gross_amount) : 0;
+            if (!(amount > 0) || !(invoiceTotal > 0)) return;
+            const partial = amount < invoiceTotal - 0.000001;
+            const full = Math.abs(amount - invoiceTotal) <= 0.000001;
+            if (!partial && !full) return;
+            const generated = partial
+                ? 'تسديد جزئي من قيمة الفاتورة "' + pendingPaymentInvoiceNumber + '"'
+                : 'تسديد كلي لقيمة الفاتورة "' + pendingPaymentInvoiceNumber + '"';
+            const previous = notesField.dataset.autoInvoiceNote || '';
+            if (previous && notesField.value.trim() === previous) notesField.value = '';
+            if (!notesField.value.trim()) notesField.value = generated;
+            else if (!notesField.value.includes(generated)) notesField.value = notesField.value.trim() + ' — ' + generated;
+            notesField.dataset.autoInvoiceNote = generated;
         }
 
         function closePaymentModal() {
@@ -7792,7 +7818,12 @@ function updateDebtViewButtons() {
                 b.title = 'مستحقات محققة';
                 b.innerHTML = '<i class="fas fa-bell"></i><span>مستحقات محققة</span><span class="due-count">0</span>';
                 b.onclick = openDueReminderNotice;
-                document.body.appendChild(b);
+                const actions = document.querySelector('.filter-actions');
+                const csvButton = actions && Array.from(actions.querySelectorAll('button')).find(function(button) { return /file-csv/.test(button.innerHTML); });
+                if (actions) {
+                    if (csvButton && csvButton.nextSibling) actions.insertBefore(b, csvButton.nextSibling);
+                    else actions.appendChild(b);
+                } else document.body.appendChild(b);
             }
             if (!document.getElementById('dueReminderOverlay')) {
                 const o = document.createElement('div');
