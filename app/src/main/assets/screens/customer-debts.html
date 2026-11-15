@@ -7950,21 +7950,17 @@ function updateDebtViewButtons() {
             feedback.classList.toggle('success', type === 'success');
         }
 
-        async function persistDueReminderDecision(action, mode='local') {
-            const rows = dueReminderRows.filter(r => Number(r.customer_party_id)>0 &&
-                Number(r.total_outstanding)>0 && Number(r.days_remaining)>=0 &&
-                Number(r.days_remaining)<=debtScreenSettings.dueSoonDays);
-            if (!rows.length) throw new Error('لا توجد مستحقات مؤهلة لتحديث التذكير.');
-            for (const row of rows) {
-                const customerId = Number(row.customer_party_id);
-                const dueDate = String(row.nearest_due_date || row.due_date || '').trim();
-                const eventId = String(row.event_id || (dueDate ? 'debt-reminder:' + customerId + ':' + dueDate : '')).trim();
-                if (!customerId || !dueDate || !eventId) continue;
-                const result = await apiCall('updateDebtReminderInteractionTyped',{
-                    event_id:eventId,customer_party_id:customerId,
-                    due_date:dueDate,action,mode
+        async function persistDueReminderDecision(action, mode='manual') {
+            const rows=dueReminderRows.filter(r=>Number(r.customer_party_id)>0&&isUpcomingDueReminder(r)&&String(r.event_id||'').trim());
+            if(!rows.length) throw new Error('لا توجد مستحقات قريبة ذات معرف تذكير صالح.');
+            for(const row of rows) {
+                const result=await apiCall('updateDebtReminderInteractionTyped',{
+                    event_id:String(row.event_id).trim(),
+                    customer_party_id:Number(row.customer_party_id),
+                    due_date:String(row.nearest_due_date||row.due_date||'').trim(),
+                    action,mode
                 });
-                if (!result || !result.success) throw new Error(result?.error || result?.message || 'تعذر حفظ قرار التذكير');
+                if(!result||!result.success) throw new Error(result?.error||result?.message||'تعذر حفظ قرار التذكير');
             }
         }
 
@@ -8004,6 +8000,20 @@ function updateDebtViewButtons() {
             }
         }
 
+        // Use the trusted business-day clock and actual ISO due date; never infer
+        // "due soon" from a missing or stale days_remaining field.
+        function dueReminderDaysRemaining(row) {
+            const dueDate=String(row?.nearest_due_date||row?.due_date||'').trim();
+            const today=businessDayDate();
+            if(!IsoCivilDate.isValidIsoDate(dueDate)||!IsoCivilDate.isValidIsoDate(today)) return null;
+            const days=IsoCivilDate.calendarDayDifference(today,dueDate);
+            return Number.isFinite(days)?days:null;
+        }
+        function isUpcomingDueReminder(row) {
+            const days=dueReminderDaysRemaining(row);
+            return Number(row?.total_outstanding)>0&&days!==null&&days>=0&&
+                days<=Math.max(0,Number(debtScreenSettings.dueSoonDays)||0);
+        }
         async function refreshDueReminderCandidates(showNotice=true) {
             ensureDueReminderUI();
             await loadDueAutoSmsSetting();
@@ -8011,11 +8021,11 @@ function updateDebtViewButtons() {
                 const result=await apiCall('getDueSoonDebtRemindersTyped', {days:debtScreenSettings.dueSoonDays});
                 if(!result.success) return;
                 dueReminderRows=Array.isArray(result.data)?result.data:[];
-                const dueSoon=dueReminderRows.filter(r=>Number(r.total_outstanding)>0&&Number(r.days_remaining)>=0&&Number(r.days_remaining)<=debtScreenSettings.dueSoonDays&&!['dismissed','viewed','queued','sent','deferred'].includes(r.interaction_action));
+                const dueSoon=dueReminderRows.filter(r=>isUpcomingDueReminder(r)&&!['dismissed','viewed','queued','sent','deferred'].includes(r.interaction_action));
                 const btn=document.getElementById('dueReminderButton');
                 if(btn){btn.style.display=dueSoon.length?'inline-flex':'none'; const c=btn.querySelector('.due-count'); if(c)c.textContent=dueSoon.length;}
                 const modes=window.__debtReminderModes||{};
-                const deferred=dueReminderRows.some(r=>Number(r.total_outstanding)>0&&Number(r.days_remaining)>=0&&Number(r.days_remaining)<=debtScreenSettings.dueSoonDays&&r.interaction_action==='deferred');
+                const deferred=dueReminderRows.some(r=>isUpcomingDueReminder(r)&&r.interaction_action==='deferred');
                 const deferredBubble=document.getElementById('dueReminderBubble');
                 if(deferred) deferredBubble?.classList.add('show');
                 else deferredBubble?.classList.remove('show');
@@ -8061,7 +8071,7 @@ function updateDebtViewButtons() {
         }
         function openDueReminderDetails(){
             ensureDueReminderUI();
-            const rows=dueReminderRows.filter(r=>Number(r.total_outstanding)>0&&Number(r.days_remaining)>=0&&Number(r.days_remaining)<=debtScreenSettings.dueSoonDays);
+            const rows=dueReminderRows.filter(r=>isUpcomingDueReminder(r));
             const html=rows.length?`<div style="overflow-x:auto;max-width:100%"><table class="due-detail-table"><thead><tr><th>العميل</th><th>الهاتف</th><th>الدين القريب</th><th>إجمالي غير المسدد</th><th>الاستحقاق</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHtml(r.customer_name||'---')}</td><td dir="ltr">${escapeHtml(r.phone||'---')}</td><td class="due-red">${formatCurrency(r.due_soon_amount||0)}</td><td class="due-blue">${formatCurrency(r.total_outstanding||0)}</td><td>${escapeHtml(r.nearest_due_date||'---')}</td></tr>`).join('')}</tbody></table></div>`:'<div style="padding:30px;text-align:center">لا توجد مستحقات مؤهلة حالياً.</div>';
             document.getElementById('dueDetailContent').innerHTML=html;
             document.getElementById('dueDetailModal').classList.add('show');
