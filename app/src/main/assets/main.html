@@ -1381,7 +1381,25 @@
             border-radius: 15px 15px 15px 5px;
             box-shadow: 0 0 8px var(--bubble-wave-glow, rgba(26,35,126,.55)), 0 0 16px var(--bubble-wave-glow, rgba(26,35,126,.35));
             pointer-events: none;
-            animation: goldenBubbleWave 1.5s ease-out 2;
+            animation: goldenBubbleWave 3s ease-out 1 both;
+        }
+        .notification-bubble.due-reminder-notification-bubble {
+            --bubble-color: #9A6B22;
+            --bubble-wave-color: rgba(255,211,120,.98);
+            --bubble-wave-glow: rgba(212,168,106,.78);
+            background: linear-gradient(145deg,#F5C66D,#9A6B22);
+            color: #241704;
+            border: 1.5px solid rgba(255,248,220,.95);
+            box-shadow: 0 5px 18px rgba(154,107,34,.38), inset 0 1px 0 rgba(255,255,255,.55);
+        }
+        .notification-bubble.due-reminder-notification-bubble::after {
+            border-top-color: #9A6B22;
+        }
+        [data-theme="dark"] .notification-bubble.due-reminder-notification-bubble {
+            --bubble-wave-color: rgba(255,225,150,.98);
+            --bubble-wave-glow: rgba(255,190,90,.8);
+            background: linear-gradient(145deg,#F5D28D,#B88636);
+            color: #211606;
         }
         .notification-bubble::after {
             content: '';
@@ -1756,32 +1774,33 @@
         /* ================================================================
            Due Reminders (خارج قسم السكون)
         ================================================================ */
-        .due-alert-btn {
-            position: relative;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            border: 1px solid rgba(239, 68, 68, .55);
-            background: linear-gradient(135deg, #7f1d1d, #dc2626);
-            color: #fff;
-            border-radius: 14px;
-            padding: 10px 15px;
-            font-weight: 800;
-            cursor: pointer;
-            animation: mainDuePulse 1.8s infinite;
+        .due-reminder-feedback {
+            display:none; margin:12px 0 0; padding:10px 13px; border-radius:12px;
+            border:1px solid rgba(220,38,38,.28); background:rgba(220,38,38,.08);
+            color:#b91c1c; font-weight:800; line-height:1.6;
         }
-        .due-alert-btn .due-count {
-            background: #fff;
-            color: #b91c1c;
-            border-radius: 999px;
-            min-width: 22px;
-            height: 22px;
-            display: grid;
-            place-items: center;
-            font-size: 12px;
+        .due-reminder-feedback.show { display:block; }
+        [data-theme="dark"] .due-reminder-feedback { color:#fecaca; }
+        .due-reminder-card {
+            border:1px solid rgba(212,168,106,.3);
+            background:linear-gradient(145deg,var(--card-solid,#fff),var(--bg2,#fdf2d8));
         }
-        @keyframes mainDuePulse {
-            50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        .due-reminder-card .due-reminder-heading h3 { color:var(--text); font-size:clamp(19px,3vw,25px); font-weight:900; }
+        .due-reminder-card .due-reminder-actions {
+            display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px;
+            align-items:stretch; direction:rtl;
+        }
+        .due-reminder-card .due-reminder-actions button {
+            min-width:0; white-space:nowrap; padding:11px 8px; font-size:14px;
+        }
+        .due-reminder-card .due-reminder-actions #mainDueReminderSendButton {
+            grid-column:1/-1; width:100%;
+        }
+        @media(max-width:420px) {
+            .due-reminder-card { padding:17px 13px; border-radius:20px; width:calc(100vw - 20px); }
+            .due-reminder-card .due-reminder-actions { gap:6px; }
+            .due-reminder-card .due-reminder-actions button { padding:10px 4px; font-size:12px; }
+            .due-auto-toggle { display:grid; grid-template-columns:1fr; }
         }
         .due-reminder-overlay {
             position: fixed;
@@ -1799,11 +1818,12 @@
             width: min(760px, 96vw);
             max-height: 88vh;
             overflow: auto;
-            background: var(--card-bg, #fff);
-            color: var(--text-primary, #111827);
+            background: var(--card-solid, #fff);
+            color: var(--text, #111827);
             border-radius: 28px;
             padding: 26px;
             box-shadow: 0 30px 90px rgba(0, 0, 0, .35);
+            border:1px solid rgba(212,168,106,.35);
         }
         .due-reminder-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
         .due-reminder-heading h3 { margin:0; }
@@ -1848,19 +1868,25 @@
         }
         .due-detail-modal.show { display: flex; }
         .due-detail-card {
-            width: min(980px, 97vw);
+            width: min(1100px, 98vw);
             max-height: 88vh;
             overflow: auto;
-            background: var(--card-bg, #fff);
+            background: var(--card-solid, #fff);
+            color:var(--text);
+            border:1px solid rgba(212,168,106,.35);
             border-radius: 24px;
             padding: 20px;
             box-shadow: 0 30px 90px rgba(0, 0, 0, .4);
         }
-        .due-detail-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; }
-        .due-detail-table th, .due-detail-table td { padding: 10px; text-align: right; }
-        .due-detail-table td { background: rgba(148, 163, 184, .09); }
+        .due-detail-table-wrap { width:100%; max-width:100%; overflow:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; margin-top:12px; }
+        .due-detail-table { width:max-content; min-width:100%; border-collapse:separate; border-spacing:0; white-space:nowrap; }
+        .due-detail-table th, .due-detail-table td { padding:11px 14px; text-align:right; white-space:nowrap; border:1px solid rgba(148,163,184,.32); }
+        .due-detail-table th { position:sticky; top:0; z-index:2; background:#E9D7B5; color:#39290F; font-size:14px; font-weight:900; border:1px solid #B78D55; }
+        [data-theme="dark"] .due-detail-table th { background:#49391F; color:#FFF0CE; border-color:#9D7A42; }
+        .due-detail-table td { background:var(--md-sys-color-surface-container-high,rgba(148,163,184,.12)); }
         .due-red { color: #dc2626; font-weight: 900; }
         .due-blue { color: #2563eb; font-weight: 900; }
+        @media(max-width:520px) { .due-detail-card { padding:13px 9px; width:calc(100vw - 12px); } .due-detail-table th,.due-detail-table td { padding:9px 11px; } }
         @keyframes dueBubbleWave { 0% { transform:scale(.88); opacity:.82; } 75%,100% { transform:scale(1.55); opacity:0; } }
         .due-bubble {
             position: fixed; top: 82px; right: 20px; z-index: 100002;
@@ -3624,42 +3650,42 @@
         let mainDueReminderDeferred = false;
 
         function ensureMainDueReminderUI() {
-            if (!document.getElementById('mainDueReminderButton')) {
-                const top = document.querySelector('.header-top');
-                if (top) {
-                    const b = document.createElement('button');
-                    b.id = 'mainDueReminderButton';
-                    b.className = 'due-alert-btn';
-                    b.style.display = 'none';
-                    b.innerHTML = '<i class="fas fa-bell"></i><span>مستحقات محققة</span><span class="due-count">0</span>';
-                    b.onclick = openMainDueReminderNotice;
-                    top.appendChild(b);
-                }
-            }
             if (!document.getElementById('mainDueReminderOverlay')) {
                 const o = document.createElement('div');
                 o.id = 'mainDueReminderOverlay';
                 o.className = 'due-reminder-overlay';
                 o.setAttribute('role','presentation');
                 o.addEventListener('click',event=>{if(event.target===o)closeMainDueReminderNotice();});
-                o.innerHTML = `<div class="due-reminder-card" role="dialog" aria-modal="true" aria-labelledby="mainDueReminderTitle"><div class="due-reminder-heading"><h3 id="mainDueReminderTitle">🔔 مستحقات العملاء تقترب</h3><button type="button" class="due-reminder-close" aria-label="إغلاق" onclick="closeMainDueReminderNotice()"><i class="fas fa-times"></i></button></div><p>يوجد عملاء لديهم فواتير آجلة اقترب موعد استحقاقها. يمكنك إرسال تذكير يدوي الآن أو تفعيل الإرسال الآلي المستمر.</p><div class="due-auto-toggle"><label><input id="mainDueReminderMode_auto" type="checkbox" onchange="setMainDebtReminderMode('auto',this.checked)"> إرسال SMS آلياً</label><label><input id="mainDueReminderMode_manual" type="checkbox" onchange="setMainDebtReminderMode('manual',this.checked)"> إرسال SMS يدوياً</label><label><input id="mainDueReminderMode_local" type="checkbox" onchange="setMainDebtReminderMode('local',this.checked)"> إشعار محلي فقط</label></div><div class="due-reminder-actions"><button class="due-view" onclick="openMainDueReminderDetails()">إطلاع</button><button class="due-delay" onclick="deferMainDueReminder()">تأجيل</button><button class="due-cancel" onclick="cancelMainDueReminderNotice()">إلغاء</button><button id="mainDueReminderSendButton" class="due-ok" onclick="approveMainDueReminders()">إرسال التذكيرات الآن</button></div></div>`;
+                o.innerHTML = `<div class="due-reminder-card" role="dialog" aria-modal="true" aria-labelledby="mainDueReminderTitle"><div class="due-reminder-heading"><h3 id="mainDueReminderTitle">🔔 مستحقات العملاء تقترب</h3><button type="button" class="due-reminder-close" aria-label="إغلاق" onclick="closeMainDueReminderNotice()"><i class="fas fa-times"></i></button></div><p>يوجد عملاء لديهم فواتير آجلة اقترب موعد استحقاقها. يمكنك إرسال تذكير يدوي الآن أو تفعيل الإرسال الآلي المستمر.</p><div class="due-auto-toggle"><label><input id="mainDueReminderMode_auto" type="checkbox" onchange="setMainDebtReminderMode('auto',this.checked)"> إرسال SMS آلياً</label><label><input id="mainDueReminderMode_manual" type="checkbox" onchange="setMainDebtReminderMode('manual',this.checked)"> إرسال SMS يدوياً</label><label><input id="mainDueReminderMode_local" type="checkbox" onchange="setMainDebtReminderMode('local',this.checked)"> إشعار محلي فقط</label></div><div id="mainDueReminderFeedback" class="due-reminder-feedback" role="status" aria-live="polite"></div><div class="due-reminder-actions"><button class="due-view" onclick="openMainDueReminderDetails()">إطلاع</button><button class="due-delay" onclick="deferMainDueReminder()">تأجيل</button><button class="due-cancel" onclick="cancelMainDueReminderNotice()">إلغاء</button><button id="mainDueReminderSendButton" class="due-ok" onclick="approveMainDueReminders()">إرسال التذكيرات الآن</button></div></div>`;
                 document.body.appendChild(o);
             }
             if (!document.getElementById('mainDueDetailModal')) {
                 const o = document.createElement('div');
                 o.id = 'mainDueDetailModal';
                 o.className = 'due-detail-modal';
-                o.innerHTML = `<div class="due-detail-card"><div style="display:flex;justify-content:space-between;align-items:center"><h3>العملاء الذين سيصلهم التذكير</h3><button class="glass-btn" onclick="closeMainDueReminderDetails()">✕</button></div><div id="mainDueDetailContent"></div></div>`;
+                o.innerHTML = `<div class="due-detail-card" role="dialog" aria-modal="true" aria-label="تفاصيل مستحقات العملاء"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h3>العملاء الذين سيصلهم التذكير</h3><button class="glass-btn" onclick="closeMainDueReminderDetails()" aria-label="إغلاق">✕</button></div><div id="mainDueDetailContent"></div></div>`;
                 document.body.appendChild(o);
             }
+            const container=document.getElementById('bubbleContainer')||createBubbleContainer();
             if (!document.getElementById('mainDueReminderBubble')) {
-                const b = document.createElement('div');
-                b.id = 'mainDueReminderBubble';
-                b.className = 'due-bubble';
-                b.innerHTML = '<i class="fas fa-comment-dots" aria-hidden="true"></i><span>تذكيرات مستحقة</span>';
-                b.onclick = openMainDueReminderNotice;
-                document.body.appendChild(b);
+                const b=document.createElement('button');
+                b.type='button'; b.id='mainDueReminderBubble';
+                b.className='notification-bubble due-reminder-notification-bubble';
+                b.style.display='none';
+                b.innerHTML='<i class="fas fa-coins" aria-hidden="true"></i>';
+                b.title='مستحقات محققة'; b.setAttribute('aria-label','مستحقات محققة - فتح تذكيرات العملاء');
+                b.addEventListener('click',openMainDueReminderNotice);
+                container.appendChild(b);
             }
+        }
+        function setMainDueReminderFeedback(message,isError=true) {
+            const el=document.getElementById('mainDueReminderFeedback');
+            if(!el)return;
+            el.textContent=message||'';
+            el.classList.toggle('show',!!message);
+            el.style.borderColor=isError?'rgba(220,38,38,.28)':'rgba(5,150,105,.3)';
+            el.style.background=isError?'rgba(220,38,38,.08)':'rgba(5,150,105,.08)';
+            el.style.color=isError?'var(--danger)':'var(--success)';
         }
 
         function dueReminderRefreshStorageKey() {
@@ -3701,12 +3727,21 @@
         async function setMainDebtReminderMode(mode,enabled){
             const keys={auto:'debt_due_auto_sms_enabled',manual:'debt_due_manual_sms_enabled',local:'debt_due_local_notification_enabled'};
             const key=keys[mode];if(!key)return;
-            const result=await apiCall('setSetting',{key,value:enabled?'1':'0'});
-            if(!result.success)throw new Error(result.error||result.message||'تعذر حفظ وضع التذكير');
-            const verify=await apiCall('getSetting',{key});
-            if(!verify.success||String(verify.value??'0')!==(enabled?'1':'0'))throw new Error('لم يتم التحقق من حفظ وضع التذكير');
-            if(mode==='auto')await setMainDueAutoSmsEnabled(enabled);
-            showToast(enabled?'تم تفعيل وضع التذكير.':'تم إيقاف وضع التذكير.','success');
+            const checkbox=document.getElementById('mainDueReminderMode_'+mode);
+            if(checkbox)checkbox.disabled=true;
+            try{
+                const result=await apiCall('setSetting',{key,value:enabled?'1':'0'});
+                if(!result.success)throw new Error(result.error||result.message||'تعذر حفظ وضع التذكير');
+                const verify=await apiCall('getSetting',{key});
+                if(!verify.success||String(verify.value??'0')!==(enabled?'1':'0'))throw new Error('لم يتم التحقق من حفظ وضع التذكير');
+                if(mode==='auto')await setMainDueAutoSmsEnabled(enabled);
+                showToast(enabled?'تم تفعيل وضع التذكير.':'تم إيقاف وضع التذكير.','success');
+                setMainDueReminderFeedback('',false);
+                if(mode==='auto'&&enabled)closeMainDueReminderNotice();
+            }catch(error){
+                if(checkbox)checkbox.checked=!enabled;
+                setMainDueReminderFeedback(error.message||'تعذر حفظ وضع التذكير');
+            }finally{if(checkbox)checkbox.disabled=false;}
         }
         async function persistMainDueReminderDecision(action,mode='manual'){
             for(const row of mainDueReminderRows.filter(r=>r.event_id&&Number(r.customer_party_id)>0)){
@@ -3775,16 +3810,22 @@
                     Number(r.days_remaining) <= 10 &&
                     !['dismissed','viewed','queued','sent','deferred'].includes(r.interaction_action)
                 );
-                const b = document.getElementById('mainDueReminderButton');
-                if (b) {
-                    b.style.display = dueSoon.length ? 'inline-flex' : 'none';
-                    const c = b.querySelector('.due-count');
-                    if (c) c.textContent = dueSoon.length;
+                const b=document.getElementById('mainDueReminderBubble');
+                if(b){
+                    const shouldShow=dueSoon.length>0;
+                    const wasHidden=b.style.display==='none';
+                    b.style.display=shouldShow?'flex':'none';
+                    b.title=`مستحقات محققة: ${dueSoon.length}`;
+                    b.setAttribute('aria-label',`مستحقات محققة: ${dueSoon.length} مستحقات قريبة`);
+                    if(shouldShow&&wasHidden){
+                        const source=document.getElementById('card-customer-debts')||document.getElementById('card-due-invoices');
+                        if(source)animateBubbleFromCard(b);
+                    }
                 }
                 const modes=window.__debtReminderModes||{};
                 const deferred=mainDueReminderRows.some(r=>r.interaction_action==='deferred');
                 const reminderBubble=document.getElementById('mainDueReminderBubble');
-                if(reminderBubble)reminderBubble.classList.toggle('show',deferred);
+                if(reminderBubble)reminderBubble.classList.toggle('is-deferred',deferred);
                 if (dueSoon.length && !mainDueReminderDeferred && (modes.manual||modes.local) &&
                     sessionStorage.getItem('mainDueReminderShownDate') !== new Date().toISOString().slice(0, 10)) {
                     sessionStorage.setItem('mainDueReminderShownDate', new Date().toISOString().slice(0, 10));
@@ -3808,20 +3849,36 @@
             if(!document.getElementById('mainDueDetailModal')?.classList.contains('show')) document.body.style.overflow='';
         }
         async function cancelMainDueReminderNotice() {
+            const buttons=document.querySelectorAll('#mainDueReminderOverlay .due-reminder-actions button');
+            buttons.forEach(button=>button.disabled=true);
             try {
-                await persistMainDueReminderDecision('dismissed','manual');
+                // "إلغاء" يوقف SMS الآلي واليدوي ويُبقي التذكير كإشعار محلي فقط.
+                const modes={auto:'0',manual:'0',local:'1'};
+                for(const [mode,value] of Object.entries(modes)){
+                    const key={auto:'debt_due_auto_sms_enabled',manual:'debt_due_manual_sms_enabled',local:'debt_due_local_notification_enabled'}[mode];
+                    const saved=await apiCall('setSetting',{key,value});
+                    if(!saved.success)throw new Error(saved.error||saved.message||'تعذر تحويل التذكير إلى إشعار محلي');
+                    const checked=await apiCall('getSetting',{key});
+                    if(!checked.success||String(checked.value??'0')!==value)throw new Error('تعذر التحقق من إعداد الإشعار المحلي');
+                }
+                await persistMainDueReminderDecision('dismissed','local');
                 mainDueReminderDeferred=false;
-                document.getElementById('mainDueReminderBubble')?.classList.remove('show');
                 closeMainDueReminderNotice();
                 await refreshMainDueReminders();
-            } catch(e) { showToast(e.message||'تعذر إلغاء التذكير','error'); }
+            } catch(e) { setMainDueReminderFeedback(e.message||'تعذر إلغاء التذكير'); }
+            finally { buttons.forEach(button=>button.disabled=false); }
         }
         async function deferMainDueReminder() {
-            try { await persistMainDueReminderDecision('deferred','manual'); } catch(e) { showToast(e.message||'تعذر تأجيل التذكير','error'); return; }
-            mainDueReminderDeferred = true;
-            closeMainDueReminderNotice();
-            const bubble=document.getElementById('mainDueReminderBubble');
-            if(bubble){bubble.classList.remove('show');void bubble.offsetWidth;bubble.classList.add('show');}
+            const buttons=document.querySelectorAll('#mainDueReminderOverlay .due-reminder-actions button');
+            buttons.forEach(button=>button.disabled=true);
+            try {
+                await persistMainDueReminderDecision('deferred','local');
+                mainDueReminderDeferred=true;
+                closeMainDueReminderNotice();
+                const bubble=document.getElementById('mainDueReminderBubble');
+                if(bubble){bubble.classList.remove('deferred-pulse');void bubble.offsetWidth;bubble.classList.add('deferred-pulse');}
+            } catch(e) { setMainDueReminderFeedback(e.message||'تعذر تأجيل التذكير'); }
+            finally { buttons.forEach(button=>button.disabled=false); }
         }
         async function approveMainDueReminders() {
             closeMainDueReminderNotice();
@@ -3841,7 +3898,7 @@
                 Number(r.days_remaining) <= 10
             );
             document.getElementById('mainDueDetailContent').innerHTML = rows.length
-                ? `<div style="overflow:auto;margin-top:12px"><table class="due-detail-table"><thead><tr><th>العميل</th><th>الهاتف</th><th>الدين القريب</th><th>إجمالي غير المسدد</th><th>الاستحقاق</th></tr></thead><tbody>${rows.map(r => `<tr><td>${String(r.customer_name || '---')}</td><td dir="ltr">${String(r.phone || '---')}</td><td class="due-red">${Number(r.due_soon_amount || 0).toLocaleString('en-US')} ${CURRENCY}</td><td class="due-blue">${Number(r.total_outstanding || 0).toLocaleString('en-US')} ${CURRENCY}</td><td>${String(r.nearest_due_date || '---')}</td></tr>`).join('')}</tbody></table></div>`
+                ? `<div class="due-detail-table-wrap"><table class="due-detail-table"><thead><tr><th>العميل</th><th>الهاتف</th><th>الدين القريب</th><th>إجمالي غير المسدد</th><th>الاستحقاق</th></tr></thead><tbody>${rows.map(r => `<tr><td>${escapeHtml(String(r.customer_name || '---'))}</td><td dir="ltr">${escapeHtml(String(r.phone || '---'))}</td><td class="due-red">${Number(r.due_soon_amount || 0).toLocaleString('en-US')} ${escapeHtml(CURRENCY)}</td><td class="due-blue">${Number(r.total_outstanding || 0).toLocaleString('en-US')} ${escapeHtml(CURRENCY)}</td><td>${escapeHtml(String(r.nearest_due_date || '---'))}</td></tr>`).join('')}</tbody></table></div>`
                 : '<div style="padding:30px;text-align:center">لا توجد مستحقات مؤهلة حالياً.</div>';
             document.getElementById('mainDueDetailModal').classList.add('show');
         }
