@@ -6694,7 +6694,7 @@ body {
     =================================================================== -->
     <div class="table-section" id="debtTableSection" data-view="table">
         <div class="debt-view-toolbar" id="debtViewToolbar" role="group" aria-label="خيارات عرض ديون العملاء">
-            <span class="debt-view-caption"><i class="fas fa-layer-group"></i> خيارات العرض</span>
+            <span class="debt-view-caption"><i class="fas fa-layer-group"></i> خيــــــارات العـــــــــرض</span>
             <span class="debt-view-arrow" aria-hidden="true"><i class="fas fa-chevron-left"></i></span>
             <button type="button" class="debt-view-button active" id="debtViewTable" onclick="setDebtView('table')"><i class="fas fa-table"></i> جدول</button>
             <button type="button" class="debt-view-button" id="debtViewCards" onclick="setDebtView('cards')"><i class="fas fa-th-large"></i> بطاقات</button>
@@ -6717,14 +6717,14 @@ body {
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>العميل</th>
-                            <th>الهاتف</th>
-                            <th>إجمالي الدين</th>
-                            <th>المدفوع</th>
-                            <th>المتبقي</th>
-                            <th>تاريخ الاستحقاق</th>
-                            <th>الحالة</th>
-                            <th>إجراء</th>
+                            <th>العميـــــل</th>
+                            <th>الهــاتــف</th>
+                            <th>إجمالي الــدين</th>
+                            <th>المــدفــوع</th>
+                            <th>المتبقــي</th>
+                            <th>تاريــخ الاستحقـاق</th>
+                            <th>الحـــــالــة</th>
+                            <th>إجـــــراء</th>
                         </tr>
                     </thead>
                     <tbody id="debtTableBody">
@@ -6830,14 +6830,14 @@ body {
             </div>
             <div class="modal-body">
                 <div class="form-group" id="paymentCustomerGroup">
-                    <label>العميل *</label>
+                    <label>العميـــل *</label>
                     <select id="pCustomerId">
                         <option value="">اختر العميل</option>
                     </select>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>المبلغ *</label>
+                        <label>المبلـــغ *</label>
                         <input id="pAmount" type="number" step="0.01" placeholder="أدخل المبلغ" oninput="updatePaymentInvoiceNote()" />
                     </div>
                     <div class="form-group">
@@ -9056,7 +9056,7 @@ async function loadCustomerDebtSettings() {
                     '<section class="report-panel"><div class="report-panel-title"><i class="fas fa-bell"></i> تذكيرات الديون</div>' +
                     '<div class="debt-reminder-grid">' +
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">إرسال SMS آلياً</span><span class="debt-setting-desc">إرسال تلقائي في الخلفية دون إشعار المستخدم.</span></div><label class="debt-setting-check"><input id="debtReminderMode_auto" type="checkbox" onchange="setDebtReminderMode(\'auto\',this.checked)"> تفعيل</label></div>' +
-                    '<div class="debt-setting-row"><div><span class="debt-setting-label">إرسال SMS يدوياً</span><span class="debt-setting-desc">يتطلب موافقة المستخدم لإرسال التذكير.</span></div><label class="debt-setting-check"><input id="debtReminderMode_manual" type="checkbox" onchange="setDebtReminderMode(\'manual\',this.checked)"> تفعيل</label></div>' +
+                    '<div class="debt-setting-row"><div><span class="debt-setting-label">إرسال SMS يدوياً</span><span class="debt-setting-desc">يتطلب موافقة المستخدم .</span></div><label class="debt-setting-check"><input id="debtReminderMode_manual" type="checkbox" onchange="setDebtReminderMode(\'manual\',this.checked)"> تفعيل</label></div>' +
                     '<div class="debt-setting-row"><div><span class="debt-setting-label">إشعار محلي</span><span class="debt-setting-desc">تنبيه داخل التطبيق فقط، دون إرسال SMS.</span></div><label class="debt-setting-check"><input id="debtReminderMode_local" type="checkbox" onchange="setDebtReminderMode(\'local\',this.checked)"> تفعيل</label></div>' +
                     '</div></section>' +
                     '<div id="debtSettingsFeedback" class="debt-settings-feedback" hidden></div><div class="report-actions"><button class="btn-report primary" onclick="saveCustomerDebtSettings()"><i class="fas fa-save"></i> حفظ الإعدادات</button><button class="btn-report" onclick="loadCustomerDebtSettings().then(openSettingsModal)"><i class="fas fa-undo"></i> إعادة تحميل المحفوظ</button></div>' +
