@@ -6434,6 +6434,81 @@ body {
     .debt-view-button { padding: 8px 10px; font-size: .76rem; }
 }
 
+
+/* Responsive acceptance correction: keep the view selector inside the viewport
+   and make the wide, non-wrapping debt table scroll within its own container. */
+#debtViewToolbar {
+    display: flex !important;
+    flex-flow: row wrap !important;
+    align-items: center;
+    justify-content: flex-start !important;
+    width: auto;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0 12px 12px !important;
+    padding: 10px 8px;
+    overflow: visible !important;
+    gap: 7px;
+    box-sizing: border-box;
+}
+#debtViewToolbar .debt-view-caption {
+    display: block;
+    flex: 0 0 100% !important;
+    width: auto !important;
+    max-width: 100%;
+    margin: 0 0 2px !important;
+    text-align: right;
+    white-space: nowrap;
+}
+#debtViewToolbar .debt-view-arrow {
+    display: none !important;
+}
+#debtViewToolbar .debt-view-button {
+    display: inline-flex;
+    flex: 1 1 82px !important;
+    min-width: max-content;
+    max-width: 100%;
+    width: auto;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+#debtTableSection,
+#debtTableSection .table-wrapper {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+#debtTableSection .table-scroll {
+    display: block;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+}
+#debtTableSection .data-table {
+    width: max-content;
+    min-width: 1200px;
+    max-width: none;
+    table-layout: auto;
+}
+@media (max-width: 560px) {
+    #debtViewToolbar {
+        margin-inline: 8px !important;
+        padding: 9px 7px;
+        gap: 6px;
+    }
+    #debtViewToolbar .debt-view-button {
+        flex: 1 1 76px !important;
+        padding: 8px 8px;
+        font-size: .76rem;
+    }
+}
+
 </style>
   <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
