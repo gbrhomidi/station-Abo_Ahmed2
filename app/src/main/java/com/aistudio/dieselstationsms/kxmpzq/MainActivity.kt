@@ -14653,7 +14653,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
             val dueAmount = row.optDouble("due_soon_amount", total)
             val message = if (days < 0) {
-                "مرحبا 🙋\nنذكّركم بأن موعد استحقاق الدين ($dueDate) قد مضى منذ ${-days} يوم.\nالمبلغ المتأخر: ${formatYER(dueAmount)}\nإجمالي الرصيد القائم: ${formatYER(total)}"
+                val overdueDays = kotlin.math.abs(days.toLong())
+                "السلام عليكم، نحيطكم علماً بأن موعد سداد الفاتورة المستحقة بتاريخ ($dueDate) قد تجاوز موعده منذ $overdueDays يوم، ولم يُسجّل سداد المبلغ المستحق حتى الآن.\\nالمبلغ المتأخر: ${formatYER(dueAmount)}\\nإجمالي رصيدكم القائم: ${formatYER(total)}\\nنرجو التكرم بالسداد في أقرب وقت، أو التواصل معنا لتأكيد السداد إن تم."
             } else if (days == 1) {
                 "مرحبا 🙋\nنذكّركم بأن موعد استحقاق الدين يوم غد ($dueDate).\nالمبلغ المستحق: ${formatYER(dueAmount)}\nإجمالي الرصيد عليكم: ${formatYER(total)}"
             } else if (days == 0) {
