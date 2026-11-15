@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>تحديد الموقع - OpenStreetMap</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="file:///android_asset/assets-local/vendor/leaflet/leaflet.css">
 <style>
 html,body,#map{height:100%;width:100%;margin:0;padding:0;background:#e8edf0}
 .leaflet-control-attribution{font-size:10px}
-.map-hint{position:absolute;z-index:1000;top:calc(12px + 4.5em);left:12px;right:12px;max-width:440px;margin:auto;padding:9px 12px;border-radius:10px;background:#ffffffed;color:#263445;font:14px sans-serif;text-align:center;box-shadow:0 2px 10px #0002;pointer-events:none}
+.map-hint{position:absolute;z-index:1000;top:calc(12px + 8.5em);left:12px;right:12px;max-width:440px;margin:auto;padding:9px 12px;border-radius:10px;background:#ffffffed;color:#263445;font:14px sans-serif;text-align:center;box-shadow:0 2px 10px #0002;pointer-events:none}
 .map-error{position:absolute;z-index:1001;bottom:12px;left:12px;right:12px;padding:10px;border-radius:10px;background:#fff0f0;color:#9b1c1c;font:13px sans-serif;text-align:center;display:none}
 </style>
 </head>
@@ -16,7 +16,7 @@ html,body,#map{height:100%;width:100%;margin:0;padding:0;background:#e8edf0}
 <div id="map"></div>
 <div class="map-hint" id="hint">المس الخريطة لتحديد الموقع أو اسحب العلامة لتعديلها</div>
 <div class="map-error" id="mapError">تعذر تحميل الخريطة. تحقق من اتصال الإنترنت ثم أعد فتح محدد الموقع.</div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="file:///android_asset/assets-local/vendor/leaflet/leaflet.js"></script>
 <script>
 (function(){
 'use strict';

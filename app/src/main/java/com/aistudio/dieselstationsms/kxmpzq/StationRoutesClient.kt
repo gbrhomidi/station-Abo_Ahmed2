@@ -1,6 +1,7 @@
 package com.aistudio.dieselstationsms.kxmpzq
 
 import com.google.firebase.appcheck.FirebaseAppCheck
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -100,22 +101,42 @@ object StationRoutesClient {
             }
         }
 
-    private suspend fun fetchAppCheckToken(): String =
-        suspendCancellableCoroutine { continuation ->
+    private suspend fun fetchAppCheckToken(): String {
+        val appCheck = try {
+            FirebaseAppCheck.getInstance()
+        } catch (error: Exception) {
+            throw IOException("Firebase App Check غير مهيأ لهذا الإصدار من التطبيق", error)
+        }
+        return try {
+            requestAppCheckToken(appCheck, forceRefresh = false)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (firstFailure: Exception) {
+            // Provider/network failures can be transient. Retry once with a forced refresh;
+            // never send an unattested request if both attempts fail.
             try {
-                FirebaseAppCheck.getInstance().getAppCheckToken(false)
-                    .addOnSuccessListener { result ->
-                        if (continuation.isActive) continuation.resume(result.token)
-                    }
-                    .addOnFailureListener { error ->
-                        if (continuation.isActive) continuation.resumeWithException(
-                            IOException("تعذر الحصول على رمز Firebase App Check", error)
-                        )
-                    }
-            } catch (error: Exception) {
-                if (continuation.isActive) continuation.resumeWithException(
-                    IOException("Firebase App Check is not initialized", error)
-                )
+                requestAppCheckToken(appCheck, forceRefresh = true)
+            } catch (retryFailure: Exception) {
+                val reason = retryFailure.message ?: firstFailure.message ?: "سبب غير معروف"
+                throw IOException("تعذر الحصول على رمز Firebase App Check بعد إعادة المحاولة: $reason", retryFailure)
             }
         }
+    }
+
+    private suspend fun requestAppCheckToken(
+        appCheck: FirebaseAppCheck,
+        forceRefresh: Boolean
+    ): String = suspendCancellableCoroutine { continuation ->
+        try {
+            appCheck.getAppCheckToken(forceRefresh)
+                .addOnSuccessListener { result ->
+                    if (continuation.isActive) continuation.resume(result.token)
+                }
+                .addOnFailureListener { error ->
+                    if (continuation.isActive) continuation.resumeWithException(error)
+                }
+        } catch (error: Exception) {
+            if (continuation.isActive) continuation.resumeWithException(error)
+        }
+    }
 }

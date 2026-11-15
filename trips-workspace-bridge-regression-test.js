@@ -80,8 +80,11 @@ function installBridge(window) {
   const { window } = dom;
   await new Promise(resolve => setTimeout(resolve, 35));
   assert.ok(calls.some(call => call[0] === 'getVehicleTripWorkspace'), 'screen must load the dedicated SQLite workspace');
+  assert.match(databaseHelper, /trim\(COALESCE\(v\.brand, ''\) \|\| ' ' \|\| COALESCE\(v\.model, ''\)\) AS vehicle_name/, 'trip workspace lookups must provide a human-readable vehicle name');
   assert.strictEqual(window.document.querySelectorAll('.trip-card').length, 1, 'one SQLite trip should be rendered');
   assert.strictEqual(window.document.querySelector('.trip-card img'), null, 'untrusted route text must be escaped before DOM rendering');
+  assert.match(html, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/, 'trip filters and modal fields must remain in two-column pairs across viewport sizes');
+  assert.doesNotMatch(html, /تعرض هذه الشاشة سجلات \*\*vehicle_trips\*\*/, 'obsolete SQLite source disclosure must not be rendered on the trips screen');
   assert.match(window.document.querySelector('.trip-card').textContent, /آخر موقع مسجل/, 'persisted telemetry must be explicitly labelled');
   assert.notStrictEqual(window.document.getElementById('statDistance').textContent, '—', 'statistics must come from the workspace response');
   assert.match(window.document.getElementById('statDistance').textContent, /كم/, 'distance statistic must retain its real unit after Arabic number formatting');

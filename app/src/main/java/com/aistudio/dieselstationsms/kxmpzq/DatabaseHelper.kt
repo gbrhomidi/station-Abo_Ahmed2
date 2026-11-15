@@ -21582,6 +21582,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val rows = readableDatabase.rawQuery(
                 """
                 SELECT t.id, t.vehicle_id, t.driver_id, t.trip_date, t.start_location, t.end_location,
+                       trim(COALESCE(v.brand, '') || ' ' || COALESCE(v.model, '')) AS vehicle_name,
                        t.distance_km, t.route_distance_km, t.start_latitude, t.start_longitude, t.end_latitude, t.end_longitude,
                        t.route_duration_seconds, t.route_provider, t.route_calculated_at, t.route_encoded_polyline,
                        t.fuel_consumed, t.fuel_cost, t.start_odometer, t.end_odometer,
@@ -21627,7 +21628,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ).use { cursor -> if (cursor.moveToFirst()) cursorToJsonObject(cursor) else JSONObject() }
             val vehicles = readableDatabase.rawQuery(
                 """
-                SELECT v.id, v.vehicle_code, COALESCE(v.plate_number_ar, v.plate_number, '') AS plate_number,
+                SELECT v.id, trim(COALESCE(v.brand, '') || ' ' || COALESCE(v.model, '')) AS vehicle_name,
                        COALESCE(v.current_odometer, 0) AS current_odometer
                 FROM vehicles v JOIN parties p ON p.id = v.party_id
                 WHERE p.station_id = ? AND p.is_deleted = 0 AND v.is_deleted = 0 AND v.status = 'active'
@@ -21668,6 +21669,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             readableDatabase.rawQuery(
                 """
                 SELECT t.id, t.vehicle_id, t.driver_id, t.trip_date, t.start_location, t.end_location,
+                       trim(COALESCE(v.brand, '') || ' ' || COALESCE(v.model, '')) AS vehicle_name,
                        t.distance_km, t.route_distance_km, t.start_latitude, t.start_longitude, t.end_latitude, t.end_longitude,
                        t.route_duration_seconds, t.route_provider, t.route_calculated_at, t.route_encoded_polyline,
                        t.fuel_consumed, t.fuel_cost, t.start_odometer, t.end_odometer,

@@ -52,6 +52,9 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   assert.doesNotMatch(rawHtml, /Math\.random|fetch\(/i, 'map must not invent positions or fetch untrusted live vehicle feeds');
   assert.match(rawHtml, /server\.arcgisonline\.com\/ArcGIS\/rest\/services\/World_Imagery/, 'satellite basemap must use the declared imagery tile service');
   assert.match(rawHtml, /opentopomap\.org/, 'terrain basemap must use the declared terrain tile service');
+  assert.match(rawHtml, /assets-local\/vendor\/leaflet\/leaflet\.js/, 'Leaflet runtime must be packaged locally so the map initializes without an external CDN');
+  assert.match(rawHtml, /basemaps\.cartocdn\.com[\s\S]{0,500}World_Street_Map[\s\S]{0,500}tile\.openstreetmap\.org/, 'street tiles must fail over across independent providers');
+  assert.doesNotMatch(rawHtml, /<script src=\"https?:\/\/unpkg\.com\/leaflet/, 'the tracking map must not require an external Leaflet script CDN');
 
   const dom = new JSDOM(html, {
     runScripts: 'dangerously', url: 'https://vehicle-tracking.test/',
@@ -95,6 +98,11 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   assert.equal(routeCall[1].vehicle_id, 101, 'route identifier must be numeric');
   assert.equal(Object.hasOwn(routeCall[1], 'station_id'), false, 'route station scope must remain native');
   assert.equal(window.document.getElementById('mapEmpty').classList.contains('show'), false, 'valid route records must not render the empty map state');
+  assert.match(window.document.getElementById('selectedVehicleDetails').textContent, /15\.37/, 'selecting a vehicle must immediately render its valid persisted coordinates');
+  const searchInput = window.document.getElementById('searchInput'); searchInput.value = 'no-match'; searchInput.dispatchEvent(new window.Event('input', { bubbles: true })); await new Promise(resolve => setTimeout(resolve, 300));
+  assert.equal(window.document.getElementById('mapEmpty').classList.contains('show'), false, 'list search filters must not hide the explicitly selected vehicle from the map');
+  assert.match(window.document.getElementById('selectedVehicleDetails').textContent, /15\.37/, 'selected vehicle details must remain available while other list filters are active');
+  searchInput.value = ''; searchInput.dispatchEvent(new window.Event('input', { bubbles: true }));
 
   window.AndroidInterface.getVehicleLocationRecords = () => success([]);
   window.AndroidInterface.getVehicleTrackingStatus = () => success([]);

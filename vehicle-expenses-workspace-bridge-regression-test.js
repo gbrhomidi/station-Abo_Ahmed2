@@ -23,7 +23,7 @@ function installBridge(window) {
     updateVehicleExpenseRecord(id, payload) { calls.push(['update', id, JSON.parse(payload)]); return ok(true); },
     deleteVehicleExpenseRecord(id) { calls.push(['delete', id]); return ok(true); },
     openVehicleExpenseInvoice(id) { calls.push(['invoice', id]); return ok(true); },
-    goHome() {},
+    goHome() { calls.push(['goHome']); },
     printCurrentPage() { return ok(true); }
   };
 }
@@ -71,6 +71,8 @@ const wait = () => new Promise(resolve => setTimeout(resolve, 35));
   assert.equal(filterCall.vehicle_id, 101, 'vehicle filter must send a numeric vehicle identifier');
   assert.equal(Object.hasOwn(filterCall, 'station_id'), false, 'filter payload must retain native station authority');
 
+  window.document.getElementById('homeButton').click();
+  assert.ok(calls.some(([name]) => name === 'goHome'), 'home button must navigate through the Android Bridge when goToHome is absent');
   window.document.getElementById('addButton').click();
   assert.equal(window.document.getElementById('formDate').value, '2026-08-26', 'new expense date must use the native Asia/Aden business-day bridge');
   window.document.getElementById('formVehicle').value = '101';
