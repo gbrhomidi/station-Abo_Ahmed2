@@ -83,6 +83,12 @@
     .search-box .input { padding-right: 36px; }
     .field-label { display: block; margin: 0 0 6px; color: var(--trip-muted); font-size: .74rem; font-weight: 700; }
     .filters-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 11px; }
+    .filter-toggle { width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border:0; border-radius:11px; background:var(--trip-surface-alt); color:var(--trip-text); font-weight:800; text-align:right; }
+    .filter-toggle i { color:var(--trip-primary); transition:transform .18s ease; }
+    .filter-panel[data-collapsed="true"] .filters-grid, .filter-panel[data-collapsed="true"] .search-row { display:none; }
+    .filter-panel[data-collapsed="true"] .filter-toggle i:last-child { transform:rotate(0deg); }
+    .filter-panel:not([data-collapsed="true"]) .filter-toggle i:last-child { transform:rotate(180deg); }
+    .filter-panel .filter-toggle { margin-bottom:8px; }
     .filters-grid .wide { grid-column: 1 / -1; }
     .filter-action { width: 43px; border: 1px solid var(--trip-border); border-radius: 12px; background: var(--trip-surface-alt); color: var(--trip-primary); font-size: .9rem; }
     .stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
@@ -182,7 +188,7 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     @media (min-width: 700px) { .filters-grid { grid-template-columns: 2fr 1fr 1fr 1fr; } .filters-grid .wide { grid-column: auto; } .stats-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } .trip-card { padding: 16px 18px; } .modal { width: min(700px, 100%); margin: 0 auto; border-radius: 24px 24px 0 0; } }
-    @media (max-width: 360px) { main { padding: 12px; } .filters-grid, .form-grid, .details-grid { grid-template-columns: 1fr; } .form-field.wide, .detail.wide { grid-column: auto; } .trip-facts { gap: 5px; } .trip-fact { padding-right: 3px; padding-left: 3px; } }
+    @media (max-width: 360px) { main { padding: 12px; } .filters-grid, .form-grid, .details-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .form-field.wide, .detail.wide { grid-column: 1/-1; } .trip-facts { gap: 5px; } .trip-fact { padding-right: 3px; padding-left: 3px; } .filters-grid .wide { grid-column:auto; } }
   </style>
   <script src="file:///android_asset/assets-local/js/business-day.js"></script>
 </head>
@@ -201,8 +207,8 @@
   </header>
 
   <main>
-    <div class="source-notice"><i class="fas fa-shield-alt"></i><span>تعرض هذه الشاشة سجلات <strong>vehicle_trips</strong> والمركبات والسائقين وآخر موقع محفوظ للمركبة من SQLite. لا تعرض خريطة أو موقعاً حياً ما لم يتوفر له سجل فعلي.</span></div>
-    <section class="filter-panel" aria-label="بحث وتصفية الرحلات">
+    <section class="filter-panel" aria-label="بحث وتصفية الرحلات" data-collapsed="true">
+      <button class="filter-toggle" type="button" id="filterToggle" aria-expanded="false"><span><i class="fas fa-sliders"></i> الفلاتر والبحث</span><i class="fas fa-chevron-down" id="filterToggleIcon"></i></button>
       <div class="search-row">
         <div class="search-box"><i class="fas fa-search"></i><label class="visually-hidden" for="searchInput">بحث في الرحلات</label><input class="input" id="searchInput" type="search" autocomplete="off" placeholder="ابحث بالمركبة أو السائق أو خط السير أو الغرض"></div>
         <button class="filter-action" type="button" id="clearFiltersButton" aria-label="مسح الفلاتر"><i class="fas fa-filter-circle-xmark"></i></button>
@@ -210,10 +216,10 @@
       <div class="filters-grid">
         <div><label class="field-label" for="vehicleFilter">المركبة</label><select class="select" id="vehicleFilter"><option value="">كل المركبات</option></select></div>
         <div><label class="field-label" for="driverFilter">السائق</label><select class="select" id="driverFilter"><option value="">كل السائقين</option></select></div>
-        <div><label class="field-label" for="tripStatusFilter">حالة الرحلة</label><select class="select" id="tripStatusFilter"><option value="">كل الحالات</option><option value="scheduled">مجدولة</option><option value="active">جارية</option><option value="completed">مكتملة</option><option value="cancelled">ملغاة</option></select></div>
         <div><label class="field-label" for="fromDate">من تاريخ</label><input class="input" id="fromDate" type="date"></div>
         <div><label class="field-label" for="toDate">إلى تاريخ</label><input class="input" id="toDate" type="date"></div>
-        <div class="wide"><label class="field-label" for="sortBy">ترتيب النتائج</label><select class="select" id="sortBy"><option value="trip_date:desc">الأحدث أولاً</option><option value="trip_date:asc">الأقدم أولاً</option><option value="distance_km:desc">الأطول مسافة</option><option value="fuel_consumed:desc">الأعلى استهلاكاً</option><option value="fuel_cost:desc">الأعلى تكلفة</option></select></div>
+        <div><label class="field-label" for="tripStatusFilter">حالة الرحلة</label><select class="select" id="tripStatusFilter"><option value="">كل الحالات</option><option value="scheduled">مجدولة</option><option value="active">جارية</option><option value="completed">مكتملة</option><option value="cancelled">ملغاة</option></select></div>
+        <div><label class="field-label" for="sortBy">ترتيب النتائج</label><select class="select" id="sortBy"><option value="trip_date:desc">الأحدث أولاً</option><option value="trip_date:asc">الأقدم أولاً</option><option value="distance_km:desc">الأطول مسافة</option><option value="fuel_consumed:desc">الأعلى استهلاكاً</option><option value="fuel_cost:desc">الأعلى تكلفة</option></select></div>
       </div>
     </section>
 
@@ -440,10 +446,10 @@
       const vehicleValue = $('vehicleFilter').value, driverValue = $('driverFilter').value, formVehicle = $('tripVehicleId').value, formDriver = $('tripDriverId').value;
       state.vehicles = Array.isArray(workspace.vehicles) ? workspace.vehicles : [];
       state.drivers = Array.isArray(workspace.drivers) ? workspace.drivers : [];
-      updateSelect('vehicleFilter', state.vehicles, vehicleValue, row => [row.vehicle_code, row.plate_number].filter(Boolean).join(' — ') || 'مركبة #' + row.id);
-      updateSelect('driverFilter', state.drivers, driverValue, row => [row.driver_name, row.driver_code].filter(Boolean).join(' — ') || 'سائق #' + row.id);
-      updateSelect('tripVehicleId', state.vehicles, formVehicle, row => [row.vehicle_code, row.plate_number].filter(Boolean).join(' — ') || 'مركبة #' + row.id);
-      const tripDriver = $('tripDriverId'); tripDriver.innerHTML = '<option value="">بدون تعيين سائق</option>' + state.drivers.map(row => `<option value="${number(row.id)}">${escapeHtml([row.driver_name, row.driver_code].filter(Boolean).join(' — ') || 'سائق #' + row.id)}</option>`).join('');
+      updateSelect('vehicleFilter', state.vehicles, vehicleValue, row => row.vehicle_name || row.name || row.brand_model || 'مركبة #' + row.id);
+      updateSelect('driverFilter', state.drivers, driverValue, row => row.driver_name || row.name || 'سائق #' + row.id);
+      updateSelect('tripVehicleId', state.vehicles, formVehicle, row => row.vehicle_name || row.name || row.brand_model || 'مركبة #' + row.id);
+      const tripDriver = $('tripDriverId'); tripDriver.innerHTML = '<option value="">بدون تعيين سائق</option>' + state.drivers.map(row => `<option value="${number(row.id)}">${escapeHtml(row.driver_name || row.name || 'سائق #' + row.id)}</option>`).join('');
       if (formDriver && [...tripDriver.options].some(option => option.value === formDriver)) tripDriver.value = formDriver;
     }
     function setStats(stats) {
@@ -601,12 +607,13 @@
     }
     function applyTheme() { const dark = localStorage.getItem('theme') === 'dark'; if (dark) document.documentElement.setAttribute('data-theme', 'dark'); else document.documentElement.removeAttribute('data-theme'); $('themeIcon').className = dark ? 'fas fa-sun' : 'fas fa-moon'; }
     function toggleTheme() { localStorage.setItem('theme', document.documentElement.hasAttribute('data-theme') ? 'light' : 'dark'); applyTheme(); }
-    function vehicleChange() { const vehicle = state.vehicles.find(row => number(row.id) === number($('tripVehicleId').value)); if (vehicle && !$('tripId').value && !$('startOdometer').value) $('startOdometer').value = number(vehicle.current_odometer) > 0 ? number(vehicle.current_odometer) : ''; const selectedVehicle = number($('tripVehicleId').value); const drivers = state.drivers.filter(driver => !number(driver.vehicle_id) || number(driver.vehicle_id) === selectedVehicle); const selected = $('tripDriverId').value; $('tripDriverId').innerHTML = '<option value="">بدون تعيين سائق</option>' + drivers.map(driver => '<option value="' + number(driver.id) + '">' + escapeHtml([driver.driver_name, driver.driver_code].filter(Boolean).join(' — ') || 'سائق #' + driver.id) + '</option>').join(''); if ([...$('tripDriverId').options].some(option => option.value === selected)) $('tripDriverId').value = selected; }
+    function vehicleChange() { const vehicle = state.vehicles.find(row => number(row.id) === number($('tripVehicleId').value)); if (vehicle && !$('tripId').value && !$('startOdometer').value) $('startOdometer').value = number(vehicle.current_odometer) > 0 ? number(vehicle.current_odometer) : ''; const selectedVehicle = number($('tripVehicleId').value); const drivers = state.drivers.filter(driver => !number(driver.vehicle_id) || number(driver.vehicle_id) === selectedVehicle); const selected = $('tripDriverId').value; $('tripDriverId').innerHTML = '<option value="">بدون تعيين سائق</option>' + drivers.map(driver => '<option value="' + number(driver.id) + '">' + escapeHtml(driver.driver_name || driver.name || 'سائق #' + driver.id) + '</option>').join(''); if ([...$('tripDriverId').options].some(option => option.value === selected)) $('tripDriverId').value = selected; }
     function closeByBackdrop(event) { if (event.target.classList.contains('modal-backdrop')) event.target.classList.remove('show'); }
     $('tripList').addEventListener('click', event => { const target = event.target.closest('[data-action]'); if (!target) return; const row = findRow(target.dataset.id); if (target.dataset.action === 'details') openDetails(row); if (target.dataset.action === 'status') openStatus(row); if (target.dataset.action === 'edit') openTrip(row); if (target.dataset.action === 'delete') askDelete(row); });
     document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => setModal(button.dataset.close, false)));
     document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.addEventListener('click', closeByBackdrop));
     $('tripForm').addEventListener('submit', saveTrip); $('statusForm').addEventListener('submit', saveStatus); $('tripVehicleId').addEventListener('change', vehicleChange); $('confirmDeleteButton').addEventListener('click', deleteTrip);
+    $('filterToggle').addEventListener('click', () => { const panel=$('.filter-panel'); const collapsed=panel.dataset.collapsed==='true'; panel.dataset.collapsed=String(!collapsed); $('filterToggle').setAttribute('aria-expanded',String(collapsed)); $('filterToggleIcon').className=collapsed?'fas fa-chevron-up':'fas fa-chevron-down'; });
     $('themeButton').addEventListener('click', toggleTheme); $('homeButton').addEventListener('click', () => { window.location.href = 'file:///android_asset/main.html'; });
     $('newTripButton').addEventListener('click', () => openTrip(null));
     $('pickTripOrigin').addEventListener('click', () => chooseTripMapPoint('origin'));
