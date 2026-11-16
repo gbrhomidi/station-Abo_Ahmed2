@@ -48,6 +48,7 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   assert.match(routeFunction, /ORDER BY location_time ASC, id ASC/, 'route order must follow the composite vehicle-time index');
   assert.doesNotMatch(routeFunction, /date\(location_time\)|datetime\(location_time\)/, 'route query must not wrap the indexed timestamp column');
   assert.match(databaseSource, /override fun onCreate\(db: SQLiteDatabase\)[\s\S]{0,500}createAllTables\(db\)[\s\S]{0,250}ensureFleetSchema\(db\)/, 'fresh databases must run the additive fleet schema before any vehicle screen query');
+  assert.match(databaseSource, /const val VERSION = 63/, 'SQLite schema repair must advance the database version so existing V62 installations execute onUpgrade');
   assert.match(databaseSource, /ensureColumn\(db, "vehicle_locations", "trip_id", "INTEGER"\)/, 'vehicle location trip_id must be added idempotently for legacy databases');
   assert.match(databaseSource, /migrateV31ToV32[\s\S]{0,500}replace\(location_time, 'T', ' '\)/, 'V32 must normalize older WebView timestamp values before index ordering is used');
   assert.doesNotMatch(rawHtml, /station_id\s*[:=]/, 'WebView must not select the operational station');
