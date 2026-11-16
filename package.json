@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "test:dashboard-reminders": "node --test dashboard-reminder-unit-test.js"
+  },
   "dependencies": {
     "jsdom": "^29.1.1"
   }

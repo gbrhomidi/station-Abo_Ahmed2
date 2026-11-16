@@ -3909,6 +3909,11 @@
                 })
                 .catch(e => showToast(e.message || 'تعذر إرسال التذكيرات', 'error'));
         }
+        function escapeMainDueReminderHtml(value) {
+            return String(value).replace(/[&<>"']/g, character => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[character]);
+        }
         function openMainDueReminderDetails() {
             ensureMainDueReminderUI();
             const rows = mainDueReminderRows.filter(r =>
@@ -3916,7 +3921,7 @@
                 Number(r.days_remaining) <= 10
             );
             document.getElementById('mainDueDetailContent').innerHTML = rows.length
-                ? `<div class="due-detail-table-wrap"><table class="due-detail-table"><thead><tr><th>العميل</th><th>الهاتف</th><th>الدين القريب</th><th>إجمالي غير المسدد</th><th>الاستحقاق</th></tr></thead><tbody>${rows.map(r => `<tr><td>${escapeHtml(String(r.customer_name || '---'))}</td><td dir="ltr">${escapeHtml(String(r.phone || '---'))}</td><td class="due-red">${Number(r.due_soon_amount || 0).toLocaleString('en-US')} ${escapeHtml(CURRENCY)}</td><td class="due-blue">${Number(r.total_outstanding || 0).toLocaleString('en-US')} ${escapeHtml(CURRENCY)}</td><td>${escapeHtml(String(r.nearest_due_date || '---'))}</td></tr>`).join('')}</tbody></table></div>`
+                ? `<div class="due-detail-table-wrap"><table class="due-detail-table"><thead><tr><th>العميل</th><th>الهاتف</th><th>الدين القريب</th><th>إجمالي غير المسدد</th><th>الاستحقاق</th></tr></thead><tbody>${rows.map(r => `<tr><td>${escapeMainDueReminderHtml(String(r.customer_name || '---'))}</td><td dir="ltr">${escapeMainDueReminderHtml(String(r.phone || '---'))}</td><td class="due-red">${Number(r.due_soon_amount || 0).toLocaleString('en-US')} ${escapeMainDueReminderHtml(CURRENCY)}</td><td class="due-blue">${Number(r.total_outstanding || 0).toLocaleString('en-US')} ${escapeMainDueReminderHtml(CURRENCY)}</td><td>${escapeMainDueReminderHtml(String(r.nearest_due_date || '---'))}</td></tr>`).join('')}</tbody></table></div>`
                 : '<div style="padding:30px;text-align:center">لا توجد مستحقات مؤهلة حالياً.</div>';
             document.getElementById('mainDueDetailModal').classList.add('show');
         }
