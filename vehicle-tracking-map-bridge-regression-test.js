@@ -51,7 +51,9 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   assert.match(databaseSource, /const val VERSION = 64/, 'SQLite schema repair must advance the database version so existing V62 and V63 installations execute onUpgrade');
   assert.match(databaseSource, /ensureColumn\(db, "vehicle_locations", "trip_id", "INTEGER"\)/, 'vehicle location trip_id must be added idempotently for legacy databases');
   const fleetSchema = databaseSource.slice(databaseSource.indexOf('private fun ensureFleetSchema'), databaseSource.indexOf('private fun ensureFleetPermissions'));
-  const deliveriesSchema = databaseSource.slice(databaseSource.indexOf('private fun ensureDeliveriesSchema'), databaseSource.indexOf('private fun ensureFuelSalesSchema'));
+  const deliveriesSchemaStart = databaseSource.indexOf('private fun ensureDeliveriesSchema');
+  const deliveriesSchemaEnd = databaseSource.indexOf('\n    private fun ', deliveriesSchemaStart + 1);
+  const deliveriesSchema = databaseSource.slice(deliveriesSchemaStart, deliveriesSchemaEnd < 0 ? undefined : deliveriesSchemaEnd);
   assert.doesNotMatch(fleetSchema, /idx_deliveries_station_location_date/, 'fleet schema must not create delivery indexes before the deliveries table exists');
   assert.match(deliveriesSchema, /ensureColumn\(db, "deliveries", "longitude", "REAL"\)[\s\S]{0,250}idx_deliveries_station_location_date/, 'delivery location index must be created only after its table and coordinate columns are ensured');
   assert.match(databaseSource, /migrateV31ToV32[\s\S]{0,500}replace\(location_time, 'T', ' '\)/, 'V32 must normalize older WebView timestamp values before index ordering is used');
