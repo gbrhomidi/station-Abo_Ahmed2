@@ -37,7 +37,7 @@ assert.equal(window.businessDayDateTime('2026-10-08 00:00:00'), '2026-10-08 00:0
 // An instant around the local boundary resolves to the prior local date before midnight.
 assert.equal(window.businessDayDate(new Date('2026-10-08T03:30:00Z')), '2026-10-08', 'UTC instant must resolve to Yemen station day');
 assert.equal(window.businessDayDate(new Date('2026-10-08T03:30:00Z'), 'America/New_York'), '2026-10-07');
-assert.equal(window.businessDayDate(new Date('2026-11-08T04:59:59Z'), 'America/New_York'), '2026-11-08', 'the instant immediately before New York local midnight stays on the previous New York day');
+assert.equal(window.businessDayDate(new Date('2026-11-08T04:59:59Z'), 'America/New_York'), '2026-11-07', 'the instant immediately before New York local midnight stays on the previous New York day');
 assert.equal(window.businessDayDate(new Date('2026-11-08T05:00:00Z'), 'America/New_York'), '2026-11-08', 'the first instant at New York local midnight advances the New York date');
 
 const observedDayChanges = [];
