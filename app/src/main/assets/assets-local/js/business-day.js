@@ -6,9 +6,9 @@
   function wallClockParts(value) {
     if (typeof value !== 'string') return null;
     const text = value.trim();
-    let match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(text);
+    let match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
     if (match) return { year:+match[1], month:+match[2], day:+match[3], hour:0, minute:0, second:0 };
-    match = /^(\\d{4})-(\\d{2})-(\\d{2})[ T](\\d{2}):(\\d{2})(?::(\\d{2}))?(?:\\.\\d{1,3})?$/.exec(text);
+    match = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\\.\d{1,3})?$/.exec(text);
     if (match) return { year:+match[1], month:+match[2], day:+match[3], hour:+match[4], minute:+match[5], second:+(match[6]||0) };
     return null;
   }
