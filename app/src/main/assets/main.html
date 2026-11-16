@@ -1360,7 +1360,7 @@
             height: 36px;
             min-width: 36px;
             flex: 0 0 36px;
-            border-radius: 12px 12px 12px 3px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -1378,7 +1378,7 @@
             z-index: -1;
             inset: -4px;
             border: 2px solid var(--bubble-wave-color, rgba(26,35,126,.95));
-            border-radius: 15px 15px 15px 5px;
+            border-radius: 50%;
             box-shadow: 0 0 8px var(--bubble-wave-glow, rgba(26,35,126,.55)), 0 0 16px var(--bubble-wave-glow, rgba(26,35,126,.35));
             pointer-events: none;
             animation: goldenBubbleWave 3s ease-out 1 both;
@@ -1401,19 +1401,16 @@
             background: linear-gradient(145deg,#F5D28D,#B88636);
             color: #211606;
         }
-        .notification-bubble::after {
-            content: '';
-            position: absolute;
-            left: 5px;
-            bottom: -6px;
-            width: 0;
-            height: 0;
-            border-top: 7px solid var(--bubble-color, #3D8BC4);
-            border-right: 7px solid transparent;
-            filter: drop-shadow(0 1px 1px rgba(0,0,0,.16));
-            pointer-events: none;
+        .notification-bubble::after { content:none; }
+        .notification-bubble.due-reminder-notification-bubble { overflow:visible; }
+        .due-reminder-notification-bubble .due-bubble-count {
+            position:absolute; top:-5px; right:-5px; min-width:17px; height:17px; padding:0 4px;
+            display:grid; place-items:center; border-radius:999px; background:#7f1d1d; color:#fff;
+            border:1px solid rgba(255,255,255,.9); font:800 10px/1 'Tajawal',sans-serif;
         }
+        .due-reminder-notification-bubble::before { animation:goldenBubbleWave 3s ease-out 1 both; }
         .notification-bubble:hover { transform: scale(1.08); }
+        @media (prefers-reduced-motion: reduce) { .bubble-flight-particle { display:none !important; } }
         .notification-bubble:active { transform: scale(.94); }
         .bubble-info { background: var(--bubble-color, #3D8BC4); }
         .bubble-warning { background: var(--bubble-color, #F59E0B); }
@@ -1788,8 +1785,13 @@
         .due-reminder-card .due-reminder-heading h3 { color:var(--text); font-size:clamp(19px,3vw,25px); font-weight:900; }
         .due-reminder-card .due-reminder-actions {
             display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px;
-            align-items:stretch; direction:rtl;
+            align-items:stretch; direction:rtl; justify-items:stretch;
         }
+        .due-reminder-card { direction:rtl; text-align:right; }
+        .due-reminder-card .due-reminder-heading { direction:rtl; }
+        .due-reminder-card .due-reminder-heading h3 { flex:1; }
+        .due-reminder-card .due-reminder-actions button { text-align:center; }
+        #mainDueReminderFeedback { direction:rtl; text-align:right; }
         .due-reminder-card .due-reminder-actions button {
             min-width:0; white-space:nowrap; padding:11px 8px; font-size:14px;
         }
@@ -1871,6 +1873,7 @@
             width: min(1100px, 98vw);
             max-height: 88vh;
             overflow: auto;
+            direction:rtl;
             background: var(--card-solid, #fff);
             color:var(--text);
             border:1px solid rgba(212,168,106,.35);
@@ -1879,11 +1882,14 @@
             box-shadow: 0 30px 90px rgba(0, 0, 0, .4);
         }
         .due-detail-table-wrap { width:100%; max-width:100%; overflow:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; margin-top:12px; }
-        .due-detail-table { width:max-content; min-width:100%; border-collapse:separate; border-spacing:0; white-space:nowrap; }
+        .due-detail-table { width:max-content; min-width:100%; border-collapse:separate; border-spacing:0; white-space:nowrap; table-layout:auto; }
         .due-detail-table th, .due-detail-table td { padding:11px 14px; text-align:right; white-space:nowrap; border:1px solid rgba(148,163,184,.32); }
-        .due-detail-table th { position:sticky; top:0; z-index:2; background:#E9D7B5; color:#39290F; font-size:14px; font-weight:900; border:1px solid #B78D55; }
+        .due-detail-table thead { position:sticky; top:0; z-index:5; }
+        .due-detail-table th { position:sticky; top:0; z-index:6; background:#E9D7B5; color:#39290F; font-size:15px; font-weight:900; border:1px solid #9A6B22; white-space:nowrap; box-shadow:0 2px 4px rgba(0,0,0,.12); }
         [data-theme="dark"] .due-detail-table th { background:#49391F; color:#FFF0CE; border-color:#9D7A42; }
-        .due-detail-table td { background:var(--md-sys-color-surface-container-high,rgba(148,163,184,.12)); }
+        .due-detail-table td { background:#F1F5F9; }
+        [data-theme="dark"] .due-detail-table td { background:#263244; }
+        .due-detail-table-wrap { max-height:62vh; }
         .due-red { color: #dc2626; font-weight: 900; }
         .due-blue { color: #2563eb; font-weight: 900; }
         @media(max-width:520px) { .due-detail-card { padding:13px 9px; width:calc(100vw - 12px); } .due-detail-table th,.due-detail-table td { padding:9px 11px; } }
@@ -3672,7 +3678,7 @@
                 b.type='button'; b.id='mainDueReminderBubble';
                 b.className='notification-bubble due-reminder-notification-bubble';
                 b.style.display='none';
-                b.innerHTML='<i class="fas fa-comment-dots" aria-hidden="true"></i>';
+                b.innerHTML='<i class="fas fa-comment-dots" aria-hidden="true"></i><span class="due-bubble-count" aria-hidden="true">0</span>';
                 b.title='مستحقات محققة'; b.setAttribute('aria-label','مستحقات محققة - فتح تذكيرات العملاء');
                 b.addEventListener('click',openMainDueReminderNotice);
                 container.appendChild(b);
@@ -3734,22 +3740,27 @@
                 if(!result.success)throw new Error(result.error||result.message||'تعذر حفظ وضع التذكير');
                 const verify=await apiCall('getSetting',{key});
                 if(!verify.success||String(verify.value??'0')!==(enabled?'1':'0'))throw new Error('لم يتم التحقق من حفظ وضع التذكير');
-                if(mode==='auto')await setMainDueAutoSmsEnabled(enabled);
-                showToast(enabled?'تم تفعيل وضع التذكير.':'تم إيقاف وضع التذكير.','success');
+                if(mode==='auto'){
+                    window.__debtReminderModes=Object.assign({},window.__debtReminderModes||{},{auto:enabled});
+                    const dashboardSetting=document.getElementById('mainDueAutoSmsEnabled');
+                    if(dashboardSetting)dashboardSetting.checked=enabled;
+                    if(enabled)await closeMainDueReminderNotice();
+                }
                 setMainDueReminderFeedback('',false);
-                if(mode==='auto'&&enabled)closeMainDueReminderNotice();
             }catch(error){
                 if(checkbox)checkbox.checked=!enabled;
                 setMainDueReminderFeedback(error.message||'تعذر حفظ وضع التذكير');
             }finally{if(checkbox)checkbox.disabled=false;}
         }
         async function persistMainDueReminderDecision(action,mode='manual'){
-            for(const row of mainDueReminderRows.filter(r=>r.event_id&&Number(r.customer_party_id)>0)){
+            const eligible=mainDueReminderRows.filter(r=>String(r.event_id||'').trim()&&Number(r.customer_party_id)>0&&Number(r.total_outstanding)>0&&Number(r.days_remaining)>=0&&Number(r.days_remaining)<=10);
+            if(!eligible.length)throw new Error('لا توجد مستحقات قريبة صالحة لتحديث التذكير.');
+            for(const row of eligible){
                 const result=await apiCall('updateDebtReminderInteractionTyped',{
-                    event_id:row.event_id,customer_party_id:Number(row.customer_party_id),
-                    due_date:row.nearest_due_date||row.due_date||'',action,mode
+                    event_id:String(row.event_id).trim(),customer_party_id:Number(row.customer_party_id),
+                    due_date:String(row.nearest_due_date||row.due_date||'').trim(),action,mode
                 });
-                if(!result.success)throw new Error(result.error||'تعذر حفظ قرار التذكير');
+                if(!result||!result.success)throw new Error(result?.error||result?.message||'تعذر حفظ قرار التذكير');
             }
         }
 
@@ -3817,15 +3828,19 @@
                     b.style.display=shouldShow?'flex':'none';
                     b.title=`مستحقات محققة: ${dueSoon.length}`;
                     b.setAttribute('aria-label',`مستحقات محققة: ${dueSoon.length} مستحقات قريبة`);
+                    const countBadge=b.querySelector('.due-bubble-count');if(countBadge)countBadge.textContent=String(dueSoon.length);
                     if(shouldShow&&wasHidden){
-                        const source=document.getElementById('card-customer-debts')||document.getElementById('card-due-invoices');
-                        if(source)animateBubbleFromCard(b);
+                        const sources=['card-customer-debts','card-due-invoices'].map(id=>document.getElementById(id)).filter(Boolean);
+                        animateBubbleFromCards(b,sources);
                     }
                 }
                 const modes=window.__debtReminderModes||{};
                 const deferred=mainDueReminderRows.some(r=>r.interaction_action==='deferred');
                 const reminderBubble=document.getElementById('mainDueReminderBubble');
-                if(reminderBubble)reminderBubble.classList.toggle('is-deferred',deferred);
+                if(reminderBubble){
+                    reminderBubble.classList.toggle('is-deferred',deferred);
+                    if(deferred&&!dueSoon.length)reminderBubble.style.display='flex';
+                }
                 if (dueSoon.length && !mainDueReminderDeferred && (modes.manual||modes.local) &&
                     sessionStorage.getItem('mainDueReminderShownDate') !== new Date().toISOString().slice(0, 10)) {
                     sessionStorage.setItem('mainDueReminderShownDate', new Date().toISOString().slice(0, 10));
@@ -3842,6 +3857,7 @@
             ensureMainDueReminderUI();
             const overlay=document.getElementById('mainDueReminderOverlay');
             if(overlay) overlay.classList.add('show');
+            setMainDueReminderFeedback('',false);
             document.body.style.overflow='hidden';
         }
         async function closeMainDueReminderNotice() {
@@ -3863,7 +3879,9 @@
                 }
                 await persistMainDueReminderDecision('dismissed','local');
                 mainDueReminderDeferred=false;
-                closeMainDueReminderNotice();
+                const bubble=document.getElementById('mainDueReminderBubble');
+                if(bubble)bubble.style.display='none';
+                await closeMainDueReminderNotice();
                 await refreshMainDueReminders();
             } catch(e) { setMainDueReminderFeedback(e.message||'تعذر إلغاء التذكير'); }
             finally { buttons.forEach(button=>button.disabled=false); }
@@ -3874,9 +3892,9 @@
             try {
                 await persistMainDueReminderDecision('deferred','local');
                 mainDueReminderDeferred=true;
-                closeMainDueReminderNotice();
+                await closeMainDueReminderNotice();
                 const bubble=document.getElementById('mainDueReminderBubble');
-                if(bubble){bubble.classList.remove('deferred-pulse');void bubble.offsetWidth;bubble.classList.add('deferred-pulse');bubble.classList.add('show');}
+                if(bubble){bubble.classList.remove('deferred-pulse');void bubble.offsetWidth;bubble.classList.add('deferred-pulse');bubble.classList.add('show');bubble.style.display='flex';}
             } catch(e) { setMainDueReminderFeedback(e.message||'تعذر تأجيل التذكير'); }
             finally { buttons.forEach(button=>button.disabled=false); }
         }
@@ -4223,6 +4241,31 @@
             animateBubbleFromCard(bubble);
         }
 
+        function animateBubbleFromCards(bubble, sources) {
+            if (!bubble || !Array.isArray(sources) || !sources.length) return;
+            if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+            const destination=bubble.getBoundingClientRect();
+            const targetX=destination.left+destination.width/2, targetY=destination.top+destination.height/2;
+            sources.forEach((source,index)=>{
+                if(!source||typeof source.getBoundingClientRect!=='function')return;
+                const rect=source.getBoundingClientRect();
+                const particle=document.createElement('span');
+                particle.className='bubble-flight-particle';
+                Object.assign(particle.style,{position:'fixed',left:`${rect.left+rect.width/2-10}px`,top:`${rect.top+rect.height/2-10}px`,width:'20px',height:'20px',borderRadius:'50%',zIndex:'100001',pointerEvents:'none',background:'radial-gradient(circle at 35% 30%,#fff6d6,#d4a86a 65%,#9a6b22)',boxShadow:'0 0 16px rgba(212,168,106,.8)',opacity:'.95'});
+                document.body.appendChild(particle);
+                const dx=targetX-(rect.left+rect.width/2),dy=targetY-(rect.top+rect.height/2);
+                const keyframes=[{transform:'translate(0,0) scale(.35)',opacity:0},{transform:`translate(${dx*.58}px,${dy*.58-24}px) scale(.8)`,opacity:1,offset:.65},{transform:`translate(${dx}px,${dy}px) scale(.08)`,opacity:0}];
+                if(typeof particle.animate==='function'){
+                    const anim=particle.animate(keyframes,{duration:760+index*70,delay:index*80,easing:'cubic-bezier(.22,.75,.25,1)'});
+                    anim.onfinish=()=>particle.remove();
+                }else{
+                    particle.style.transition=`transform ${760+index*70}ms cubic-bezier(.22,.75,.25,1) ${index*80}ms, opacity ${760+index*70}ms ease ${index*80}ms`;
+                    requestAnimationFrame(()=>{particle.style.transform=`translate(${dx}px,${dy}px) scale(.08)`;particle.style.opacity='0';});
+                    setTimeout(()=>particle.remove(),900+index*80);
+                }
+            });
+            bubble.animate?.([{transform:'scale(.7)',opacity:.35},{transform:'scale(1.12)',opacity:1,offset:.6},{transform:'scale(1)',opacity:1}],{duration:520,easing:'cubic-bezier(.2,.75,.25,1)'});
+        }
         function animateBubbleFromCard(bubble) {
             if (!bubble || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
             const source = document.getElementById(bubble.dataset.target);
