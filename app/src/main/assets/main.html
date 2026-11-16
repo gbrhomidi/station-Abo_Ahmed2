@@ -2205,7 +2205,8 @@
             if (dateEl) {
                 try {
                     dateEl.textContent = new Intl.DateTimeFormat('ar-EG', {
-                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                        timeZone: window.DEFAULT_BUSINESS_TIME_ZONE || 'Asia/Aden'
                     }).format(now);
                 } catch (e) {
                     dateEl.textContent = now.toLocaleDateString('ar-EG');
@@ -2214,7 +2215,8 @@
             if (timeEl) {
                 try {
                     timeEl.textContent = new Intl.DateTimeFormat('en-GB', {
-                        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+                        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+                        timeZone: window.DEFAULT_BUSINESS_TIME_ZONE || 'Asia/Aden'
                     }).format(now);
                 } catch (e) {
                     timeEl.textContent = now.toLocaleTimeString('en-GB');
@@ -3842,8 +3844,8 @@
                     if(deferred&&!dueSoon.length)reminderBubble.style.display='flex';
                 }
                 if (dueSoon.length && !mainDueReminderDeferred && (modes.manual||modes.local) &&
-                    sessionStorage.getItem('mainDueReminderShownDate') !== new Date().toISOString().slice(0, 10)) {
-                    sessionStorage.setItem('mainDueReminderShownDate', new Date().toISOString().slice(0, 10));
+                    sessionStorage.getItem('mainDueReminderShownDate') !== businessDayDate()) {
+                    sessionStorage.setItem('mainDueReminderShownDate', businessDayDate());
                     openMainDueReminderNotice();
                 }
                 return true;

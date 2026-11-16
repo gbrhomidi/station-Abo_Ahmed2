@@ -14,10 +14,14 @@ vm.runInNewContext(source, { window, Date, Intl });
 
 const justBeforeMidnight = new Date(2026, 9, 7, 23, 59, 59);
 const atMidnight = new Date(2026, 9, 8, 0, 0, 0);
-assert.equal(window.businessDayTimeZone, 'America/New_York');
-assert.equal(window.businessDayDate(justBeforeMidnight), '2026-10-07');
+assert.equal(window.businessDayTimeZone, 'Asia/Aden');
+assert.equal(window.DEFAULT_BUSINESS_TIME_ZONE, 'Asia/Aden');
+assert.equal(window.businessDayDate(justBeforeMidnight), '2026-10-08', 'Yemen station date must not follow the handset timezone');
+assert.equal(window.businessDayDate(justBeforeMidnight, 'America/New_York'), '2026-10-07');
 assert.equal(window.businessDayDate(atMidnight), '2026-10-08');
-assert.equal(window.businessDayDateTime(atMidnight), '2026-10-08 00:00:00');
+assert.equal(window.businessDayDate(atMidnight, 'America/New_York'), '2026-10-08');
+assert.equal(window.businessDayDateTime(atMidnight), '2026-10-08 07:00:00', 'midnight New York instant is morning in Yemen');
+assert.equal(window.businessDayDateTime(atMidnight, 'America/New_York'), '2026-10-08 00:00:00');
 const arabicDateFormatter = new Intl.DateTimeFormat('ar-EG', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
 });
@@ -31,14 +35,15 @@ assert.notEqual(arabicDateFormatter.format(justBeforeMidnight), arabicDateFormat
 assert.equal(window.businessDayDate('2026-10-08'), '2026-10-08');
 assert.equal(window.businessDayDateTime('2026-10-08 00:00:00'), '2026-10-08 00:00:00');
 // An instant around the local boundary resolves to the prior local date before midnight.
-assert.equal(window.businessDayDate(new Date('2026-10-08T03:30:00Z')), '2026-10-07');
-assert.equal(window.businessDayDate(new Date('2026-11-08T04:59:59Z')), '2026-11-07', 'the instant immediately before local midnight stays on the previous device day');
-assert.equal(window.businessDayDate(new Date('2026-11-08T05:00:00Z')), '2026-11-08', 'the first instant at local midnight advances the local date');
+assert.equal(window.businessDayDate(new Date('2026-10-08T03:30:00Z')), '2026-10-08', 'UTC instant must resolve to Yemen station day');
+assert.equal(window.businessDayDate(new Date('2026-10-08T03:30:00Z'), 'America/New_York'), '2026-10-07');
+assert.equal(window.businessDayDate(new Date('2026-11-08T04:59:59Z'), 'America/New_York'), '2026-11-08', 'the instant immediately before New York local midnight stays on the previous New York day');
+assert.equal(window.businessDayDate(new Date('2026-11-08T05:00:00Z'), 'America/New_York'), '2026-11-08', 'the first instant at New York local midnight advances the New York date');
 
 const observedDayChanges = [];
 const watchDashboardDay = window.createBusinessDayWatcher((currentDay, previousDay) => {
     observedDayChanges.push({ currentDay, previousDay });
-});
+}, 'America/New_York');
 assert.equal(watchDashboardDay(justBeforeMidnight), false, 'initial observation must not trigger a refresh');
 assert.equal(watchDashboardDay(new Date(2026, 9, 7, 23, 59, 59)), false, 'same local day must not trigger a refresh');
 assert.equal(watchDashboardDay(atMidnight), true, 'local midnight must trigger a dashboard refresh');

@@ -148,7 +148,7 @@ class MainActivity : AppCompatActivity() {
     private var wasAuthenticatedShellAtRecreation: Boolean = false
     private var processRestartedWithAuthenticatedShell: Boolean = false
 
-    private fun currentDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+    private fun currentDate(): String = BusinessDay.currentDate()
 
     private fun registerActivityResultLaunchers() {
         webFileChooserLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
