@@ -48,7 +48,7 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   assert.match(routeFunction, /ORDER BY location_time ASC, id ASC/, 'route order must follow the composite vehicle-time index');
   assert.doesNotMatch(routeFunction, /date\(location_time\)|datetime\(location_time\)/, 'route query must not wrap the indexed timestamp column');
   assert.match(databaseSource, /override fun onCreate\(db: SQLiteDatabase\)[\s\S]{0,500}createAllTables\(db\)[\s\S]{0,250}ensureFleetSchema\(db\)/, 'fresh databases must run the additive fleet schema before any vehicle screen query');
-  assert.match(databaseSource, /const val VERSION = 63/, 'SQLite schema repair must advance the database version so existing V62 installations execute onUpgrade');
+  assert.match(databaseSource, /const val VERSION = 64/, 'SQLite schema repair must advance the database version so existing V62 and V63 installations execute onUpgrade');
   assert.match(databaseSource, /ensureColumn\(db, "vehicle_locations", "trip_id", "INTEGER"\)/, 'vehicle location trip_id must be added idempotently for legacy databases');
   const fleetSchema = databaseSource.slice(databaseSource.indexOf('private fun ensureFleetSchema'), databaseSource.indexOf('private fun ensureFleetPermissions'));
   const deliveriesSchema = databaseSource.slice(databaseSource.indexOf('private fun ensureDeliveriesSchema'), databaseSource.indexOf('private fun ensureFuelSalesSchema'));
