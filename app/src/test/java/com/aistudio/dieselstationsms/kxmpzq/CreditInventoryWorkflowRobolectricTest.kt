@@ -337,6 +337,12 @@ class CreditInventoryWorkflowRobolectricTest {
 
     @Test fun `vehicle trip workspace joins actual fleet records and excludes another station`() {
         val db = helper.writableDatabase
+        val hasVehicleLocationTripId = db.rawQuery("PRAGMA table_info(vehicle_locations)", null).use { cursor ->
+            var found = false
+            while (cursor.moveToNext()) if (cursor.getString(1) == "trip_id") found = true
+            found
+        }
+        assertTrue("قاعدة البيانات الجديدة يجب أن تنشئ vehicle_locations.trip_id قبل استعلامات الأسطول", hasVehicleLocationTripId)
         val partyTypeId = db.rawQuery("SELECT id FROM party_types WHERE is_deleted = 0 ORDER BY id LIMIT 1", null).use { check(it.moveToFirst()); it.getLong(0) }
         val stationTwo = db.insertOrThrow("stations", null, ContentValues().apply {
             put("uuid", UUID.randomUUID().toString()); put("station_code", "TRP-${UUID.randomUUID().toString().take(8)}")

@@ -47,6 +47,8 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   assert.match(routeFunction, /location_time < \?/, 'route date upper bound must use a precomputed exclusive day boundary without wrapping indexed values');
   assert.match(routeFunction, /ORDER BY location_time ASC, id ASC/, 'route order must follow the composite vehicle-time index');
   assert.doesNotMatch(routeFunction, /date\(location_time\)|datetime\(location_time\)/, 'route query must not wrap the indexed timestamp column');
+  assert.match(databaseSource, /override fun onCreate\(db: SQLiteDatabase\)[\s\S]{0,500}createAllTables\(db\)[\s\S]{0,250}ensureFleetSchema\(db\)/, 'fresh databases must run the additive fleet schema before any vehicle screen query');
+  assert.match(databaseSource, /ensureColumn\(db, "vehicle_locations", "trip_id", "INTEGER"\)/, 'vehicle location trip_id must be added idempotently for legacy databases');
   assert.match(databaseSource, /migrateV31ToV32[\s\S]{0,500}replace\(location_time, 'T', ' '\)/, 'V32 must normalize older WebView timestamp values before index ordering is used');
   assert.doesNotMatch(rawHtml, /station_id\s*[:=]/, 'WebView must not select the operational station');
   assert.doesNotMatch(rawHtml, /Math\.random|fetch\(/i, 'map must not invent positions or fetch untrusted live vehicle feeds');
@@ -80,6 +82,9 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   await wait();
 
   assert.deepEqual(calls.map(call => call[0]).sort(), ['locations', 'tracking', 'vehicles'], 'screen initialization must request locations, fleet records, and tracking status from Android');
+  assert.equal(window.document.getElementById('vehicleFilter').options.length, 2, 'main vehicle filter must be populated from SQLite vehicles');
+  assert.equal(window.document.getElementById('vehicleInput').options.length, 2, 'new-location vehicle selector must be populated from SQLite vehicles');
+  assert.equal(window.document.getElementById('reportVehicle').options.length, 2, 'report vehicle selector must be populated from SQLite vehicles');
   window.document.querySelector('[data-nav="add"]').click(); await wait();
   window.document.getElementById('captureVehicleGpsButton').click();
   assert.ok(calls.some(call => call[0] === 'mapPicker'), 'vehicle form must open native GPS picker');
@@ -178,6 +183,29 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   await wait();
   assert.equal(window.document.getElementById('mapEmpty').classList.contains('show'), false, 'an empty selected route must not erase independently available persisted locations');
 
-  console.log('Vehicle tracking map and Android Bridge regression PASS (32 assertion groups).');
   window.close();
+
+  const delayedDom = new JSDOM(html, {
+    runScripts: 'dangerously', url: 'https://vehicle-tracking-delayed.test/',
+    beforeParse(window) {
+      window.L = {
+        map() { return { setView() { return this; }, invalidateSize() {}, fitBounds() {}, hasLayer() { return false; }, removeLayer() {} }; },
+        control: { layers() { return { addTo() { return this; } }; } },
+        tileLayer() { return { addTo() { return this; } }; },
+        polyline() { return { addTo() { return this; } }; },
+        circleMarker() { return { bindPopup() { return this; }, addTo() { return this; } }; }
+      };
+      window.confirm = () => true;
+      window.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {} });
+      window.HTMLElement.prototype.scrollIntoView = () => {};
+      window.setTimeout(() => installBridge(window), 150);
+    }
+  });
+  await new Promise(resolve => setTimeout(resolve, 350));
+  assert.ok(calls.some(call => call[0] === 'vehicles'), 'screen must recover when AndroidInterface is injected after page script startup');
+  assert.equal(delayedDom.window.document.getElementById('vehicleInput').options.length, 2, 'late bridge initialization must still populate the add-location selector');
+  assert.equal(delayedDom.window.document.getElementById('reportVehicle').options.length, 2, 'late bridge initialization must still populate the report selector');
+  delayedDom.window.close();
+
+  console.log('Vehicle tracking map and Android Bridge regression PASS (fresh-schema, selector, and delayed-bridge coverage).');
 })().catch(error => { console.error(error.stack || error); process.exitCode = 1; });

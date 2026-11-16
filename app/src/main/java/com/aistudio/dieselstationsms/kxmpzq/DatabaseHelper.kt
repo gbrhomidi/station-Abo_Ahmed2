@@ -228,6 +228,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.beginTransaction()
         try {
             createAllTables(db)
+            ensureFleetSchema(db)
+            ensureFleetPermissions(db)
             ensureProductReferenceData(db)
             ensureVehicleArchiveSchema(db)
             ensureVehicleTripLifecycleSchema(db)
@@ -6056,6 +6058,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 uuid TEXT UNIQUE NOT NULL,
                 vehicle_id INTEGER NOT NULL,
+                trip_id INTEGER,
                 latitude DECIMAL(10,8) NOT NULL,
                 longitude DECIMAL(11,8) NOT NULL,
                 speed DECIMAL(6,2),
