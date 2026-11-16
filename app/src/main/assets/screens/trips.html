@@ -95,7 +95,7 @@
     .metric-icon { width: 30px; height: 30px; margin: 0 auto 5px; border-radius: 10px; display: grid; place-items: center; color: var(--metric-color, var(--trip-primary)); background: var(--metric-soft, var(--trip-primary-soft)); font-size: .83rem; }
     .metric-value { display: block; min-height: 25px; font-size: 1.2rem; font-weight: 800; line-height: 1.35; direction: ltr; unicode-bidi: plaintext; }
     .metric-label { display: block; color: var(--trip-muted); font-size: .7rem; font-weight: 700; }
-    .section-card { overflow: hidden; border: 1px solid var(--trip-border); border-radius: 22px; background: var(--trip-surface); box-shadow: var(--trip-shadow); }
+    .section-card { overflow-x: auto; overflow-y: hidden; border: 1px solid var(--trip-border); border-radius: 22px; background: var(--trip-surface); box-shadow: var(--trip-shadow); }
     .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 14px 11px; border-bottom: 1px solid var(--trip-border); }
     .section-head h2 { margin: 0; font-size: .98rem; }
     .section-meta { color: var(--trip-muted); font-size: .72rem; white-space: nowrap; }
@@ -105,7 +105,8 @@
     .status-active { color: var(--trip-blue); background: var(--trip-blue-soft); }
     .status-completed { color: var(--trip-green); background: var(--trip-green-soft); }
     .status-cancelled { color: var(--trip-danger); background: var(--trip-danger-soft); }
-    .trip-list { display: grid; gap: 0; }
+    .trip-list { display: grid; gap: 0; min-width: 0; touch-action: pan-x pan-y; }
+    .trip-card { min-width: 0; }
     .trip-card { padding: 14px; border-bottom: 1px solid var(--trip-border); }
     .trip-card:last-child { border-bottom: 0; }
     .trip-top { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; }
@@ -476,7 +477,8 @@
       } else {
         list.innerHTML = state.rows.map(row => {
           const savedLocation = locationText(row);
-          const location = savedLocation ? '<span class="location-fact" title="آخر قراءة موقع محفوظة للمركبة"><i class="fas fa-location-dot"></i>آخر موقع مسجل: ' + escapeHtml(savedLocation) + (row.last_location_time ? ' · ' + formatDate(row.last_location_time) : '') + '</span>' : '<span class="location-fact"><i class="fas fa-location-crosshairs"></i>لا توجد إحداثيات محفوظة للمركبة</span>';
+          const linkedLocation = Number(row.linked_location_count || 0) > 0;
+          const location = savedLocation ? '<span class="location-fact" title="آخر قراءة موقع محفوظة للمركبة"><i class="fas fa-location-dot"></i>آخر موقع مسجل: ' + escapeHtml(savedLocation) + (row.last_location_time ? ' · ' + formatDate(row.last_location_time) : '') + (linkedLocation ? ' · مرتبط بالرحلة' : '') + '</span>' : '<span class="location-fact"><i class="fas fa-location-crosshairs"></i>لا توجد إحداثيات محفوظة للمركبة</span>';
           const distance = number(row.distance_km) > 0 ? formatNumber(row.distance_km) + ' كم' : '—';
           const fuel = number(row.fuel_consumed) > 0 ? formatNumber(row.fuel_consumed) + ' ل' : '—';
           const efficiency = number(row.efficiency_km_per_liter) > 0 ? formatNumber(row.efficiency_km_per_liter) + ' كم/ل' : '—';
@@ -528,7 +530,11 @@
         catch (error) { toast(error.message || 'تعذر تحميل التفاصيل الكاملة للرحلة', true); }
       }
       const savedLocation = locationText(row);
-      $('detailsContent').innerHTML = '<div class="details-grid">' + detail('المركبة', vehicleName(row), 'text') + detail('السائق', row.driver_name || row.driver_code, 'text') + detail('تاريخ الرحلة', row.trip_date) + detail('غرض الرحلة', row.trip_purpose, 'text') + detail('نقطة الانطلاق', row.start_location, 'text') + detail('نقطة الوصول', row.end_location, 'text') + detail('المسافة', number(row.distance_km) > 0 ? formatNumber(row.distance_km) + ' كم' : '') + detail('الوقود المستهلك', number(row.fuel_consumed) > 0 ? formatNumber(row.fuel_consumed) + ' لتر' : '') + detail('تكلفة الوقود', number(row.fuel_cost) > 0 ? formatNumber(row.fuel_cost) : '') + detail('الكفاءة', number(row.efficiency_km_per_liter) > 0 ? formatNumber(row.efficiency_km_per_liter) + ' كم/لتر' : '') + detail('عداد البداية', row.start_odometer) + detail('عداد النهاية', row.end_odometer) + detail('فرق العداد', row.odometer_delta) + detail('العداد الحالي للمركبة', row.vehicle_current_odometer) + detail('ملاحظات', row.notes, 'wide text') + '</div><div class="telemetry-note"><i class="fas fa-satellite-dish"></i>' + (savedLocation ? 'آخر قراءة موقع <strong>محفوظة</strong> للمركبة: ' + escapeHtml(savedLocation) + (row.last_location_time ? ' في ' + formatDate(row.last_location_time) : '') + (number(row.last_speed) > 0 ? '؛ السرعة المسجلة ' + formatNumber(row.last_speed) : '') + '. هذه القراءة لا تُعرض كموقع حي أو مسار رحلة لأنها لا تحمل رابط رحلة في جدول المواقع.' : 'لا توجد قراءة موقع محفوظة لهذه المركبة في البيانات المعادة. لا تعرض الشاشة خريطة أو موقعاً افتراضياً.') + '</div>';
+      const linkedLocationCount = number(row.linked_location_count);
+      const telemetryText = linkedLocationCount > 0
+        ? 'آخر قراءة موقع <strong>مرتبطة بهذه الرحلة</strong>: ' + escapeHtml(savedLocation || 'إحداثيات مرتبطة') + (row.last_location_time ? ' في ' + formatDate(row.last_location_time) : '') + (number(row.last_speed) > 0 ? '؛ السرعة المسجلة ' + formatNumber(row.last_speed) : '') + '.'
+        : 'لا توجد قراءة موقع مرتبطة بهذه الرحلة في جدول المواقع؛ آخر قراءة عامة للمركبة لا تحمل رابط رحلة، لذلك تم إخفاؤها حتى لا تُنسب إلى هذه الرحلة.';
+      $('detailsContent').innerHTML = '<div class="details-grid">' + detail('المركبة', vehicleName(row), 'text') + detail('السائق', row.driver_name || row.driver_code, 'text') + detail('تاريخ الرحلة', row.trip_date) + detail('غرض الرحلة', row.trip_purpose, 'text') + detail('نقطة الانطلاق', row.start_location, 'text') + detail('نقطة الوصول', row.end_location, 'text') + detail('المسافة', number(row.distance_km) > 0 ? formatNumber(row.distance_km) + ' كم' : '') + detail('الوقود المستهلك', number(row.fuel_consumed) > 0 ? formatNumber(row.fuel_consumed) + ' لتر' : '') + detail('تكلفة الوقود', number(row.fuel_cost) > 0 ? formatNumber(row.fuel_cost) : '') + detail('الكفاءة', number(row.efficiency_km_per_liter) > 0 ? formatNumber(row.efficiency_km_per_liter) + ' كم/لتر' : '') + detail('عداد البداية', row.start_odometer) + detail('عداد النهاية', row.end_odometer) + detail('فرق العداد', row.odometer_delta) + detail('العداد الحالي للمركبة', row.vehicle_current_odometer) + detail('ملاحظات', row.notes, 'wide text') + '</div><div class="telemetry-note"><i class="fas fa-satellite-dish"></i>' + telemetryText + '</div>';
       const timeline = document.createElement('section'); timeline.className = 'telemetry-note'; timeline.innerHTML = '<i class="fas fa-timeline"></i><strong> الخط الزمني للرحلة</strong><div id="tripTimeline" class="timeline-list">جاري قراءة أحداث الرحلة…</div>'; $('detailsContent').appendChild(timeline);
       if (tripId) {
         try {
@@ -611,12 +617,12 @@
     document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => setModal(button.dataset.close, false)));
     document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.addEventListener('click', closeByBackdrop));
     $('tripForm').addEventListener('submit', saveTrip); $('statusForm').addEventListener('submit', saveStatus); $('tripVehicleId').addEventListener('change', vehicleChange); $('confirmDeleteButton').addEventListener('click', deleteTrip);
-    $('filterToggle').addEventListener('click', () => { const panel=$('.filter-panel'); const collapsed=panel.dataset.collapsed==='true'; panel.dataset.collapsed=String(!collapsed); $('filterToggle').setAttribute('aria-expanded',String(collapsed)); $('filterToggleIcon').className=collapsed?'fas fa-chevron-up':'fas fa-chevron-down'; });
+    $('filterToggle').addEventListener('click', () => { const panel=document.querySelector('.filter-panel'); const collapsed=panel.dataset.collapsed==='true'; panel.dataset.collapsed=String(!collapsed); $('filterToggle').setAttribute('aria-expanded',String(collapsed)); $('filterToggleIcon').className=collapsed?'fas fa-chevron-up':'fas fa-chevron-down'; });
     $('themeButton').addEventListener('click', toggleTheme); $('homeButton').addEventListener('click', () => { window.location.href = 'file:///android_asset/main.html'; });
     $('newTripButton').addEventListener('click', () => openTrip(null));
     $('pickTripOrigin').addEventListener('click', () => chooseTripMapPoint('origin'));
     $('pickTripDestination').addEventListener('click', () => chooseTripMapPoint('destination'));
-    $('calculateTripRoute').addEventListener('click', calculateTripRoute); $('refreshButton').addEventListener('click', () => loadWorkspace(state.page)); $('reportButton').addEventListener('click', () => setModal('reportModal', true)); $('generateReportButton').addEventListener('click', generateReport); $('exportButton').addEventListener('click', exportCsv); $('filtersButton').addEventListener('click', () => $('searchInput').focus());
+    $('calculateTripRoute').addEventListener('click', calculateTripRoute); $('refreshButton').addEventListener('click', () => loadWorkspace(state.page)); $('reportButton').addEventListener('click', () => setModal('reportModal', true)); $('generateReportButton').addEventListener('click', generateReport); $('exportButton').addEventListener('click', exportCsv); $('filtersButton').addEventListener('click', () => { const panel=document.querySelector('.filter-panel'); const collapsed=panel.dataset.collapsed==='true'; if (collapsed) { panel.dataset.collapsed='false'; $('filterToggle').setAttribute('aria-expanded','true'); $('filterToggleIcon').className='fas fa-chevron-up'; } $('searchInput').focus(); });
     $('nextButton').addEventListener('click', () => loadWorkspace(state.page + 1)); $('previousButton').addEventListener('click', () => loadWorkspace(state.page - 1));
     [$('vehicleFilter'), $('driverFilter'), $('tripStatusFilter'), $('fromDate'), $('toDate'), $('sortBy')].forEach(control => control.addEventListener('change', () => loadWorkspace(1)));
     $('searchInput').addEventListener('input', () => { clearTimeout(state.searchTimer); state.searchTimer = setTimeout(() => loadWorkspace(1), 280); });

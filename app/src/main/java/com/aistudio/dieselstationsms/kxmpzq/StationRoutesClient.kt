@@ -12,6 +12,11 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import kotlin.math.asin
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -52,8 +57,12 @@ object StationRoutesClient {
             require(origin.isValid()) { "إحداثيات نقطة الانطلاق غير صحيحة" }
             require(destination.isValid()) { "إحداثيات الوجهة غير صحيحة" }
 
-            val token = fetchAppCheckToken()
-            if (token.isBlank()) throw IOException("Firebase App Check returned an empty token")
+            val token = try { fetchAppCheckToken() } catch (error: Exception) {
+                // Routing is optional. Do not block trip entry when Firebase attestation is
+                // unavailable (for example debug PIN verification or a captive network).
+                return@withContext offlineEstimate(origin, destination)
+            }
+            if (token.isBlank()) return@withContext offlineEstimate(origin, destination)
 
             val payload = JSONObject()
                 .put("origin", JSONObject().put("latitude", origin.latitude).put("longitude", origin.longitude))
@@ -100,6 +109,25 @@ object StationRoutesClient {
                 route
             }
         }
+
+    private fun offlineEstimate(origin: Coordinate, destination: Coordinate): Route {
+        val earthKm = 6371.0088
+        val dLat = Math.toRadians(destination.latitude - origin.latitude)
+        val dLon = Math.toRadians(destination.longitude - origin.longitude)
+        val a = sin(dLat / 2).pow(2) + cos(Math.toRadians(origin.latitude)) * cos(Math.toRadians(destination.latitude)) * sin(dLon / 2).pow(2)
+        val distanceKm = 2.0 * earthKm * asin(sqrt(a.coerceIn(0.0, 1.0)))
+        require(distanceKm > 0.0) { "نقطتا الرحلة متطابقتان" }
+        val durationSeconds = distanceKm / 35.0 * 3600.0
+        return Route("OFFLINE_ESTIMATE", distanceKm * 1000.0, distanceKm, durationSeconds, encodePolyline(listOf(origin, destination)), 0, true)
+    }
+
+    private fun encodePolyline(points: List<Coordinate>): String {
+        var lastLat = 0; var lastLon = 0
+        val out = StringBuilder()
+        fun append(value: Int) { var v = if (value < 0) (value shl 1).inv() else value shl 1; while (v >= 0x20) { out.append(((v and 0x1f) or 0x20) + 63); v = v ushr 5 }; out.append(v + 63) }
+        points.forEach { point -> val lat = kotlin.math.round(point.latitude * 1e5).toInt(); val lon = kotlin.math.round(point.longitude * 1e5).toInt(); append(lat-lastLat); append(lon-lastLon); lastLat=lat; lastLon=lon }
+        return out.toString()
+    }
 
     private suspend fun fetchAppCheckToken(): String {
         val appCheck = try {

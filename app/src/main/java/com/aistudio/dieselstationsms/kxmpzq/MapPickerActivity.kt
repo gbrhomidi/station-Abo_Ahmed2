@@ -15,6 +15,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebSettings
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -86,6 +87,7 @@ class MapPickerActivity : AppCompatActivity() {
             allowFileAccess = true
             allowContentAccess = true
             javaScriptCanOpenWindowsAutomatically = false
+            cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
             setSupportMultipleWindows(false)
         }
         binding.mapWebView.webChromeClient = WebChromeClient()

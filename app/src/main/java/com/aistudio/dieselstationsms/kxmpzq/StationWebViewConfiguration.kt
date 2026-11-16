@@ -30,7 +30,7 @@ internal object StationWebViewConfiguration {
             javaScriptCanOpenWindowsAutomatically = false
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             safeBrowsingEnabled = true
-            cacheMode = WebSettings.LOAD_DEFAULT
+            cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
             loadsImagesAutomatically = true
             setSupportMultipleWindows(false)
             userAgentString = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 " +

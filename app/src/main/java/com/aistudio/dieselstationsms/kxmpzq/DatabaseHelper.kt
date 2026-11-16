@@ -1136,6 +1136,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureColumn(db, "vehicle_trips", "route_provider", "TEXT")
         ensureColumn(db, "vehicle_trips", "route_encoded_polyline", "TEXT")
         ensureColumn(db, "vehicle_trips", "route_calculated_at", "TEXT")
+        ensureColumn(db, "vehicle_locations", "trip_id", "INTEGER")
         ensureColumn(db, "vehicle_expenses", "trip_id", "INTEGER")
         ensureColumn(db, "vehicle_expenses", "source_distance_km", "REAL")
         ensureColumn(db, "vehicle_expenses", "idempotency_key", "TEXT")
@@ -1164,6 +1165,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_drivers_station_deleted_status ON drivers(station_id, is_deleted, status)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicles_party_deleted_status ON vehicles(party_id, is_deleted, status)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_locations_vehicle_time ON vehicle_locations(vehicle_id, location_time)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_locations_trip_time ON vehicle_locations(trip_id, location_time)")
+        // Backfill only unambiguous historical links: one trip for a vehicle on a date.
+        db.execSQL("""
+            UPDATE vehicle_locations
+            SET trip_id = (
+                SELECT MIN(t.id) FROM vehicle_trips t
+                WHERE t.vehicle_id = vehicle_locations.vehicle_id
+                  AND date(t.trip_date) = date(vehicle_locations.location_time)
+                  AND (SELECT COUNT(*) FROM vehicle_trips same_day WHERE same_day.vehicle_id = t.vehicle_id AND date(same_day.trip_date) = date(t.trip_date)) = 1
+            )
+            WHERE trip_id IS NULL
+              AND EXISTS (
+                SELECT 1 FROM vehicle_trips t2
+                WHERE t2.vehicle_id = vehicle_locations.vehicle_id
+                  AND date(t2.trip_date) = date(vehicle_locations.location_time)
+                  AND (SELECT COUNT(*) FROM vehicle_trips same_day2 WHERE same_day2.vehicle_id = t2.vehicle_id AND date(same_day2.trip_date) = date(t2.trip_date)) = 1
+              )
+        """.trimIndent())
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_trips_vehicle_date ON vehicle_trips(vehicle_id, trip_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_expenses_vehicle_date ON vehicle_expenses(vehicle_id, expense_date)")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicle_expenses_idempotency_key ON vehicle_expenses(idempotency_key) WHERE idempotency_key IS NOT NULL AND trim(idempotency_key) <> ''")
@@ -19283,13 +19302,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
             "vehicle_locations" -> OperationalTableSpec(
                 table = "vehicle_locations",
-                columns = listOf("vehicle_id", "latitude", "longitude", "speed", "heading", "fuel_level", "odometer", "altitude", "accuracy", "location_time"),
+                columns = listOf("vehicle_id", "trip_id", "latitude", "longitude", "speed", "heading", "fuel_level", "odometer", "altitude", "accuracy", "location_time"),
                 required = listOf("vehicle_id", "latitude", "longitude"),
                 searchColumns = listOf("vehicle_id", "location_time"),
                 softDeleted = false,
                 hasUpdatedAt = false,
                 hasStatus = false,
-                numericColumns = listOf("latitude", "longitude", "speed", "heading", "fuel_level", "odometer", "altitude", "accuracy")
+                numericColumns = listOf("vehicle_id", "trip_id", "latitude", "longitude", "speed", "heading", "fuel_level", "odometer", "altitude", "accuracy")
             )
             "vehicle_trips" -> OperationalTableSpec(
                 table = "vehicle_trips",
@@ -19983,6 +20002,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 validateFleetNumber(data, "longitude", -180.0, 180.0)
                 listOf("speed", "fuel_level", "odometer", "accuracy").forEach { validateFleetNumber(data, it) }
                 validateFleetNumber(data, "altitude", -Double.MAX_VALUE)
+                if (data.has("trip_id") && !data.isNull("trip_id")) validateFleetNumber(data, "trip_id", 1.0)
                 validateFleetDate(data, "location_time")
             }
             "vehicle_trips" -> {
@@ -20710,6 +20730,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             "vehicle_locations", "vehicle_trips", "vehicle_expenses", "vehicle_maintenance", "vehicle_insurance" -> {
                 requireVehicleInStation(db, data.optLong("vehicle_id", 0L), stationId)
+                if (screenKey == "vehicle_locations") {
+                    val tripId = data.optLong("trip_id", 0L)
+                    if (tripId > 0L) {
+                        db.rawQuery("SELECT 1 FROM vehicle_trips t JOIN vehicles v ON v.id=t.vehicle_id JOIN parties p ON p.id=v.party_id WHERE t.id=? AND t.vehicle_id=? AND p.station_id=? AND p.is_deleted=0 LIMIT 1", arrayOf(tripId.toString(), data.optLong("vehicle_id").toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الرحلة المرتبطة لا تتبع المركبة أو المحطة الحالية" } }
+                    }
+                }
                 if (screenKey == "vehicle_trips") {
                     val driverId = data.optLong("driver_id", 0L)
                     if (driverId > 0L) requireDriverInStation(db, driverId, stationId)
@@ -21595,12 +21621,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        latest.latitude AS last_latitude, latest.longitude AS last_longitude,
                        latest.speed AS last_speed, latest.odometer AS last_odometer,
                        latest.location_time AS last_location_time,
+                       (SELECT COUNT(*) FROM vehicle_locations linked_location WHERE linked_location.trip_id=t.id) AS linked_location_count,
                        CASE WHEN COALESCE(t.fuel_consumed, 0) > 0 THEN ROUND(COALESCE(t.distance_km, 0) / t.fuel_consumed, 2) END AS efficiency_km_per_liter,
                        CASE WHEN t.start_odometer IS NOT NULL AND t.end_odometer IS NOT NULL THEN ROUND(t.end_odometer - t.start_odometer, 2) END AS odometer_delta
                 $joins
                 LEFT JOIN vehicle_locations latest ON latest.id = (
                     SELECT location.id FROM vehicle_locations location
-                    WHERE location.vehicle_id = t.vehicle_id
+                    WHERE location.vehicle_id = t.vehicle_id AND location.trip_id = t.id
                     ORDER BY datetime(location.location_time) DESC, location.id DESC LIMIT 1
                 )
                 $whereSql
@@ -21679,6 +21706,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        COALESCE(d.driver_code, '') AS driver_code, COALESCE(d.full_name_ar, d.full_name, '') AS driver_name,
                        latest.latitude AS last_latitude, latest.longitude AS last_longitude, latest.speed AS last_speed,
                        latest.location_time AS last_location_time,
+                       (SELECT COUNT(*) FROM vehicle_locations linked_location WHERE linked_location.trip_id=t.id) AS linked_location_count,
                        CASE WHEN COALESCE(t.fuel_consumed, 0) > 0 THEN ROUND(COALESCE(t.distance_km, 0) / t.fuel_consumed, 2) END AS efficiency_km_per_liter
                 FROM vehicle_trips t
                 JOIN vehicles v ON v.id = t.vehicle_id AND v.is_deleted = 0
@@ -21686,7 +21714,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 LEFT JOIN drivers d ON d.id = t.driver_id AND d.station_id = ? AND d.is_deleted = 0
                 LEFT JOIN vehicle_locations latest ON latest.id = (
                     SELECT location.id FROM vehicle_locations location
-                    WHERE location.vehicle_id = t.vehicle_id
+                    WHERE location.vehicle_id = t.vehicle_id AND location.trip_id = t.id
                     ORDER BY datetime(location.location_time) DESC, location.id DESC LIMIT 1
                 )
                 WHERE t.id = ?
@@ -22212,6 +22240,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val id = writeDb.insertOrThrow(spec.table, null, values)
             if (id > 0) {
                 if (screenKey == "vehicle_trips") {
+                    // Associate persisted GPS readings from the trip date with the newly created trip.
+                    // No synthetic GPS points are created; only existing readings are linked.
+                    writeDb.execSQL("UPDATE vehicle_locations SET trip_id=? WHERE vehicle_id=? AND trip_id IS NULL AND date(location_time)=date(?)", arrayOf(id, data.optLong("vehicle_id"), data.optString("trip_date")))
+
                     writeDb.insertOrThrow("vehicle_trip_events", null, ContentValues().apply {
                         put("uuid", UUID.randomUUID().toString()); put("trip_id", id); put("event_type", "created")
                         put("event_note", "تم إنشاء سجل الرحلة"); put("occurred_at", getCurrentDateTime())
@@ -22282,6 +22314,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val whereArgs = if (directScope) arrayOf(id.toString(), stationId.toString()) else arrayOf(id.toString())
             val rows = writableDatabase.update(spec.table, values, where, whereArgs)
             if (rows > 0) {
+                if (screenKey == "vehicle_trips") {
+                    writableDatabase.execSQL("UPDATE vehicle_locations SET trip_id=? WHERE vehicle_id=? AND trip_id IS NULL AND date(location_time)=date(?)", arrayOf(id, data.optLong("vehicle_id"), data.optString("trip_date")))
+                }
                 if (screenKey == "attendance") logOperationalAudit(screenKey, "update", id, actorId, oldRow, operationalRowJson(screenKey, id))
                 else { logActivity("system", "update_${spec.table}", "تحديث سجل ${spec.table}: $id"); if (screenKey == "employees") logEmployeeAudit(id, "update", actorId, oldRow, operationalRowJson(screenKey, id), "") }
             }
