@@ -156,12 +156,22 @@ class DatabaseHelperCompatibilityMatrixTest {
             context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
             try {
                 val before = DatabaseHelper.getInstance(context).writableDatabase
-                val partyId = before.rawQuery(
-                    "SELECT id FROM parties WHERE COALESCE(is_deleted, 0)=0 ORDER BY id LIMIT 1", null
+                // Fresh databases intentionally contain no operational customers.
+                // Create a minimal FK-valid owner instead of depending on user data.
+                val partyTypeId = before.rawQuery(
+                    "SELECT id FROM party_types WHERE COALESCE(is_deleted, 0)=0 ORDER BY id LIMIT 1", null
                 ).use { cursor ->
-                    assertTrue("fixture requires a seeded party to own a vehicle", cursor.moveToFirst())
+                    assertTrue("fixture requires the built-in party type reference row", cursor.moveToFirst())
                     cursor.getLong(0)
                 }
+                val partyId = before.insertOrThrow("parties", null, android.content.ContentValues().apply {
+                    put("uuid", "V64-MIGRATION-PARTY-$legacyVersion")
+                    put("party_code", "V64-PARTY-$legacyVersion")
+                    put("party_type_id", partyTypeId)
+                    put("commercial_name", "Fleet migration fixture $legacyVersion")
+                    put("is_active", 1)
+                    put("is_deleted", 0)
+                })
                 val vehicleId = before.insertOrThrow("vehicles", null, android.content.ContentValues().apply {
                     put("uuid", "V64-MIGRATION-VEHICLE-$legacyVersion")
                     put("vehicle_code", "V64-$legacyVersion")
