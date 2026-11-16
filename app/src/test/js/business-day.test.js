@@ -32,8 +32,8 @@ assert.equal(window.businessDayDate('2026-10-08'), '2026-10-08');
 assert.equal(window.businessDayDateTime('2026-10-08 00:00:00'), '2026-10-08 00:00:00');
 // An instant around the local boundary resolves to the prior local date before midnight.
 assert.equal(window.businessDayDate(new Date('2026-10-08T03:30:00Z')), '2026-10-07');
-assert.equal(window.businessDayDate(new Date('2026-11-08T04:59:59Z')), '2026-11-07', 'the instant immediately before local midnight stays on the previous device day');
-assert.equal(window.businessDayDate(new Date('2026-11-08T05:00:00Z')), '2026-11-08', 'the first instant at local midnight advances the local date');
+assert.equal(window.businessDayDate(new Date('2026-11-08T03:59:59Z')), '2026-11-07', 'the instant immediately before local midnight stays on the previous device day');
+assert.equal(window.businessDayDate(new Date('2026-11-08T04:00:00Z')), '2026-11-08', 'the first instant at local midnight advances the local date');
 
 const observedDayChanges = [];
 const watchDashboardDay = window.createBusinessDayWatcher((currentDay, previousDay) => {

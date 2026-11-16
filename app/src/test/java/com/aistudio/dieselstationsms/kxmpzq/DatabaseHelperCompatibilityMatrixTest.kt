@@ -147,6 +147,87 @@ class DatabaseHelperCompatibilityMatrixTest {
         }
     }
 
+    @Test
+    @Config(sdk = [26])
+    fun upgradesV62AndV63FleetSchemaWithoutLosingLegacyLocationRows() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        listOf(62, 63).forEach { legacyVersion ->
+            DatabaseHelper.closeInstance()
+            context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
+            try {
+                val before = DatabaseHelper.getInstance(context).writableDatabase
+                val partyId = before.rawQuery(
+                    "SELECT id FROM parties WHERE COALESCE(is_deleted, 0)=0 ORDER BY id LIMIT 1", null
+                ).use { cursor ->
+                    assertTrue("fixture requires a seeded party to own a vehicle", cursor.moveToFirst())
+                    cursor.getLong(0)
+                }
+                val vehicleId = before.insertOrThrow("vehicles", null, android.content.ContentValues().apply {
+                    put("uuid", "V64-MIGRATION-VEHICLE-$legacyVersion")
+                    put("vehicle_code", "V64-$legacyVersion")
+                    put("party_id", partyId)
+                    put("plate_number", "MIG-$legacyVersion")
+                    put("status", "active")
+                    put("is_deleted", 0)
+                })
+                val locationId = before.insertOrThrow("vehicle_locations", null, android.content.ContentValues().apply {
+                    put("uuid", "V64-MIGRATION-LOCATION-$legacyVersion")
+                    put("vehicle_id", vehicleId)
+                    put("latitude", 15.3694)
+                    put("longitude", 44.1910)
+                    put("speed", 27.5)
+                    put("location_time", "2026-11-16 08:15:00")
+                })
+                assertTrue(locationId > 0L)
+                before.beginTransaction()
+                try {
+                    before.execSQL("""
+                        CREATE TABLE vehicle_locations_v64_legacy AS
+                        SELECT id, uuid, vehicle_id, latitude, longitude, speed, heading,
+                               fuel_level, odometer, altitude, accuracy, location_time, created_at
+                        FROM vehicle_locations
+                    """.trimIndent())
+                    before.execSQL("DROP TABLE vehicle_locations")
+                    before.execSQL("ALTER TABLE vehicle_locations_v64_legacy RENAME TO vehicle_locations")
+                    before.version = legacyVersion
+                    before.setTransactionSuccessful()
+                } finally {
+                    before.endTransaction()
+                }
+                DatabaseHelper.closeInstance()
+                val upgraded = DatabaseHelper.getInstance(context).writableDatabase
+                assertEquals("legacy V$legacyVersion must reach V64", 64, upgraded.version)
+                val columns = upgraded.rawQuery("PRAGMA table_info(vehicle_locations)", null).use { cursor ->
+                    buildSet { while (cursor.moveToNext()) add(cursor.getString(1)) }
+                }
+                assertTrue("V64 must add vehicle_locations.trip_id", "trip_id" in columns)
+                upgraded.rawQuery(
+                    "SELECT latitude, longitude, speed FROM vehicle_locations WHERE id=?",
+                    arrayOf(locationId.toString())
+                ).use { cursor ->
+                    assertTrue("legacy location row must survive V$legacyVersion -> V64", cursor.moveToFirst())
+                    assertEquals(15.3694, cursor.getDouble(0), 0.000001)
+                    assertEquals(44.1910, cursor.getDouble(1), 0.000001)
+                    assertEquals(27.5, cursor.getDouble(2), 0.000001)
+                }
+                val fleetIndex = upgraded.rawQuery(
+                    "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_vehicle_locations_trip_time'",
+                    null
+                ).use { it.moveToFirst() }
+                assertTrue("fleet trip/time index must be restored", fleetIndex)
+                val integrity = upgraded.rawQuery("PRAGMA integrity_check", null).use {
+                    assertTrue(it.moveToFirst()); it.getString(0)
+                }
+                assertEquals("ok", integrity)
+                val fkViolations = upgraded.rawQuery("PRAGMA foreign_key_check", null).use { it.count }
+                assertEquals("upgrade must not introduce foreign-key violations", 0, fkViolations)
+            } finally {
+                DatabaseHelper.closeInstance()
+                context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
+            }
+        }
+    }
+
     private fun assertSmsAttemptSchema(database: SQLiteDatabase) {
         listOf(
             "claimed_at" to "claim timestamp must be persisted",

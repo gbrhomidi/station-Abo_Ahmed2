@@ -57,7 +57,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 63
+        const val VERSION = 64
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -322,6 +322,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     61 -> CustomerReceivablesRepository.ensureSchema(db)
                 }
             }
+            // V64 repairs Fleet schema for every legacy database, including installations already at V63.
+            // Keep this inside the upgrade transaction so DDL and data backfills roll back together.
+            ensureFleetSchema(db)
+            ensureFleetPermissions(db)
             ensureModule006Schema(db)
             ensureModule007Schema(db)
             ensureModule010Schema(db)
