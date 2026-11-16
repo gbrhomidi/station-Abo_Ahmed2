@@ -10,6 +10,12 @@ import java.time.ZonedDateTime
 class BusinessDayBoundaryTest {
 
     @Test
+    fun defaultBusinessZoneIsTheYemenStationZone() {
+        assertEquals("Asia/Aden", BusinessDay.DEFAULT_ZONE_ID)
+        assertEquals("Asia/Aden", BusinessDay.context().zoneId)
+    }
+
+    @Test
     fun localMidnightIsAnExactBoundaryInTheSelectedStationDeviceZone() {
         val zone = ZoneId.of("Asia/Aden")
         val beforeMidnight = ZonedDateTime.of(2026, 11, 7, 23, 59, 59, 0, zone)

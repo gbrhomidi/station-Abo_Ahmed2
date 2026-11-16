@@ -34341,7 +34341,10 @@ private fun postSalesReversalJournal(
      * prefix, making a Saudi-local day appear to begin at 03:00.
      */
     private fun migrateV43ToV44(db: SQLiteDatabase) {
-        val localZone = ZoneId.systemDefault()
+        // Historical operational data was created in the station's Yemen timezone.
+        // Never derive this one-time legacy conversion from the handset/CI timezone.
+        // Later database versions are deliberately not reinterpreted or rewritten.
+        val localZone = ZoneId.of(BusinessDay.DEFAULT_ZONE_ID)
         val fixes = mutableListOf<Triple<Long, String, String>>()
         db.rawQuery(
             "SELECT id, created_at, business_day FROM sales_transactions WHERE created_at IS NOT NULL AND business_day IS NOT NULL AND business_day = substr(created_at, 1, 10)",
@@ -34368,7 +34371,7 @@ private fun postSalesReversalJournal(
                 statement.close()
             }
         }
-        Log.d(TAG, "Migrated sales business days to device-local date V43 -> V44; corrected ${fixes.size} rows")
+        Log.d(TAG, "Migrated sales business days to station-local date V43 -> V44; corrected ${fixes.size} rows")
     }
 
     private fun databaseUtcTimestampToLocalDate(value: String, zoneId: ZoneId): String? {
