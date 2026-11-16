@@ -253,21 +253,26 @@ class PricingV41RobolectricTest {
     }
 
     @Test
-    fun businessDayDefaultsToDeviceTimeZoneAndRollsAtLocalMidnight() {
-        val previousTimeZone = TimeZone.getDefault()
-        try {
-            TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"))
-            val beforeMidnight = ZonedDateTime.parse("2026-10-07T23:59:59-04:00[America/New_York]")
-            val midnight = ZonedDateTime.parse("2026-10-08T00:00:00-04:00[America/New_York]")
+    fun businessDayUsesYemenDefaultAndSupportsExplicitNewYorkZone() {
+        val beforeMidnight = ZonedDateTime.parse("2026-10-07T23:59:59-04:00[America/New_York]")
+        val midnight = ZonedDateTime.parse("2026-10-08T00:00:00-04:00[America/New_York]")
 
-            assertEquals("America/New_York", BusinessDay.DEFAULT_ZONE_ID)
-            assertEquals("2026-10-07", BusinessDay.currentDate(now = beforeMidnight))
-            assertEquals("2026-10-08", BusinessDay.currentDate(now = midnight))
-            assertEquals("2026-10-08 00:00:00", BusinessDay.context(now = midnight).startDateTime)
-            assertEquals("America/New_York", BusinessDay.context(now = midnight).zoneId)
-        } finally {
-            TimeZone.setDefault(previousTimeZone)
-        }
+        // The station's operating date must not follow the handset or CI timezone.
+        assertEquals("Asia/Aden", BusinessDay.DEFAULT_ZONE_ID)
+        assertEquals("Asia/Aden", BusinessDay.context().zoneId)
+        assertEquals(
+            beforeMidnight.withZoneSameInstant(java.time.ZoneId.of("Asia/Aden")).toLocalDate().toString(),
+            BusinessDay.currentDate(now = beforeMidnight)
+        )
+
+        // Other regions remain supported when explicitly selected by the caller.
+        assertEquals("2026-10-07", BusinessDay.currentDate(zoneId = "America/New_York", now = beforeMidnight))
+        assertEquals("2026-10-08", BusinessDay.currentDate(zoneId = "America/New_York", now = midnight))
+        assertEquals(
+            "2026-10-08 00:00:00",
+            BusinessDay.context(zoneId = "America/New_York", now = midnight).startDateTime
+        )
+        assertEquals("America/New_York", BusinessDay.context(zoneId = "America/New_York", now = midnight).zoneId)
     }
 
     @Test
