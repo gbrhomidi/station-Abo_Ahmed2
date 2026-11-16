@@ -168,10 +168,17 @@ function installBridge(window) {
   assert.strictEqual(deleted[1], 301, 'delete must send a numeric native record ID');
 
   window.document.getElementById('reportButton').click();
+  window.document.getElementById('reportMinDistance').value = '10';
+  window.document.getElementById('reportRouteState').value = 'calculated';
   window.document.getElementById('generateReportButton').click();
   await new Promise(resolve => setTimeout(resolve, 25));
-  assert.ok(calls.some(call => call[0] === 'generateVehicleTripReport'), 'report must use existing Android report contract');
+  const reportCall = calls.filter(call => call[0] === 'generateVehicleTripReport').at(-1);
+  assert.ok(reportCall, 'report must use existing Android report contract');
+  assert.strictEqual(reportCall[1].min_distance_km, 10, 'report distance filter must reach SQLite');
+  assert.strictEqual(reportCall[1].route_state, 'calculated', 'report route filter must reach SQLite');
   assert.ok(!window.document.querySelector('#reportContent img'), 'report output must escape untrusted route text');
+  assert.ok(window.document.querySelector('.report-summary'), 'report must render summary KPIs');
+  assert.ok(window.document.querySelectorAll('.report-table th').length >= 10, 'report table must expose operational route metrics');
   console.log('trips workspace bridge regression tests: PASS (25 assertion groups)');
   dom.window.close();
 })().catch(error => { console.error(error.stack || error); process.exitCode = 1; });

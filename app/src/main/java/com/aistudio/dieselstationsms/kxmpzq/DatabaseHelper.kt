@@ -19312,7 +19312,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
             "vehicle_trips" -> OperationalTableSpec(
                 table = "vehicle_trips",
-                columns = listOf("vehicle_id", "driver_id", "trip_date", "start_location", "end_location", "start_latitude", "start_longitude", "end_latitude", "end_longitude", "distance_km", "fuel_consumed", "fuel_cost", "start_odometer", "end_odometer", "route_distance_km", "route_duration_seconds", "route_provider", "route_encoded_polyline", "route_calculated_at", "trip_purpose", "notes"),
+                columns = listOf("vehicle_id", "driver_id", "trip_date", "trip_status", "start_location", "end_location", "start_latitude", "start_longitude", "end_latitude", "end_longitude", "distance_km", "fuel_consumed", "fuel_cost", "start_odometer", "end_odometer", "route_distance_km", "route_duration_seconds", "route_provider", "route_encoded_polyline", "route_calculated_at", "trip_purpose", "notes"),
                 required = listOf("vehicle_id", "trip_date"),
                 searchColumns = listOf("start_location", "end_location", "trip_purpose", "notes"),
                 softDeleted = false,
@@ -21009,6 +21009,37 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    /** Additional report-only predicates for the vehicle-trips screen. */
+    private fun appendVehicleTripReportFilters(
+        params: JSONObject,
+        where: MutableList<String>,
+        args: MutableList<String>
+    ) {
+        fun nonNegative(key: String): Double? {
+            val raw = params.optString(key, "").trim()
+            if (raw.isBlank()) return null
+            return raw.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
+                ?: throw IllegalArgumentException("قيمة $key غير صالحة")
+        }
+        val distanceExpression = "COALESCE(NULLIF(route_distance_km, 0), distance_km, 0)"
+        val status = params.optString("status", params.optString("trip_status", "")).trim().lowercase(Locale.US)
+        if (status.isNotBlank()) {
+            require(status in setOf("scheduled", "active", "completed", "cancelled")) { "حالة الرحلة غير مدعومة" }
+            where += "trip_status = ?"
+            args += status
+        }
+        nonNegative("min_distance_km")?.let { where += "$distanceExpression >= ?"; args += it.toString() }
+        nonNegative("max_distance_km")?.let { where += "$distanceExpression <= ?"; args += it.toString() }
+        nonNegative("min_fuel_cost")?.let { where += "COALESCE(fuel_cost, 0) >= ?"; args += it.toString() }
+        nonNegative("max_fuel_cost")?.let { where += "COALESCE(fuel_cost, 0) <= ?"; args += it.toString() }
+        when (params.optString("route_state", "").trim().lowercase(Locale.US)) {
+            "", "all" -> Unit
+            "calculated" -> where += "(COALESCE(route_distance_km, 0) > 0 OR NULLIF(TRIM(COALESCE(route_provider, '')), '') IS NOT NULL)"
+            "missing" -> where += "COALESCE(route_distance_km, 0) <= 0 AND NULLIF(TRIM(COALESCE(route_provider, '')), '') IS NULL"
+            else -> throw IllegalArgumentException("حالة المسار غير مدعومة")
+        }
+    }
+
     fun getOperationalRows(screenKey: String, params: JSONObject = JSONObject()): JSONArray {
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         dbLock.lock()
@@ -21108,6 +21139,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 if (screenKey == "vehicle_trips") {
                     val driverId = params.optLong("driver_id", 0L)
                     if (driverId > 0L) { where += "driver_id = ?"; args += driverId.toString() }
+                    appendVehicleTripReportFilters(params, where, args)
                 }
             }
             val dateColumn = when (screenKey) {
@@ -21248,6 +21280,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 if (screenKey == "vehicle_trips") {
                     val driverId = params.optLong("driver_id", 0L)
                     if (driverId > 0L) { where += "driver_id = ?"; args += driverId.toString() }
+                    appendVehicleTripReportFilters(params, where, args)
                 }
             }
             val dateColumn = when (screenKey) {
