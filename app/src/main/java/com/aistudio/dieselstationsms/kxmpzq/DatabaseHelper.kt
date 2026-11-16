@@ -1189,7 +1189,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_expenses_vehicle_date ON vehicle_expenses(vehicle_id, expense_date)")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicle_expenses_idempotency_key ON vehicle_expenses(idempotency_key) WHERE idempotency_key IS NOT NULL AND trim(idempotency_key) <> ''")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_parties_location_station ON parties(station_id, latitude, longitude)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_station_location_date ON deliveries(station_id, latitude, longitude, delivery_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_trips_route_vehicle_date ON vehicle_trips(vehicle_id, trip_date, start_latitude, end_latitude)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_expenses_trip ON vehicle_expenses(trip_id, vehicle_id)")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicle_expenses_station_idempotency ON vehicle_expenses(idempotency_key) WHERE idempotency_key IS NOT NULL AND TRIM(idempotency_key) <> ''")
@@ -1983,6 +1982,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         // from free-form legacy location text.
         ensureColumn(db, "deliveries", "latitude", "REAL")
         ensureColumn(db, "deliveries", "longitude", "REAL")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_station_location_date ON deliveries(station_id, latitude, longitude, delivery_date)")
         ensureColumn(db, "deliveries", "location_accuracy", "REAL")
         ensureColumn(db, "deliveries", "location_source", "TEXT")
         ensureColumn(db, "deliveries", "route_distance_km", "REAL")
