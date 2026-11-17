@@ -2457,9 +2457,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 row.map { it as Any }.toTypedArray()
             )
         }
-        val rolesReadWrite = listOf(1L, 2L, 3L)
-        val rolesReadAudit = listOf(1L, 2L, 3L, 5L)
-        val rolesDelete = listOf(1L, 2L)
+        // Legacy databases may have a partial/custom role catalogue. Never insert
+        // role_permissions rows for hard-coded role IDs that do not exist: that
+        // turns an otherwise valid schema upgrade into a foreign-key failure.
+        val existingRoleIds = mutableSetOf<Long>()
+        db.rawQuery("SELECT id FROM roles", null).use { cursor ->
+            while (cursor.moveToNext()) existingRoleIds += cursor.getLong(0)
+        }
+        val rolesReadWrite = listOf(1L, 2L, 3L).filter { it in existingRoleIds }
+        val rolesReadAudit = listOf(1L, 2L, 3L, 5L).filter { it in existingRoleIds }
+        val rolesDelete = listOf(1L, 2L).filter { it in existingRoleIds }
         val grants = listOf(
             "contracts.read" to rolesReadAudit,
             "contracts.create" to rolesReadWrite,
