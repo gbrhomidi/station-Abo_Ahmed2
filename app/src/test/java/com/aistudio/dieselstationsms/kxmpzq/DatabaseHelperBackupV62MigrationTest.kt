@@ -54,6 +54,18 @@ class DatabaseHelperBackupV62MigrationTest {
             val upgraded = DatabaseHelper.getInstance(context).writableDatabase
             assertEquals("the actual V62 Android helper upgrade must finish at V65",
                 DatabaseHelper.VERSION, upgraded.version)
+            assertEquals("permission migration must not create grants for missing role foreign keys", 0,
+                scalarInt(upgraded, """
+                    SELECT COUNT(*) FROM role_permissions rp
+                    LEFT JOIN roles r ON r.id = rp.role_id
+                    WHERE r.id IS NULL
+                """.trimIndent()))
+            assertEquals("contract permissions must be granted only to roles present in this legacy database", 0,
+                scalarInt(upgraded, """
+                    SELECT COUNT(*) FROM role_permissions rp
+                    JOIN permissions p ON p.id = rp.permission_id
+                    WHERE p.permission_code LIKE 'contracts.%' AND rp.role_id NOT IN (1, 2)
+                """.trimIndent()))
             expectedV62Tables.forEach { table ->
                 assertEquals("all 247 original V62 tables must survive upgrade: $table", 1,
                     scalarInt(upgraded, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='$table'"))
