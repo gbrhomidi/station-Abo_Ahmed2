@@ -2493,7 +2493,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("can_export", if (permissionCode.endsWith("export")) 1 else 0)
                     put("can_print", if (permissionCode.endsWith("export") || permissionCode.endsWith("audit")) 1 else 0)
                     put("can_approve", 0)
-                    put("created_by", 1)
+                    // Contract grants are global and migration-created. Do not
+                    // fabricate optional FK references to station, branch, or user
+                    // rows that may not exist in a valid legacy database.
+                    putNull("station_id")
+                    putNull("branch_id")
+                    putNull("created_by")
                 }
                 db.insertWithOnConflict("role_permissions", null, values, SQLiteDatabase.CONFLICT_IGNORE)
             }
