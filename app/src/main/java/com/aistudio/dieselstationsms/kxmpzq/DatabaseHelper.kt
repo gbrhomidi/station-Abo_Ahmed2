@@ -62,6 +62,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
+        // Persist timestamps and business-date values in the station's canonical clock.
+        private const val BUSINESS_TIME_ZONE_ID = "Asia/Aden"
         // Must stay aligned with payments.payment_type CHECK in createFinanceTables().
         private val VALID_PAYMENT_TYPES = setOf(
             "cash", "cheque", "bank_transfer", "credit_card", "mobile_money", "loyalty_points"
@@ -75,7 +77,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private fun getDateFormat(): SimpleDateFormat {
             var df = dateFormatThreadLocal.get()
             if (df == null) {
-                df = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                df = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).apply {
+                    timeZone = TimeZone.getTimeZone(BUSINESS_TIME_ZONE_ID)
+                }
                 dateFormatThreadLocal.set(df)
             }
             return df
@@ -84,7 +88,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         fun getDateOnlyFormat(): SimpleDateFormat {
             var df = dateOnlyFormatThreadLocal.get()
             if (df == null) {
-                df = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                df = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply {
+                    timeZone = TimeZone.getTimeZone(BUSINESS_TIME_ZONE_ID)
+                }
                 dateOnlyFormatThreadLocal.set(df)
             }
             return df
@@ -93,7 +99,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private fun getTimeFormat(): SimpleDateFormat {
             var df = timeFormatThreadLocal.get()
             if (df == null) {
-                df = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                df = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).apply {
+                    timeZone = TimeZone.getTimeZone(BUSINESS_TIME_ZONE_ID)
+                }
                 timeFormatThreadLocal.set(df)
             }
             return df
