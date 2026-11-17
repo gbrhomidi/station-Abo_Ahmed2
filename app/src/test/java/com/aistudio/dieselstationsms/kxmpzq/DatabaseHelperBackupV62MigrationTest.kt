@@ -19,10 +19,9 @@ import java.util.Base64
 import java.util.zip.GZIPInputStream
 
 /**
- * Exercises the real Android SQLiteOpenHelper upgrade path with exact V62 DDL for
- * the 12 fleet/accounting tables in scope, extracted from the user's backup. The
- * remaining empty reference schema is created by the production helper. Only DDL
- * is stored in test resources; every operational row is synthetic.
+ * Exercises the real Android SQLiteOpenHelper upgrade path against the complete
+ * backup-derived V62 schema (247 tables, indexes and triggers). Only DDL is stored
+ * in test resources; every operational row and required reference row is synthetic.
  */
 @RunWith(RobolectricTestRunner::class)
 class DatabaseHelperBackupV62MigrationTest {
@@ -216,9 +215,16 @@ class DatabaseHelperBackupV62MigrationTest {
                 put("uuid", "TEST-PARTY-TYPE-UUID"); put("type_code", "TEST")
                 put("type_name", "Migration Test Type"); put("is_active", 1); put("is_deleted", 0)
             })
+            // ensureTaskPermissions grants task permissions to legacy role IDs 1 and 2.
+            // Seed both FK parents explicitly so this sanitized database models the
+            // production migration precondition instead of failing on a missing role.
             before.insertOrThrow("roles", null, ContentValues().apply {
-                put("uuid", "TEST-ROLE-UUID"); put("role_code", "TEST-ROLE")
-                put("role_name", "Migration Test Role"); put("is_active", 1); put("is_deleted", 0)
+                put("id", 1L); put("uuid", "TEST-ROLE-UUID-1"); put("role_code", "TEST-ADMIN")
+                put("role_name", "Migration Test Admin"); put("is_active", 1); put("is_deleted", 0)
+            })
+            before.insertOrThrow("roles", null, ContentValues().apply {
+                put("id", 2L); put("uuid", "TEST-ROLE-UUID-2"); put("role_code", "TEST-SUPER-ADMIN")
+                put("role_name", "Migration Test Super Admin"); put("is_active", 1); put("is_deleted", 0)
             })
             before.setTransactionSuccessful()
         } finally {
