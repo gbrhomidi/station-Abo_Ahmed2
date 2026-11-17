@@ -191,7 +191,7 @@ class DatabaseHelperBackupV62MigrationTest {
                 // the file. The backup-derived manifest also contains its DDL, so
                 // verify the platform-created table rather than executing CREATE twice.
                 if (rank == 0 && item.getString("name") == "android_metadata") {
-                    assertTrue(tableExists(before, "android_metadata"))
+                    assertEquals(1, scalarInt(before, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='android_metadata'"))
                     continue
                 }
                 before.execSQL(item.getString("sql"))
