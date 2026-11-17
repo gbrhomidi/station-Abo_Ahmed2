@@ -34,6 +34,8 @@ class DatabaseHelperBackupV62MigrationTest {
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
         try {
             val databaseFile = createSanitizedV62Database(context)
+        val expectedV62Tables = readV62SchemaManifest().getJSONArray("table_names").let { array -> (0 until array.length()).map { array.getString(it) }.toSet() }
+        assertEquals("full V62 table inventory", 247, expectedV62Tables.size)
             val legacy = SQLiteDatabase.openDatabase(databaseFile.path, null, SQLiteDatabase.OPEN_READONLY)
             try {
                 assertEquals(62, legacy.version)
@@ -53,6 +55,10 @@ class DatabaseHelperBackupV62MigrationTest {
             val upgraded = DatabaseHelper.getInstance(context).writableDatabase
             assertEquals("the actual V62 Android helper upgrade must finish at V65",
                 DatabaseHelper.VERSION, upgraded.version)
+            expectedV62Tables.forEach { table ->
+                assertEquals("all 247 original V62 tables must survive upgrade: $table", 1,
+                    scalarInt(upgraded, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='$table'"))
+            }
 
             val locationColumns = tableColumns(upgraded, "vehicle_locations")
             assertTrue("V62 -> V65 must add vehicle_locations.trip_id", "trip_id" in locationColumns)
@@ -140,56 +146,48 @@ class DatabaseHelperBackupV62MigrationTest {
     }
 
     private fun createSanitizedV62Database(context: Context): File {
-        // Use the production helper to create all non-target reference tables, then
-        // replace the 12 migration-surface tables with their exact V62 DDL extracted
-        // from the real backup. No rows from the backup are copied into this fixture.
-        val before = DatabaseHelper.getInstance(context).writableDatabase
         val databaseFile = context.getDatabasePath(DatabaseHelper.DATABASE_NAME)
-        val selectedTables = listOf(
-            "parties", "vehicles", "drivers", "vehicle_trips", "vehicle_locations",
-            "vehicle_expenses", "vehicle_trip_events", "deliveries", "sales_transactions",
-            "payments", "fuel_sales", "stock_movements"
-        )
-        selectedTables.forEach { table ->
-            assertEquals("fresh helper database must not contain operational rows in $table",
-                0, scalarInt(before, "SELECT COUNT(*) FROM $table"))
-        }
-
-        val resourceName = "db/v62_migration_surface_schema.b64"
-        val resource = javaClass.classLoader?.getResourceAsStream(resourceName)
-            ?: throw AssertionError("Missing backup-derived V62 schema resource: $resourceName")
-        val encoded = resource.bufferedReader(StandardCharsets.US_ASCII).use { it.readText().trim() }
-        val compressed = Base64.getDecoder().decode(encoded)
-        val manifestText = GZIPInputStream(ByteArrayInputStream(compressed)).bufferedReader(StandardCharsets.UTF_8).use {
-            it.readText()
-        }
-        val manifest = JSONObject(manifestText)
+        databaseFile.parentFile?.mkdirs()
+        val manifest = readV62SchemaManifest()
         assertEquals(62, manifest.getInt("source_user_version"))
         assertEquals(247, manifest.getInt("source_table_count"))
-        assertEquals("0ee6b902f96d6789c81771cb1781d3839afc3a9fc03094abc8f3bb12987dab47",
-            manifest.getString("source_backup_table_schema_sha256"))
-        assertEquals("eb732d57e4bf5a70e839342ac2f33d0993bf49f5ef6cb9558cc9df53af5d7579",
-            manifest.getString("selected_table_schema_sha256"))
+        assertEquals(361, manifest.getInt("source_index_count"))
+        assertEquals(13, manifest.getInt("source_trigger_count"))
+        val objects = manifest.getJSONArray("objects")
+        val canonicalSchema = buildString {
+            for (index in 0 until objects.length()) {
+                val item = objects.getJSONObject(index)
+                append(item.getString("type")).append('|')
+                    .append(item.getString("name")).append('|')
+                    .append(item.getString("table_name")).append('|')
+                    .append(item.getString("sql")).append('\n')
+            }
+        }.trimEnd()
+        val schemaHash = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(canonicalSchema.toByteArray(StandardCharsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        assertEquals(manifest.getString("source_schema_sha256"), schemaHash)
 
+        val before = context.openOrCreateDatabase(DatabaseHelper.DATABASE_NAME, Context.MODE_PRIVATE, null)
         before.setForeignKeyConstraintsEnabled(false)
         before.beginTransaction()
         try {
-            // Drop child tables first. Foreign-key enforcement is disabled only while
-            // replacing the empty fixture schema, never during the production upgrade.
-            listOf(
-                "payments", "fuel_sales", "deliveries", "vehicle_trip_events",
-                "vehicle_locations", "vehicle_expenses", "vehicle_trips", "drivers",
-                "vehicles", "sales_transactions", "stock_movements", "parties"
-            ).forEach { before.execSQL("DROP TABLE IF EXISTS `$it`") }
-
-            val objects = manifest.getJSONArray("objects")
-            assertEquals(selectedTables.size, objects.length())
+            var previousRank = -1
             for (index in 0 until objects.length()) {
                 val item = objects.getJSONObject(index)
-                assertTrue("unexpected table in backup-derived schema: ${item.getString("name")}",
-                    item.getString("name") in selectedTables)
+                val rank = when (item.getString("type")) {
+                    "table" -> 0
+                    "index" -> 1
+                    "trigger" -> 2
+                    else -> throw AssertionError("Unexpected V62 schema object type")
+                }
+                assertTrue("V62 DDL objects must be ordered tables/indexes/triggers", rank >= previousRank)
+                previousRank = rank
                 before.execSQL(item.getString("sql"))
             }
+            assertEquals(247, scalarInt(before, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))
+            assertEquals(361, scalarInt(before, "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%'"))
+            assertEquals(13, scalarInt(before, "SELECT COUNT(*) FROM sqlite_master WHERE type='trigger'"))
             before.version = 62
             before.setTransactionSuccessful()
         } finally {
@@ -197,6 +195,24 @@ class DatabaseHelperBackupV62MigrationTest {
         }
         before.setForeignKeyConstraintsEnabled(true)
 
+        before.beginTransaction()
+        try {
+            before.insertOrThrow("stations", null, ContentValues().apply {
+                put("uuid", "TEST-STATION-UUID"); put("station_code", "TEST-STATION")
+                put("station_name", "Migration Test Station"); put("is_deleted", 0)
+            })
+            before.insertOrThrow("party_types", null, ContentValues().apply {
+                put("uuid", "TEST-PARTY-TYPE-UUID"); put("type_code", "TEST")
+                put("type_name", "Migration Test Type"); put("is_active", 1); put("is_deleted", 0)
+            })
+            before.insertOrThrow("roles", null, ContentValues().apply {
+                put("uuid", "TEST-ROLE-UUID"); put("role_code", "TEST-ROLE")
+                put("role_name", "Migration Test Role"); put("is_active", 1); put("is_deleted", 0)
+            })
+            before.setTransactionSuccessful()
+        } finally {
+            before.endTransaction()
+        }
         val stationId = before.rawQuery(
             "SELECT id FROM stations WHERE COALESCE(is_deleted,0)=0 ORDER BY id LIMIT 1", null
         ).use { cursor -> assertTrue("fresh database requires a station reference", cursor.moveToFirst()); cursor.getLong(0) }
@@ -319,8 +335,20 @@ class DatabaseHelperBackupV62MigrationTest {
             before.endTransaction()
         }
         before.version = 62
+        before.close()
         DatabaseHelper.closeInstance()
         return databaseFile
+    }
+
+
+    private fun readV62SchemaManifest(): JSONObject {
+        val resourceName = "db/v62_full_schema_fixture.b64"
+        val resource = javaClass.classLoader?.getResourceAsStream(resourceName)
+            ?: throw AssertionError("Missing full V62 schema fixture: $resourceName")
+        val encoded = resource.bufferedReader(StandardCharsets.US_ASCII).use { it.readText().trim() }
+        val compressed = Base64.getDecoder().decode(encoded)
+        val manifestText = GZIPInputStream(ByteArrayInputStream(compressed)).bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+        return JSONObject(manifestText)
     }
 
     private fun tableColumns(database: SQLiteDatabase, table: String): Set<String> =
