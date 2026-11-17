@@ -1,5 +1,6 @@
 package com.aistudio.dieselstationsms.kxmpzq
 
+import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
@@ -9,6 +10,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.TimeZone
 
 @RunWith(RobolectricTestRunner::class)
 class DatabaseHelperCompatibilityMatrixTest {
@@ -235,6 +237,154 @@ class DatabaseHelperCompatibilityMatrixTest {
                 DatabaseHelper.closeInstance()
                 context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
             }
+        }
+    }
+
+    @Test
+    @Config(sdk = [26])
+    fun upgradesV43BusinessDaysInYemenAndPreservesFinancialHistory() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val previousTimeZone = TimeZone.getDefault()
+        DatabaseHelper.closeInstance()
+        context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"))
+            val before = DatabaseHelper.getInstance(context).writableDatabase
+            val userId = before.insertOrThrow("users", null, ContentValues().apply {
+                put("uuid", "V44-TZ-USER")
+                put("username", "v44_tz_user")
+                put("password_hash", "test-only")
+                put("full_name", "V44 timezone fixture")
+                put("role_id", 1)
+                put("station_id", 1)
+                put("is_deleted", 0)
+            })
+            val shiftId = before.insertOrThrow("shifts", null, ContentValues().apply {
+                put("uuid", "V44-TZ-SHIFT")
+                put("shift_code", "V44-TZ-SHIFT")
+                put("station_id", 1)
+                put("shift_date", "2026-11-16")
+                put("shift_type", "night")
+                put("start_time", "2026-11-16 20:00:00")
+                put("cashier_id", userId)
+            })
+            val saleId = before.insertOrThrow("sales_transactions", null, ContentValues().apply {
+                put("uuid", "V44-TZ-SALE")
+                put("sale_code", "V44-TZ-SALE")
+                put("invoice_number", "V44-TZ-INVOICE")
+                put("station_id", 1)
+                put("shift_id", shiftId)
+                put("cashier_id", userId)
+                put("subtotal", 100.0)
+                put("gross_amount", 100.0)
+                put("net_amount", 100.0)
+                put("paid_amount", 25.0)
+                put("remaining_amount", 75.0)
+                put("created_at", "2026-11-16 21:30:00")
+                put("business_day", "2026-11-16")
+            })
+            val paymentId = before.insertOrThrow("payments", null, ContentValues().apply {
+                put("uuid", "V44-TZ-PAYMENT")
+                put("payment_code", "V44-TZ-PAYMENT")
+                put("station_id", 1)
+                put("sale_id", saleId)
+                put("payment_type", "cash")
+                put("payment_method", "cash")
+                put("amount", 25.0)
+                put("created_at", "2026-11-16 21:45:00")
+                put("business_day", "2026-11-16")
+            })
+            val fuelSaleId = before.insertOrThrow("fuel_sales", null, ContentValues().apply {
+                put("uuid", "V44-TZ-FUEL")
+                put("sale_id", saleId)
+                put("station_id", 1)
+                put("quantity", 10.0)
+                put("price_per_liter", 10.0)
+                put("total_amount", 100.0)
+                put("created_at", "2026-11-16 22:00:00")
+                put("business_day", "2026-11-16")
+            })
+            val fuelSaleWithExplicitDateId = before.insertOrThrow("fuel_sales", null, ContentValues().apply {
+                put("uuid", "V44-TZ-FUEL-EXPLICIT")
+                put("sale_id", saleId)
+                put("station_id", 1)
+                put("quantity", 2.0)
+                put("price_per_liter", 10.0)
+                put("total_amount", 20.0)
+                put("sale_date", "2026-11-16")
+                put("created_at", "2026-11-16 22:00:00")
+                put("business_day", "2026-11-16")
+            })
+            val stockMovementId = before.insertOrThrow("stock_movements", null, ContentValues().apply {
+                put("uuid", "V44-TZ-STOCK")
+                put("movement_type", "in")
+                put("quantity", 3.0)
+                put("created_at", "2026-11-16 22:15:00")
+                put("business_day", "2026-11-16")
+            })
+            val stockMovementWithExplicitDateId = before.insertOrThrow("stock_movements", null, ContentValues().apply {
+                put("uuid", "V44-TZ-STOCK-EXPLICIT")
+                put("movement_type", "in")
+                put("quantity", 4.0)
+                put("movement_date", "2026-11-16")
+                put("created_at", "2026-11-16 22:15:00")
+                put("business_day", "2026-11-16")
+            })
+            val countsBefore = listOf("sales_transactions", "payments", "fuel_sales", "stock_movements").associateWith { table ->
+                before.rawQuery("SELECT COUNT(*) FROM $table", null).use { assertTrue(it.moveToFirst()); it.getInt(0) }
+            }
+            before.version = 43
+            DatabaseHelper.closeInstance()
+
+            val upgraded = DatabaseHelper.getInstance(context).writableDatabase
+            assertEquals("V43 must upgrade through all migrations to the current schema", DatabaseHelper.VERSION, upgraded.version)
+
+            fun businessDay(table: String, id: Long): String =
+                upgraded.rawQuery("SELECT business_day FROM $table WHERE id=?", arrayOf(id.toString())).use {
+                    assertTrue("$table row $id must survive the upgrade", it.moveToFirst())
+                    it.getString(0)
+                }
+
+            assertEquals("2026-11-17", businessDay("sales_transactions", saleId))
+            assertEquals("2026-11-17", businessDay("payments", paymentId))
+            assertEquals("2026-11-17", businessDay("fuel_sales", fuelSaleId))
+            assertEquals("2026-11-16", businessDay("fuel_sales", fuelSaleWithExplicitDateId))
+            assertEquals("2026-11-17", businessDay("stock_movements", stockMovementId))
+            assertEquals("2026-11-16", businessDay("stock_movements", stockMovementWithExplicitDateId))
+
+            upgraded.rawQuery(
+                "SELECT created_at, net_amount, paid_amount, remaining_amount FROM sales_transactions WHERE id=?",
+                arrayOf(saleId.toString())
+            ).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("2026-11-16 21:30:00", it.getString(0))
+                assertEquals(100.0, it.getDouble(1), 0.000001)
+                assertEquals(25.0, it.getDouble(2), 0.000001)
+                assertEquals(75.0, it.getDouble(3), 0.000001)
+            }
+            upgraded.rawQuery(
+                "SELECT created_at, amount, sale_id FROM payments WHERE id=?",
+                arrayOf(paymentId.toString())
+            ).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("2026-11-16 21:45:00", it.getString(0))
+                assertEquals(25.0, it.getDouble(1), 0.000001)
+                assertEquals(saleId, it.getLong(2))
+            }
+            countsBefore.forEach { (table, count) ->
+                val countAfter = upgraded.rawQuery("SELECT COUNT(*) FROM $table", null).use {
+                    assertTrue(it.moveToFirst()); it.getInt(0)
+                }
+                assertEquals("$table row count must be preserved by V43 migration", count, countAfter)
+            }
+            assertEquals("ok", upgraded.rawQuery("PRAGMA integrity_check", null).use {
+                assertTrue(it.moveToFirst()); it.getString(0)
+            })
+            assertEquals(0, upgraded.rawQuery("PRAGMA foreign_key_check", null).use { it.count })
+        } finally {
+            DatabaseHelper.closeInstance()
+            context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
+            TimeZone.setDefault(previousTimeZone)
         }
     }
 

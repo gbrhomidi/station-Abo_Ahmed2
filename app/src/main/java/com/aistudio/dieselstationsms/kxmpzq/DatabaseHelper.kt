@@ -34336,42 +34336,57 @@ private fun postSalesReversalJournal(
     }
 
     /**
-     * V44 aligns historical sales days with the device's local calendar day.
-     * SQLite CURRENT_TIMESTAMP is UTC; V41 previously copied only its date
-     * prefix, making a Saudi-local day appear to begin at 03:00.
+     * V44 repairs legacy business_day values that V41 backfilled from a UTC
+     * created_at date prefix. The station operating zone is fixed to Yemen;
+     * handset and CI timezone settings must never influence this migration.
+     *
+     * Only rows whose business_day still equals the UTC date prefix are eligible.
+     * For fuel_sales and stock_movements, rows with an explicit sale_date or
+     * movement_date are deliberately excluded because those are authoritative
+     * operational dates, not timestamp fallbacks.
      */
     private fun migrateV43ToV44(db: SQLiteDatabase) {
-        // Historical operational data was created in the station's Yemen timezone.
-        // Never derive this one-time legacy conversion from the handset/CI timezone.
-        // Later database versions are deliberately not reinterpreted or rewritten.
-        val localZone = ZoneId.of(BusinessDay.DEFAULT_ZONE_ID)
-        val fixes = mutableListOf<Triple<Long, String, String>>()
-        db.rawQuery(
-            "SELECT id, created_at, business_day FROM sales_transactions WHERE created_at IS NOT NULL AND business_day IS NOT NULL AND business_day = substr(created_at, 1, 10)",
-            null
-        ).use { cursor ->
-            while (cursor.moveToNext()) {
-                val createdAt = cursor.getString(1)
-                val storedDay = cursor.getString(2)
-                val localDay = databaseUtcTimestampToLocalDate(createdAt, localZone) ?: continue
-                if (localDay != storedDay) fixes += Triple(cursor.getLong(0), storedDay, localDay)
-            }
-        }
-        if (fixes.isNotEmpty()) {
-            val statement = db.compileStatement("UPDATE sales_transactions SET business_day=? WHERE id=? AND business_day=?")
-            try {
-                fixes.forEach { (id, oldDay, localDay) ->
-                    statement.clearBindings()
-                    statement.bindString(1, localDay)
-                    statement.bindLong(2, id)
-                    statement.bindString(3, oldDay)
-                    statement.executeUpdateDelete()
+        val stationZone = ZoneId.of(BusinessDay.DEFAULT_ZONE_ID)
+        val targets = listOf(
+            "sales_transactions" to "",
+            "payments" to "",
+            "fuel_sales" to " AND sale_date IS NULL",
+            "stock_movements" to " AND movement_date IS NULL"
+        )
+        var correctedRows = 0
+        targets.forEach { (tableName, sourceDateGuard) ->
+            val fixes = mutableListOf<Triple<Long, String, String>>()
+            db.rawQuery(
+                "SELECT id, created_at, business_day FROM $tableName " +
+                    "WHERE created_at IS NOT NULL AND business_day IS NOT NULL " +
+                    "AND business_day = substr(created_at, 1, 10)$sourceDateGuard",
+                null
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val createdAt = cursor.getString(1)
+                    val storedDay = cursor.getString(2)
+                    val stationDay = databaseUtcTimestampToLocalDate(createdAt, stationZone) ?: continue
+                    if (stationDay != storedDay) fixes += Triple(cursor.getLong(0), storedDay, stationDay)
                 }
-            } finally {
-                statement.close()
+            }
+            if (fixes.isNotEmpty()) {
+                val statement = db.compileStatement(
+                    "UPDATE $tableName SET business_day=? WHERE id=? AND business_day=?"
+                )
+                try {
+                    fixes.forEach { (id, oldDay, stationDay) ->
+                        statement.clearBindings()
+                        statement.bindString(1, stationDay)
+                        statement.bindLong(2, id)
+                        statement.bindString(3, oldDay)
+                        correctedRows += statement.executeUpdateDelete()
+                    }
+                } finally {
+                    statement.close()
+                }
             }
         }
-        Log.d(TAG, "Migrated sales business days to station-local date V43 -> V44; corrected ${fixes.size} rows")
+        Log.d(TAG, "Migrated legacy UTC-prefixed business days to Asia/Aden V43 -> V44; corrected $correctedRows rows")
     }
 
     private fun databaseUtcTimestampToLocalDate(value: String, zoneId: ZoneId): String? {
