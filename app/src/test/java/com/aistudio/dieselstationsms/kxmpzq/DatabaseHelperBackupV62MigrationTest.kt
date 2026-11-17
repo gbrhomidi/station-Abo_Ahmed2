@@ -201,12 +201,20 @@ class DatabaseHelperBackupV62MigrationTest {
         val partyTypeId = before.rawQuery(
             "SELECT id FROM party_types WHERE COALESCE(is_deleted,0)=0 ORDER BY id LIMIT 1", null
         ).use { cursor -> assertTrue("fresh database requires a party type reference", cursor.moveToFirst()); cursor.getLong(0) }
-        val cashierId = before.rawQuery(
-            "SELECT id FROM users WHERE COALESCE(is_deleted,0)=0 ORDER BY id LIMIT 1", null
-        ).use { cursor -> assertTrue("fresh database requires a cashier reference", cursor.moveToFirst()); cursor.getLong(0) }
+        val roleId = before.rawQuery(
+            "SELECT id FROM roles WHERE COALESCE(is_deleted,0)=0 ORDER BY id LIMIT 1", null
+        ).use { cursor -> assertTrue("fresh database requires a role reference", cursor.moveToFirst()); cursor.getLong(0) }
 
         before.beginTransaction()
         try {
+            // The production onCreate fixture has roles/stations but intentionally no
+            // cashier account; create a deterministic synthetic cashier for FK-valid rows.
+            val cashierId = before.insertOrThrow("users", null, ContentValues().apply {
+                put("uuid", "TEST-CASHIER-UUID"); put("username", "v62_migration_cashier")
+                put("password_hash", "test-only-not-a-password"); put("full_name", "Migration Test Cashier")
+                put("full_name_ar", "أمين صندوق اختبار الترحيل")
+                put("role_id", roleId); put("station_id", stationId); put("is_deleted", 0)
+            })
             val partyId = before.insertOrThrow("parties", null, ContentValues().apply {
                 put("uuid", "TEST-PARTY-UUID"); put("party_code", "TEST-PARTY")
                 put("party_type_id", partyTypeId); put("station_id", stationId)
