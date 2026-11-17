@@ -57,7 +57,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 64
+        const val VERSION = 65
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -320,6 +320,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     58 -> DebtDueDateRepository.migrateV58ToV59(db)
                     59 -> DebtDueDateRepository.migrateV59ToV60(db)
                     61 -> CustomerReceivablesRepository.ensureSchema(db)
+                    64 -> migrateV64ToV65(db)
                 }
             }
             // V64 repairs Fleet schema for every legacy database, including installations already at V63.
@@ -34337,15 +34338,23 @@ private fun postSalesReversalJournal(
 
     /**
      * V44 repairs legacy business_day values that V41 backfilled from a UTC
-     * created_at date prefix. The station operating zone is fixed to Yemen;
-     * handset and CI timezone settings must never influence this migration.
+     * created_at date prefix. V65 repeats the same idempotent repair for
+     * installations that had already advanced to V64 before this fix shipped.
      *
      * Only rows whose business_day still equals the UTC date prefix are eligible.
      * For fuel_sales and stock_movements, rows with an explicit sale_date or
-     * movement_date are deliberately excluded because those are authoritative
-     * operational dates, not timestamp fallbacks.
+     * movement_date are excluded because those are authoritative operational
+     * dates, not timestamp fallbacks. Invalid or missing timestamps are preserved.
      */
     private fun migrateV43ToV44(db: SQLiteDatabase) {
+        migrateLegacyBusinessDaysToStationZone(db, "V43 -> V44")
+    }
+
+    private fun migrateV64ToV65(db: SQLiteDatabase) {
+        migrateLegacyBusinessDaysToStationZone(db, "V64 -> V65")
+    }
+
+    private fun migrateLegacyBusinessDaysToStationZone(db: SQLiteDatabase, migration: String) {
         val stationZone = ZoneId.of(BusinessDay.DEFAULT_ZONE_ID)
         val targets = listOf(
             "sales_transactions" to "",
@@ -34386,7 +34395,7 @@ private fun postSalesReversalJournal(
                 }
             }
         }
-        Log.d(TAG, "Migrated legacy UTC-prefixed business days to Asia/Aden V43 -> V44; corrected $correctedRows rows")
+        Log.d(TAG, "Migrated legacy UTC-prefixed business days to Asia/Aden ($migration); corrected $correctedRows rows")
     }
 
     private fun databaseUtcTimestampToLocalDate(value: String, zoneId: ZoneId): String? {

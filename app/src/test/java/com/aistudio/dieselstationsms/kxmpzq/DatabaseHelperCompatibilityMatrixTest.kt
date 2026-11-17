@@ -208,7 +208,7 @@ class DatabaseHelperCompatibilityMatrixTest {
                 }
                 DatabaseHelper.closeInstance()
                 val upgraded = DatabaseHelper.getInstance(context).writableDatabase
-                assertEquals("legacy V$legacyVersion must reach V64", 64, upgraded.version)
+                assertEquals("legacy V$legacyVersion must reach the current database schema", DatabaseHelper.VERSION, upgraded.version)
                 val columns = upgraded.rawQuery("PRAGMA table_info(vehicle_locations)", null).use { cursor ->
                     buildSet { while (cursor.moveToNext()) add(cursor.getString(1)) }
                 }
@@ -376,6 +376,50 @@ class DatabaseHelperCompatibilityMatrixTest {
                     assertTrue(it.moveToFirst()); it.getInt(0)
                 }
                 assertEquals("$table row count must be preserved by V43 migration", count, countAfter)
+            }
+            assertEquals("ok", upgraded.rawQuery("PRAGMA integrity_check", null).use {
+                assertTrue(it.moveToFirst()); it.getString(0)
+            })
+            assertEquals(0, upgraded.rawQuery("PRAGMA foreign_key_check", null).use { it.count })
+        } finally {
+            DatabaseHelper.closeInstance()
+            context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
+            TimeZone.setDefault(previousTimeZone)
+        }
+    }
+
+    @Test
+    @Config(sdk = [26])
+    fun upgradesAlreadyInstalledV64DatabaseWithLegacyUtcPaymentDay() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val previousTimeZone = TimeZone.getDefault()
+        DatabaseHelper.closeInstance()
+        context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"))
+            val before = DatabaseHelper.getInstance(context).writableDatabase
+            val paymentId = before.insertOrThrow("payments", null, ContentValues().apply {
+                put("uuid", "V65-EXISTING-PAYMENT")
+                put("payment_code", "V65-EXISTING-PAYMENT")
+                put("payment_type", "cash")
+                put("payment_method", "cash")
+                put("amount", 42.5)
+                put("created_at", "2026-11-16 21:45:00")
+                put("business_day", "2026-11-16")
+            })
+            before.version = 64
+            DatabaseHelper.closeInstance()
+
+            val upgraded = DatabaseHelper.getInstance(context).writableDatabase
+            assertEquals(DatabaseHelper.VERSION, upgraded.version)
+            upgraded.rawQuery(
+                "SELECT business_day, created_at, amount FROM payments WHERE id=?",
+                arrayOf(paymentId.toString())
+            ).use {
+                assertTrue("legacy payment must survive V64 -> V65", it.moveToFirst())
+                assertEquals("2026-11-17", it.getString(0))
+                assertEquals("2026-11-16 21:45:00", it.getString(1))
+                assertEquals(42.5, it.getDouble(2), 0.000001)
             }
             assertEquals("ok", upgraded.rawQuery("PRAGMA integrity_check", null).use {
                 assertTrue(it.moveToFirst()); it.getString(0)
