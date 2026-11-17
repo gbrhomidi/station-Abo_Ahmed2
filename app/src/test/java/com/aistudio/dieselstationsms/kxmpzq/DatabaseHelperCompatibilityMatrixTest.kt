@@ -450,7 +450,7 @@ class DatabaseHelperCompatibilityMatrixTest {
             ).use {
                 assertTrue("zone-less local payment must survive V64 -> V65", it.moveToFirst())
                 assertEquals("2026-11-16", it.getString(0))
-                assertEquals("2026-11-16T21:45:00Z", it.getString(1))
+                assertEquals("2026-11-16 21:45:00", it.getString(1))
                 assertEquals(17.25, it.getDouble(2), 0.000001)
             }
             upgraded.rawQuery(
@@ -459,7 +459,7 @@ class DatabaseHelperCompatibilityMatrixTest {
             ).use {
                 assertTrue("legacy payment must survive V64 -> V65", it.moveToFirst())
                 assertEquals("2026-11-17", it.getString(0))
-                assertEquals("2026-11-16 21:45:00", it.getString(1))
+                assertEquals("2026-11-16T21:45:00Z", it.getString(1))
                 assertEquals(42.5, it.getDouble(2), 0.000001)
             }
             assertEquals("ok", upgraded.rawQuery("PRAGMA integrity_check", null).use {

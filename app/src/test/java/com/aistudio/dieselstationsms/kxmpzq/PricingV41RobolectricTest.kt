@@ -374,7 +374,7 @@ class PricingV41RobolectricTest {
                 }
             )
 
-            val utcBackfilledRow = insertSale("V44-UTC-1", "2026-10-07 21:00:00", "2026-10-07")
+            val utcBackfilledRow = insertSale("V44-UTC-1", "2026-10-07T21:00:00Z", "2026-10-07")
             val alreadyCorrectRow = insertSale("V44-LOCAL-1", "2026-10-07 21:00:00", "2026-10-08")
             val sameCalendarDayRow = insertSale("V44-SAME-1", "2026-10-07 20:30:00", "2026-10-07")
             db.version = 43
