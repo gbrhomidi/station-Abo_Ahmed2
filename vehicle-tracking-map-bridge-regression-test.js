@@ -48,7 +48,7 @@ async function wait() { await new Promise(resolve => setTimeout(resolve, 30)); }
   assert.match(routeFunction, /ORDER BY location_time ASC, id ASC/, 'route order must follow the composite vehicle-time index');
   assert.doesNotMatch(routeFunction, /date\(location_time\)|datetime\(location_time\)/, 'route query must not wrap the indexed timestamp column');
   assert.match(databaseSource, /override fun onCreate\(db: SQLiteDatabase\)[\s\S]{0,500}createAllTables\(db\)[\s\S]{0,250}ensureFleetSchema\(db\)/, 'fresh databases must run the additive fleet schema before any vehicle screen query');
-  const schemaVersionLine = databaseSource.split('\\n').find(line => line.includes('const val VERSION ='));
+  const schemaVersionLine = databaseSource.split(String.fromCharCode(10)).find(line => line.includes('const val VERSION ='));
   const schemaVersion = Number(schemaVersionLine?.split('=').pop()?.trim());
   assert.ok(Number.isFinite(schemaVersion) && schemaVersion > 63,
     'SQLite schema version must remain newer than V62/V63 so those installations execute onUpgrade');
