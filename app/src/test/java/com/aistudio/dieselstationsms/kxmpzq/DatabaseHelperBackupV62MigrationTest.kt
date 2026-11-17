@@ -137,6 +137,10 @@ class DatabaseHelperBackupV62MigrationTest {
             }
             assertEquals(3, scalarInt(reopened,
                 "SELECT COUNT(*) FROM vehicle_trip_events WHERE event_type='created'"))
+            expectedV62Tables.forEach { table ->
+                assertEquals("all original V62 tables must remain after closing and reopening: $table", 1,
+                    scalarInt(reopened, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='$table'"))
+            }
             assertEquals("ok", scalarString(reopened, "PRAGMA integrity_check"))
             assertEquals(0, reopened.rawQuery("PRAGMA foreign_key_check", null).use { it.count })
         } finally {
