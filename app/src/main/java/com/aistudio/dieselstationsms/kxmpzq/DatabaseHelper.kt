@@ -256,6 +256,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureApprovalControlSchema(db)
             ensurePricingV42Schema(db)
             ensureOpenCompatibilitySchema(db)
+            ensurePhase1WetStockSchema(db)
             DebtDueDateRepository.ensureSchema(db)
             SupplierPayablesRepository.ensureSchema(db)
             CustomerReceivablesRepository.ensureSchema(db)
@@ -343,6 +344,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensurePricingV41Schema(db)
             ensurePricingV42Schema(db)
             ensureOpenCompatibilitySchema(db)
+            ensurePhase1WetStockSchema(db)
             DebtDueDateRepository.ensureSchema(db)
             SupplierPayablesRepository.ensureSchema(db)
             CustomerReceivablesRepository.ensureSchema(db)
@@ -1898,6 +1900,86 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_sale_adjustments_station_date ON fuel_sale_adjustments(station_id, created_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_damaged_products_sale ON damaged_products(sale_id, sale_item_id, source_type)")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS uq_damaged_products_idempotency ON damaged_products(station_id, idempotency_key) WHERE idempotency_key IS NOT NULL AND idempotency_key <> ''")
+    }
+
+    /**
+     * Phase 1 wet-stock schema. The repository already has legacy tanks/shifts
+     * tables, so this migration is deliberately additive and keeps their IDs.
+     */
+    private fun ensurePhase1WetStockSchema(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS tank_readings (
+                reading_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tank_id INTEGER NOT NULL REFERENCES tanks(id),
+                reading_at TEXT NOT NULL,
+                current_liters REAL NOT NULL CHECK(current_liters >= 0),
+                temperature_c REAL,
+                water_level_mm REAL,
+                source TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('ATG','dip','manual')),
+                recorded_by INTEGER REFERENCES users(id)
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_phase1_tank_readings_tank_at ON tank_readings(tank_id, reading_at DESC)")
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS inventory_reason_codes (
+                code TEXT PRIMARY KEY,
+                label_ar TEXT NOT NULL,
+                label_en TEXT,
+                applies_to TEXT DEFAULT 'BOTH' CHECK(applies_to IN ('PRODUCT','FUEL','BOTH')),
+                requires_note INTEGER NOT NULL DEFAULT 0
+            )
+        """.trimIndent())
+        val reasons = listOf(
+            arrayOf("LEAKAGE", "تسرب", "Leakage", "FUEL", 1),
+            arrayOf("EVAPORATION", "تبخر", "Evaporation", "FUEL", 1),
+            arrayOf("METER_ERROR", "خطأ قراءة", "Meter error", "FUEL", 1),
+            arrayOf("THEFT", "سرقة", "Theft", "FUEL", 1),
+            arrayOf("PUMP_DIFF", "فرق مضخة", "Pump difference", "FUEL", 1),
+            arrayOf("DIP_VARIANCE", "فرق غمس", "Dip variance", "FUEL", 1),
+            arrayOf("MANUAL_ADJUSTMENT", "تسوية يدوية", "Manual adjustment", "BOTH", 1)
+        )
+        reasons.forEach { reason ->
+            db.execSQL("INSERT OR IGNORE INTO inventory_reason_codes(code,label_ar,label_en,applies_to,requires_note) VALUES(?,?,?,?,?)", reason)
+        }
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS tank_dip_readings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tank_id INTEGER NOT NULL REFERENCES tanks(id),
+                dip_cm REAL NOT NULL CHECK(dip_cm >= 0),
+                dip_liters REAL NOT NULL CHECK(dip_liters >= 0),
+                book_liters REAL NOT NULL,
+                variance_liters REAL NOT NULL,
+                variance_percent REAL NOT NULL,
+                tolerance_exceeded INTEGER NOT NULL DEFAULT 0,
+                reason_code TEXT REFERENCES inventory_reason_codes(code),
+                shift_id INTEGER REFERENCES shifts(id),
+                notes TEXT,
+                created_by INTEGER REFERENCES users(id),
+                created_at TEXT NOT NULL
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_phase1_dip_tank_at ON tank_dip_readings(tank_id, created_at DESC)")
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS shift_reconciliations (
+                recon_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                shift_id INTEGER NOT NULL REFERENCES shifts(id),
+                tank_id INTEGER NOT NULL REFERENCES tanks(id),
+                opening_liters REAL NOT NULL,
+                deliveries_liters REAL NOT NULL DEFAULT 0,
+                sales_liters REAL NOT NULL DEFAULT 0,
+                adjustments_liters REAL NOT NULL DEFAULT 0,
+                expected_liters REAL NOT NULL,
+                actual_liters REAL NOT NULL,
+                variance_liters REAL NOT NULL,
+                variance_pct REAL NOT NULL,
+                cause TEXT REFERENCES inventory_reason_codes(code),
+                notes TEXT,
+                approved_by INTEGER REFERENCES users(id),
+                approved_at TEXT,
+                UNIQUE(shift_id, tank_id)
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_phase1_recon_shift_tank ON shift_reconciliations(shift_id, tank_id)")
     }
 
     private fun ensureFuelSalesSchema(db: SQLiteDatabase) {
@@ -29937,10 +30019,96 @@ private fun postSalesReversalJournal(
                 put("created_at", getCurrentDateTime())
                 put("created_by", data.optInt("created_by", 1))
             }
-            db.insert("tank_level_log", null, cv)
+            val legacyId = db.insertOrThrow("tank_level_log", null, cv)
+            val currentLiters = data.optDouble(
+                "current_liters",
+                data.optDouble("measured_level", data.optDouble("calculated_level", data.optDouble("closing_level", 0.0)))
+            )
+            require(currentLiters >= 0.0) { "مستوى الخزان غير صالح" }
+            db.insertOrThrow("tank_readings", null, ContentValues().apply {
+                put("tank_id", data.optInt("tank_id", 0))
+                put("reading_at", data.optString("reading_at", data.optString("reading_date", getCurrentDateTime())))
+                put("current_liters", currentLiters)
+                if (data.has("temperature_c") || data.has("fuel_temperature")) put("temperature_c", data.optDouble("temperature_c", data.optDouble("fuel_temperature")))
+                if (data.has("water_level_mm")) put("water_level_mm", data.optDouble("water_level_mm"))
+                put("source", data.optString("source", if (data.optString("reading_type", "manual") == "auto") "ATG" else "manual"))
+                val recorderId = data.optInt("created_by", 0)
+                if (recorderId > 0) put("recorded_by", recorderId) else putNull("recorded_by")
+            })
+            legacyId
         } finally {
             dbLock.unlock()
         }
+    }
+
+    /** Phase 1 contract: station-scoped wet-stock page with empty arrays, never mock data. */
+    fun getWetStockPage(stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val tanks = db.rawQuery("""
+                SELECT t.id AS tank_id, t.tank_code, COALESCE(t.tank_name_ar,t.tank_name) AS tank_name,
+                       t.capacity_liters, t.fuel_type_id, COALESCE(r.current_liters,t.current_quantity,0) AS current_liters,
+                       r.temperature_c, r.water_level_mm, r.reading_at,
+                       COALESCE((SELECT COUNT(*) FROM pumps p WHERE p.tank_id=t.id AND p.station_id=t.station_id AND p.status='active' AND p.is_deleted=0),0) AS active_pumps,
+                       COALESCE((SELECT COUNT(*) FROM pumps p WHERE p.tank_id=t.id AND p.station_id=t.station_id AND p.status IN ('maintenance','offline') AND p.is_deleted=0),0) AS inactive_pumps
+                FROM tanks t
+                LEFT JOIN tank_readings r ON r.reading_id=(SELECT r2.reading_id FROM tank_readings r2 WHERE r2.tank_id=t.id ORDER BY r2.reading_at DESC,r2.reading_id DESC LIMIT 1)
+                WHERE t.station_id=? AND t.is_deleted=0 AND t.status<>'retired' AND t.deleted_at IS NULL
+                ORDER BY t.id
+            """.trimIndent(), arrayOf(stationScopeId.toString())).use { cursorToJsonArray(it) }
+            val kpis = JSONObject()
+            db.rawQuery("SELECT COALESCE(SUM(COALESCE(r.current_liters,t.current_quantity)),0), COALESCE(SUM(t.capacity_liters-COALESCE(r.current_liters,t.current_quantity)),0) FROM tanks t LEFT JOIN tank_readings r ON r.reading_id=(SELECT r2.reading_id FROM tank_readings r2 WHERE r2.tank_id=t.id ORDER BY r2.reading_at DESC,r2.reading_id DESC LIMIT 1) WHERE t.station_id=? AND t.is_deleted=0 AND t.status<>'retired'", arrayOf(stationScopeId.toString())).use { c -> if (c.moveToFirst()) { kpis.put("total_liters", c.getDouble(0)); kpis.put("ullage_liters", c.getDouble(1)) } }
+            val shift = getOpenShift(stationScopeId)
+            val shiftId = shift?.optLong("shift_id", shift.optLong("id", 0L)) ?: 0L
+            db.rawQuery("SELECT COALESCE(SUM(quantity),0), COALESCE(SUM(total_amount),0) FROM fuel_sales WHERE station_id=? AND shift_id=? AND is_deleted=0 AND status NOT IN ('cancelled','reversed')", arrayOf(stationScopeId.toString(), shiftId.toString())).use { c -> if (c.moveToFirst()) { kpis.put("current_shift_liters", c.getDouble(0)); kpis.put("current_shift_amount", c.getDouble(1)) } }
+            val recons = db.rawQuery("SELECT sr.*, t.tank_code, COALESCE(t.tank_name_ar,t.tank_name) tank_name FROM shift_reconciliations sr JOIN tanks t ON t.id=sr.tank_id WHERE t.station_id=? ORDER BY sr.recon_id DESC LIMIT 10", arrayOf(stationScopeId.toString())).use { cursorToJsonArray(it) }
+            JSONObject().put("tanks", tanks).put("kpis", kpis).put("last_reconciliations", recons)
+        } finally { dbLock.unlock() }
+    }
+
+    fun getShiftReconciliation(params: JSONObject, stationScopeId: Int): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val where = StringBuilder("t.station_id=?")
+            val args = mutableListOf(stationScopeId.toString())
+            if (params.has("shift_id")) { where.append(" AND sr.shift_id=?"); args += params.optLong("shift_id").toString() }
+            if (params.has("tank_id")) { where.append(" AND sr.tank_id=?"); args += params.optLong("tank_id").toString() }
+            db.rawQuery("SELECT sr.*,t.tank_code,COALESCE(t.tank_name_ar,t.tank_name) tank_name FROM shift_reconciliations sr JOIN tanks t ON t.id=sr.tank_id WHERE $where ORDER BY sr.recon_id DESC", args.toTypedArray()).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun submitShiftReconciliation(data: JSONObject, stationScopeId: Int, actorId: Long): JSONObject {
+        val shiftId = data.optLong("shift_id", 0L); val tankId = data.optLong("tank_id", 0L); val actual = data.optDouble("actual_liters", -1.0)
+        require(shiftId > 0 && tankId > 0 && actual >= 0.0) { "بيانات التسوية غير مكتملة" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            var opening = 0.0; var deliveries = 0.0; var sales = 0.0; var shiftStatus = "open"
+            db.rawQuery("SELECT COALESCE((SELECT current_liters FROM tank_readings WHERE tank_id=? ORDER BY reading_at ASC,reading_id ASC LIMIT 1),t.current_quantity,0),s.status FROM tanks t JOIN shifts s ON s.id=? WHERE t.id=? AND t.station_id=?", arrayOf(tankId.toString(),shiftId.toString(),tankId.toString(),stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "الخزان أو الوردية خارج نطاق المحطة" }; opening=c.getDouble(0); shiftStatus=c.getString(1) }
+            require(shiftStatus != "reconciled") { "الوردية مغلقة التسوية ولا يمكن تعديلها" }
+            db.rawQuery("SELECT COALESCE(SUM(fs.quantity),0) FROM fuel_sales fs JOIN pumps p ON p.id=fs.pump_id WHERE p.tank_id=? AND fs.shift_id=? AND fs.is_deleted=0 AND fs.status NOT IN ('cancelled','reversed')", arrayOf(tankId.toString(),shiftId.toString())).use { c -> if(c.moveToFirst()) sales=c.getDouble(0) }
+            db.rawQuery("SELECT COALESCE(SUM(COALESCE(actual_quantity,delivered_quantity)),0) FROM tank_refills WHERE tank_id=? AND is_deleted=0 AND arrival_date IS NOT NULL AND arrival_date >= (SELECT start_time FROM shifts WHERE id=?) AND arrival_date <= COALESCE((SELECT end_time FROM shifts WHERE id=?),CURRENT_TIMESTAMP)", arrayOf(tankId.toString(),shiftId.toString(),shiftId.toString())).use { c -> if(c.moveToFirst()) deliveries=c.getDouble(0) }
+            val expected = opening + deliveries - sales + data.optDouble("adjustments_liters", 0.0)
+            val variance = actual - expected; val pct = if (expected == 0.0) if (variance == 0.0) 0.0 else 100.0 else variance / expected * 100.0
+            val cause = data.optString("cause", "").takeIf { it.isNotBlank() }; val tolerance = data.optDouble("tolerance_threshold", 0.5)
+            if (kotlin.math.abs(pct) > tolerance) { require(!cause.isNullOrBlank()) { "سبب الفارق مطلوب عند تجاوز التسامح" }; require(data.optString("notes").isNotBlank()) { "ملاحظات الفارق مطلوبة" } }
+            if (cause != null) db.rawQuery("SELECT 1 FROM inventory_reason_codes WHERE code=? AND applies_to IN ('FUEL','BOTH')", arrayOf(cause)).use { c -> require(c.moveToFirst()) { "سبب الفارق غير معتمد" } }
+            val cv = ContentValues().apply { put("shift_id",shiftId);put("tank_id",tankId);put("opening_liters",opening);put("deliveries_liters",deliveries);put("sales_liters",sales);put("adjustments_liters",data.optDouble("adjustments_liters",0.0));put("expected_liters",expected);put("actual_liters",actual);put("variance_liters",variance);put("variance_pct",pct);put("cause",cause);put("notes",data.optString("notes"));put("approved_by",if(actorId>0) actorId else null);put("approved_at",if(actorId>0) getCurrentDateTime() else null) }
+            db.delete("shift_reconciliations", "shift_id=? AND tank_id=?", arrayOf(shiftId.toString(),tankId.toString()))
+            val id = db.insertOrThrow("shift_reconciliations", null, cv)
+            JSONObject().put("recon_id",id).put("expected_liters",expected).put("actual_liters",actual).put("variance_liters",variance).put("variance_pct",pct)
+        } finally { dbLock.unlock() }
+    }
+
+    fun insertDipReading(data: JSONObject, stationScopeId: Int, actorId: Long): JSONObject {
+        val tankId=data.optLong("tank_id",0L); val dipCm=data.optDouble("dip_cm",-1.0); val dipLiters=data.optDouble("dip_liters",-1.0)
+        require(tankId>0 && dipCm>=0.0 && dipLiters>=0.0) { "قراءة الغمس بالسنتيمتر واللتر مطلوبة" }
+        dbLock.lock()
+        return try { val db=writableDatabase; var book=0.0; db.rawQuery("SELECT COALESCE((SELECT current_liters FROM tank_readings WHERE tank_id=? ORDER BY reading_at DESC,reading_id DESC LIMIT 1),current_quantity,0) FROM tanks WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(tankId.toString(),tankId.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "الخزان غير موجود أو خارج نطاق المحطة" };book=c.getDouble(0)}; val variance=dipLiters-book; val pct=if(book==0.0) if(variance==0.0)0.0 else 100.0 else variance/book*100.0; val exceeded=kotlin.math.abs(pct)>data.optDouble("tolerance_threshold",0.5); val reason=data.optString("reason_code","").takeIf{it.isNotBlank()}; if(exceeded){require(reason!=null){"سبب الفارق مطلوب عند تجاوز التسامح"}}; if(reason!=null) db.rawQuery("SELECT 1 FROM inventory_reason_codes WHERE code=? AND applies_to IN ('FUEL','BOTH')",arrayOf(reason)).use{c->require(c.moveToFirst()){ "سبب الفارق غير معتمد" }}; val cv=ContentValues().apply{put("tank_id",tankId);put("dip_cm",dipCm);put("dip_liters",dipLiters);put("book_liters",book);put("variance_liters",variance);put("variance_percent",pct);put("tolerance_exceeded",if(exceeded)1 else 0);if(reason!=null)put("reason_code",reason);val sid=data.optLong("shift_id",0L);if(sid>0)put("shift_id",sid);put("notes",data.optString("notes"));if(actorId>0)put("created_by",actorId);put("created_at",getCurrentDateTime())}; val id=db.insertOrThrow("tank_dip_readings",null,cv); JSONObject().put("dip_id",id).put("variance_liters",variance).put("variance_percent",pct).put("tolerance_exceeded",exceeded)
+        } finally { dbLock.unlock() }
     }
 
     // ========================================================================

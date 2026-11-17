@@ -5309,6 +5309,43 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+        // Phase 1: Wet Stock (additive bridge contract)
+        @JavascriptInterface
+        fun getWetStockPage(jsonData: String = "{}"): String {
+            return try {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            dataResponse(helper.getWetStockPage(requireCurrentStationId(helper, activity.currentUserId)))
+        } catch (e: Exception) { DebugLogger.logException("WetStock", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getShiftReconciliation(jsonData: String = "{}"): String {
+            return try {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            dataResponse(helper.getShiftReconciliation(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(helper, activity.currentUserId)))
+        } catch (e: Exception) { DebugLogger.logException("ShiftReconciliation", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun submitShiftReconciliation(jsonData: String): String {
+            return try {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            dataResponse(helper.submitShiftReconciliation(JSONObject(jsonData), requireCurrentStationId(helper, activity.currentUserId), activity.currentUserId))
+        } catch (e: Exception) { DebugLogger.logException("ShiftReconciliation", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun insertDipReading(jsonData: String): String {
+            return try {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            dataResponse(helper.insertDipReading(JSONObject(jsonData), requireCurrentStationId(helper, activity.currentUserId), activity.currentUserId))
+        } catch (e: Exception) { DebugLogger.logException("DipReading", e); errorResponse(e.message) }
+        }
+
         // ============================================================
         // 9. المخزون
         // ============================================================

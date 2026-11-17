@@ -1430,6 +1430,19 @@
     </div>
    </div>
    <!-- ===== قسم الحركات ===== -->
+   <div class="section" id="wetStockSection">
+    <div class="glass-card">
+     <div class="chart-header"><h3 class="chart-title">🛢️ مخزون الوقود — Wet Stock</h3><button class="apply-btn" onclick="loadWetStock()">🔄 تحديث</button></div>
+     <div class="intelligence-kpis" id="wetStockKpis">
+      <div class="intelligence-mini"><div class="mini-label">إجمالي الوقود</div><div class="mini-value" id="wetTotalLiters">0 لتر</div></div>
+      <div class="intelligence-mini"><div class="mini-label">Ullage</div><div class="mini-value" id="wetUllage">0 لتر</div></div>
+      <div class="intelligence-mini"><div class="mini-label">مبيعات الوردية</div><div class="mini-value" id="wetShiftSales">0 لتر</div></div>
+      <div class="intelligence-mini"><div class="mini-label">قيمة المبيعات</div><div class="mini-value" id="wetShiftAmount">0 ريال</div></div>
+     </div>
+     <div class="table-container"><table class="data-table intelligence-table"><thead><tr><th>الخزان</th><th>السعة (لتر)</th><th>المستوى (لتر)</th><th>Ullage (لتر)</th><th>الحرارة (°م)</th><th>الماء (ملم)</th><th>المضخات</th><th>الإجراء</th></tr></thead><tbody id="wetTankBoard"><tr><td colspan="8">لا توجد بيانات فعلية</td></tr></tbody></table></div>
+    </div>
+    <div class="glass-card"><div class="chart-header"><h3 class="chart-title">تسوية الوردية وقراءات الغمس</h3></div><div class="table-container"><table class="data-table intelligence-table"><thead><tr><th>الوردية</th><th>الخزان</th><th>المتوقع (لتر)</th><th>الفعلي (لتر)</th><th>الفارق (لتر)</th><th>الفارق (%)</th></tr></thead><tbody id="wetReconciliationRows"><tr><td colspan="6">لا توجد تسويات</td></tr></tbody></table></div></div>
+   </div>
    <div class="section" id="movementsSection">
     <div class="glass-card">
      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
@@ -1589,6 +1602,7 @@
      الملخص
     </span>
    </div>
+   <div class="menu-item" data-section="wetStock" onclick="switchSection('wetStock')"><i class="fas fa-gas-pump"></i><span>الوقود</span></div>
    <div class="menu-item" data-section="movements" onclick="switchSection('movements')">
     <i class="fas fa-exchange-alt">
     </i>
@@ -1837,6 +1851,12 @@ function apiCall(action, params = {}) {
             return invokeBridge('getInventoryMovementPage', [json]);
         case 'addProduct':
             return invokeBridge('addProduct', [json]);
+        case 'getWetStockPage':
+            return invokeBridge('getWetStockPage', [json]);
+        case 'getShiftReconciliation':
+            return invokeBridge('getShiftReconciliation', [json]);
+        case 'insertDipReading':
+            return invokeBridge('insertDipReading', [json]);
         default:
             return Promise.reject(new Error('الإجراء غير مدعوم: ' + action));
     }
@@ -1893,6 +1913,7 @@ function switchSection(sectionId) {
     document.querySelector(`.menu-item[data-section="${sectionId}"]`).classList.add('active');
     
     // تحميل البيانات حسب القسم
+    if (sectionId === 'wetStock') loadWetStock();
     if (sectionId === 'movements') loadMovements();
     if (sectionId === 'values') loadStockValues();
     if (sectionId === 'alerts') loadAlerts();
@@ -1935,6 +1956,36 @@ async function loadInitialData() {
     } finally {
         showLoading(false);
     }
+}
+
+async function loadWetStock() {
+    try {
+        const result = await apiCall('getWetStockPage', {});
+        const data = result.data || {}, kpis = data.kpis || {};
+        document.getElementById('wetTotalLiters').textContent = Number(kpis.total_liters || 0).toLocaleString('en') + ' لتر';
+        document.getElementById('wetUllage').textContent = Number(kpis.ullage_liters || 0).toLocaleString('en') + ' لتر';
+        document.getElementById('wetShiftSales').textContent = Number(kpis.current_shift_liters || 0).toLocaleString('en') + ' لتر';
+        document.getElementById('wetShiftAmount').textContent = Number(kpis.current_shift_amount || 0).toLocaleString('en') + ' ريال';
+        const rows = data.tanks || [];
+        document.getElementById('wetTankBoard').innerHTML = rows.length ? rows.map(t => {
+            const ullage = Number(t.capacity_liters || 0) - Number(t.current_liters || 0), water = Number(t.water_level_mm || 0);
+            return `<tr><td>${escapeHtml(t.tank_name || t.tank_code || '')}</td><td>${Number(t.capacity_liters||0).toLocaleString('en')} لتر</td><td>${Number(t.current_liters||0).toLocaleString('en')} لتر</td><td class="${ullage < Number(t.capacity_liters||0)*.2 ? 'risk-critical':''}">${ullage.toLocaleString('en')} لتر</td><td>${t.temperature_c == null ? '—' : Number(t.temperature_c).toFixed(1)+' °م'}</td><td class="${water > 50 ? 'risk-critical':''}">${water.toLocaleString('en')} ملم</td><td>${Number(t.active_pumps||0)} نشطة / ${Number(t.inactive_pumps||0)} متوقفة</td><td><button class="apply-btn" onclick="recordWetDip(${Number(t.tank_id)})">تسجيل غمس</button><button class="apply-btn apply-btn-secondary" onclick="reconcileWetTank(${Number(t.tank_id)})">تسوية</button></td></tr>`;
+        }).join('') : '<tr><td colspan="8">لا توجد خزانات أو قراءات فعلية للمحطة</td></tr>';
+        const recs = data.last_reconciliations || [];
+        document.getElementById('wetReconciliationRows').innerHTML = recs.length ? recs.map(r => `<tr><td>${escapeHtml(r.shift_id)}</td><td>${escapeHtml(r.tank_name || r.tank_code || '')}</td><td>${Number(r.expected_liters||0).toLocaleString('en')} لتر</td><td>${Number(r.actual_liters||0).toLocaleString('en')} لتر</td><td>${Number(r.variance_liters||0).toFixed(2)} لتر</td><td>${Number(r.variance_pct||0).toFixed(2)}%</td></tr>`).join('') : '<tr><td colspan="6">لا توجد تسويات ورديات</td></tr>';
+    } catch (e) { showToast(e.message || 'تعذر تحميل مخزون الوقود', 'error'); }
+}
+
+async function recordWetDip(tankId) {
+    const result = await Swal.fire({ title:'تسجيل غمس', html:'<input id="dipCm" class="swal2-input" type="number" min="0" step="0.01" placeholder="قراءة الغمس (سم)"><input id="dipLiters" class="swal2-input" type="number" min="0" step="0.01" placeholder="الحجم المعاير (لتر)"><input id="dipReason" class="swal2-input" placeholder="سبب الفارق عند الحاجة">', focusConfirm:false, showCancelButton:true, confirmButtonText:'حفظ', cancelButtonText:'إلغاء', preConfirm:() => ({tank_id:tankId,dip_cm:Number(document.getElementById('dipCm').value),dip_liters:Number(document.getElementById('dipLiters').value),reason_code:document.getElementById('dipReason').value}) });
+    if (!result.isConfirmed) return;
+    try { await apiCall('insertDipReading', result.value); showToast('تم تسجيل قراءة الغمس فعليًا', 'success'); await loadWetStock(); } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function reconcileWetTank(tankId) {
+    const result = await Swal.fire({ title:'تسوية الخزان للوردية الحالية', html:'<input id="reconShift" class="swal2-input" type="number" min="1" placeholder="معرف الوردية"><input id="reconActual" class="swal2-input" type="number" min="0" step="0.01" placeholder="القراءة الختامية (لتر)"><input id="reconCause" class="swal2-input" placeholder="سبب الفارق عند الحاجة"><textarea id="reconNotes" class="swal2-textarea" placeholder="ملاحظات التسوية"></textarea>', focusConfirm:false, showCancelButton:true, confirmButtonText:'حفظ التسوية', cancelButtonText:'إلغاء', preConfirm:() => ({shift_id:Number(document.getElementById('reconShift').value),tank_id:tankId,actual_liters:Number(document.getElementById('reconActual').value),cause:document.getElementById('reconCause').value,notes:document.getElementById('reconNotes').value}) });
+    if (!result.isConfirmed) return;
+    try { await invokeBridge('submitShiftReconciliation', [JSON.stringify(result.value)]); showToast('تم احتساب التسوية وحفظ الفارق', 'success'); await loadWetStock(); } catch (e) { showToast(e.message, 'error'); }
 }
 
 function applyPageData(data) {
