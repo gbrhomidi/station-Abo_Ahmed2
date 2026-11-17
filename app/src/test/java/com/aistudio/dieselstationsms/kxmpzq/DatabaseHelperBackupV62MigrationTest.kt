@@ -187,6 +187,13 @@ class DatabaseHelperBackupV62MigrationTest {
                 }
                 assertTrue("V62 DDL objects must be ordered tables/indexes/triggers", rank >= previousRank)
                 previousRank = rank
+                // Android creates this internal table when openOrCreateDatabase() opens
+                // the file. The backup-derived manifest also contains its DDL, so
+                // verify the platform-created table rather than executing CREATE twice.
+                if (rank == 0 && item.getString("name") == "android_metadata") {
+                    assertTrue(tableExists(before, "android_metadata"))
+                    continue
+                }
                 before.execSQL(item.getString("sql"))
             }
             assertEquals(247, scalarInt(before, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))
