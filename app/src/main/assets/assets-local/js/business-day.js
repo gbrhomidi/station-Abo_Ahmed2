@@ -7,10 +7,34 @@
     if (typeof value !== 'string') return null;
     const text = value.trim();
     let match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
-    if (match) return { year:+match[1], month:+match[2], day:+match[3], hour:0, minute:0, second:0 };
-    match = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\\.\d{1,3})?$/.exec(text);
-    if (match) return { year:+match[1], month:+match[2], day:+match[3], hour:+match[4], minute:+match[5], second:+(match[6]||0) };
-    return null;
+    if (!match) {
+      match = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?$/.exec(text);
+    }
+    if (!match) return null;
+    const hasTime = text.length > 10;
+    const valueParts = {
+      year: +match[1], month: +match[2], day: +match[3],
+      hour: hasTime ? +match[4] : 0,
+      minute: hasTime ? +match[5] : 0,
+      second: hasTime ? +(match[6] || 0) : 0
+    };
+    if (valueParts.year < 1 || valueParts.year > 9999 ||
+        valueParts.month < 1 || valueParts.month > 12 ||
+        valueParts.day < 1 || valueParts.day > 31 ||
+        valueParts.hour < 0 || valueParts.hour > 23 ||
+        valueParts.minute < 0 || valueParts.minute > 59 ||
+        valueParts.second < 0 || valueParts.second > 59) {
+      throw new TypeError('Invalid business-day date');
+    }
+    const validationDate = new Date(0);
+    validationDate.setUTCFullYear(valueParts.year, valueParts.month - 1, valueParts.day);
+    validationDate.setUTCHours(valueParts.hour, valueParts.minute, valueParts.second, 0);
+    if (validationDate.getUTCFullYear() !== valueParts.year ||
+        validationDate.getUTCMonth() + 1 !== valueParts.month ||
+        validationDate.getUTCDate() !== valueParts.day) {
+      throw new TypeError('Invalid business-day date');
+    }
+    return valueParts;
   }
 
   function parts(value, timeZone) {
@@ -30,6 +54,10 @@
   root.DEFAULT_BUSINESS_TIME_ZONE = DEFAULT_TIME_ZONE;
   root.businessDayDate = function (date = new Date(), timeZone = DEFAULT_TIME_ZONE) {
     return dateText(parts(date, timeZone));
+  };
+  root.businessDayTime = function (date = new Date(), timeZone = DEFAULT_TIME_ZONE) {
+    const p = parts(date, timeZone);
+    return pad(p.hour) + ':' + pad(p.minute) + ':' + pad(p.second);
   };
   root.businessDayDateTime = function (date = new Date(), timeZone = DEFAULT_TIME_ZONE) {
     const p = parts(date, timeZone);

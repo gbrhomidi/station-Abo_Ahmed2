@@ -2381,9 +2381,10 @@
             const clockEl = document.getElementById('sleepClock');
             if (!clockEl) return;
             try {
-                clockEl.textContent = new Date().toLocaleTimeString('en-GB', { hour12: false });
+                clockEl.textContent = window.businessDayTime(new Date());
             } catch (_) {
-                clockEl.textContent = new Date().toTimeString().split(' ')[0];
+                // Do not silently display the handset's unrelated timezone.
+                clockEl.textContent = '--:--:--';
             }
         }
 
@@ -2393,7 +2394,13 @@
         function applyScheduledTheme() {
             if (String(displaySettings.DISPLAY_DARK_MODE_SCHEDULE_ENABLED) !== '1') return;
             const now = new Date();
-            const cur = now.getHours() * 60 + now.getMinutes();
+            let cur;
+            try {
+                const [stationHour, stationMinute] = window.businessDayTime(now).split(':').map(Number);
+                cur = stationHour * 60 + stationMinute;
+            } catch (_) {
+                return;
+            }
             const [fh, fm] = (displaySettings.DISPLAY_DARK_MODE_FROM || '20:00').split(':').map(Number);
             const [th, tm] = (displaySettings.DISPLAY_DARK_MODE_TO || '07:00').split(':').map(Number);
             const from = (fh || 0) * 60 + (fm || 0);

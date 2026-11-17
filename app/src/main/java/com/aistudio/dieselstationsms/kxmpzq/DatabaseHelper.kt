@@ -34411,6 +34411,85 @@ private fun postSalesReversalJournal(
         return instant.atZone(zoneId).toLocalDate().toString()
     }
 
+    /**
+     * Backfills only missing business_day values from existing source data.
+     *
+     * Explicit sale_date/movement_date values are civil station dates. For created_at,
+     * timestamps with Z/offset are instants converted to Asia/Aden; zone-less valid
+     * wall-clock timestamps retain their date because their timezone is unknown.
+     * Invalid timestamps and rows with no trustworthy date remain undated.
+     */
+    private fun backfillMissingBusinessDaysFromTrustedSources(db: SQLiteDatabase) {
+        val stationZone = ZoneId.of(BusinessDay.DEFAULT_ZONE_ID)
+        val sources = listOf(
+            Triple("sales_transactions", null, "created_at"),
+            Triple("payments", null, "created_at"),
+            Triple("fuel_sales", "sale_date", "created_at"),
+            Triple("stock_movements", "movement_date", "created_at")
+        )
+        var updatedRows = 0
+        sources.forEach { (tableName, sourceDateColumn, timestampColumn) ->
+            val sourceExpression = sourceDateColumn ?: "NULL"
+            val updates = mutableListOf<Pair<Long, String>>()
+            db.rawQuery(
+                "SELECT id, $sourceExpression, $timestampColumn FROM $tableName " +
+                    "WHERE business_day IS NULL OR trim(business_day) = ''",
+                null
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val sourceDate = if (cursor.isNull(1)) null else cursor.getString(1)
+                    val createdAt = if (cursor.isNull(2)) null else cursor.getString(2)
+                    val businessDay = legacyCivilDateFromSource(sourceDate)
+                        ?: legacyTimestampToBusinessDay(createdAt, stationZone)
+                        ?: continue
+                    updates += cursor.getLong(0) to businessDay
+                }
+            }
+            if (updates.isNotEmpty()) {
+                val statement = db.compileStatement(
+                    "UPDATE $tableName SET business_day=? WHERE id=? AND (business_day IS NULL OR trim(business_day) = '')"
+                )
+                try {
+                    updates.forEach { (id, businessDay) ->
+                        statement.clearBindings()
+                        statement.bindString(1, businessDay)
+                        statement.bindLong(2, id)
+                        updatedRows += statement.executeUpdateDelete()
+                    }
+                } finally {
+                    statement.close()
+                }
+            }
+        }
+        Log.d(TAG, "Backfilled " + updatedRows + " missing business_day values from trusted sources in " + stationZone.id)
+    }
+
+    private fun legacyCivilDateFromSource(value: String?): String? {
+        val text = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val dateText = when {
+            text.length == 10 -> text
+            text.length > 10 && (text[10] == 'T' || text[10] == ' ') -> text.substring(0, 10)
+            else -> return null
+        }
+        return IsoCivilDate.parse(dateText)?.toString()
+    }
+
+    private fun legacyTimestampToBusinessDay(value: String?, zoneId: ZoneId): String? {
+        val text = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        databaseUtcTimestampToLocalDate(text, zoneId)?.let { return it }
+        // A malformed value that claims to carry an offset must not be downgraded
+        // to a seemingly valid date prefix.
+        val hasOffsetSuffix = Regex("(?:[zZ]|[+-]\\d{2}:?\\d{2})$").containsMatchIn(text)
+        if (hasOffsetSuffix) return null
+        if (text.length > 10 && (text[10] == 'T' || text[10] == ' ')) {
+            return runCatching {
+                LocalDateTime.parse(text.replace(' ', 'T'), DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                    .toLocalDate().toString()
+            }.getOrNull()
+        }
+        return IsoCivilDate.parse(text)?.toString()
+    }
+
     private fun ensurePricingV42Schema(db: SQLiteDatabase) {
         ensureColumn(db, "price_list_items", "quantity_limit", "REAL")
         ensureColumn(db, "price_list_items", "quantity_sold", "REAL NOT NULL DEFAULT 0")
@@ -34486,10 +34565,10 @@ private fun postSalesReversalJournal(
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payments_business_day ON payments(business_day, created_at)")
         db.execSQL("CREATE TRIGGER IF NOT EXISTS trg_products_sale_price_history AFTER UPDATE OF sale_price ON products\n            WHEN OLD.sale_price IS NOT NEW.sale_price AND NEW.is_deleted = 0\n            BEGIN\n                INSERT INTO price_history(product_id, old_price, new_price, change_date, change_reason, created_by, archived)\n                VALUES(OLD.id, OLD.sale_price, NEW.sale_price, COALESCE(NEW.updated_at, CURRENT_TIMESTAMP), 'تغيير سعر المنتج', NEW.updated_by, 0);\n            END")
         db.execSQL("CREATE TRIGGER IF NOT EXISTS trg_fuel_types_sale_price_history AFTER UPDATE OF default_sale_price ON fuel_types\n            WHEN OLD.default_sale_price IS NOT NEW.default_sale_price AND NEW.is_deleted = 0\n            BEGIN\n                INSERT INTO fuel_price_history(uuid, fuel_type_id, station_id, old_price, new_price, price_kind, change_date, change_reason, created_by, archived)\n                SELECT lower(hex(randomblob(16))), OLD.id, s.id, OLD.default_sale_price, NEW.default_sale_price, 'default', COALESCE(NEW.updated_at, CURRENT_TIMESTAMP), 'تغيير سعر الوقود', NEW.updated_by, 0\n                FROM stations s WHERE s.id IN (SELECT DISTINCT station_id FROM tanks WHERE fuel_type_id = OLD.id AND is_deleted = 0);\n            END")
-        db.execSQL("UPDATE sales_transactions SET business_day = date(COALESCE(created_at, CURRENT_TIMESTAMP), 'localtime') WHERE business_day IS NULL OR trim(business_day) = ''")
-        db.execSQL("UPDATE fuel_sales SET business_day = substr(COALESCE(sale_date, created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
-        db.execSQL("UPDATE payments SET business_day = substr(COALESCE(created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
-        db.execSQL("UPDATE stock_movements SET business_day = substr(COALESCE(movement_date, created_at, CURRENT_TIMESTAMP), 1, 10) WHERE business_day IS NULL OR trim(business_day) = ''")
+        // Do not use SQLite localtime or CURRENT_TIMESTAMP for historical rows:
+        // the handset timezone is not the station timezone, and an absent timestamp
+        // is not evidence of the current business day.
+        backfillMissingBusinessDaysFromTrustedSources(db)
     }
 
     private fun ensureSalesReportIndexes(db: SQLiteDatabase) {

@@ -3,7 +3,9 @@ package com.aistudio.dieselstationsms.kxmpzq
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
+import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
 
@@ -29,6 +31,17 @@ class BusinessDayBoundaryTest {
         assertEquals("2026-11-08 00:00:00", context.startDateTime)
         assertEquals("2026-11-09 00:00:00", context.endDateTime)
         assertEquals(zone.id, context.zoneId)
+    }
+
+    @Test
+    fun newYorkCivilDayRangesRespectBothDstTransitions() {
+        val zone = "America/New_York"
+        val springForward = BusinessDay.range(LocalDate.parse("2026-03-08"), zone)
+        val fallBack = BusinessDay.range(LocalDate.parse("2026-11-01"), zone)
+
+        assertEquals(23L, Duration.between(springForward.first.toInstant(), springForward.second.toInstant()).toHours())
+        assertEquals(25L, Duration.between(fallBack.first.toInstant(), fallBack.second.toInstant()).toHours())
+        assertEquals("2026-11-02 00:00:00", fallBack.second.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))
     }
 
     @Test

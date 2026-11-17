@@ -34,6 +34,11 @@ assert.notEqual(arabicDateFormatter.format(justBeforeMidnight), arabicDateFormat
 // Date-only and timezone-less wall-clock values must not be interpreted as UTC.
 assert.equal(window.businessDayDate('2026-10-08'), '2026-10-08');
 assert.equal(window.businessDayDateTime('2026-10-08 00:00:00'), '2026-10-08 00:00:00');
+assert.equal(window.businessDayDateTime('2026-10-08 00:00:00.125'), '2026-10-08 00:00:00', 'fractional SQLite wall-clock seconds must parse without changing the civil day');
+assert.equal(window.businessDayTime(new Date('2026-10-08T03:30:00Z')), '06:30:00', 'station clock must use Asia/Aden rather than handset local time');
+assert.equal(window.businessDayTime(new Date('2026-10-08T03:30:00Z'), 'America/New_York'), '23:30:00', 'the same instant must resolve in the explicitly selected timezone');
+assert.throws(() => window.businessDayDate('2026-02-30'), /Invalid business-day date/, 'impossible civil dates must be rejected');
+assert.throws(() => window.businessDayDateTime('2026-10-08 24:00:00'), /Invalid business-day date/, 'out-of-range wall-clock hours must be rejected');
 // An instant around the local boundary resolves to the prior local date before midnight.
 assert.equal(window.businessDayDate(new Date('2026-10-08T03:30:00Z')), '2026-10-08', 'UTC instant must resolve to Yemen station day');
 assert.equal(window.businessDayDate(new Date('2026-10-08T03:30:00Z'), 'America/New_York'), '2026-10-07');
@@ -56,6 +61,8 @@ assert.ok(mainHtml.includes('file:///android_asset/assets-local/js/business-day.
 assert.ok(mainHtml.includes('dashboardBusinessDayWatcher(now);'), 'main.html must inspect the local day while updating its clock');
 assert.ok(mainHtml.includes('if (!isSleeping) loadDashboard(true);'), 'a detected day change must reload the dashboard cards');
 assert.ok(mainHtml.includes("new Intl.DateTimeFormat('ar-EG'"), 'main.html must render the date using the device locale');
+assert.ok(mainHtml.includes('window.businessDayTime(new Date())'), 'sleep clock must use the station timezone');
+assert.ok(mainHtml.includes('window.businessDayTime(now)'), 'scheduled theme must follow the station timezone');
 assert.ok(mainHtml.includes('if (forceRefresh) dashboardRefreshQueued = true;'), 'midnight refresh must not be lost during an in-flight dashboard request');
 
 require(path.join(__dirname, '../../../../customer-debt-centralization-regression-test.js'));

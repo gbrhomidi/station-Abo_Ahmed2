@@ -439,6 +439,146 @@ class DatabaseHelperCompatibilityMatrixTest {
                 put("created_at", "2026-11-16 21:45:00")
                 put("business_day", "2026-11-16")
             })
+            val offsetPaymentId = before.insertOrThrow("payments", null, ContentValues().apply {
+                put("uuid", "V65-OFFSET-PAYMENT")
+                put("payment_code", "V65-OFFSET-PAYMENT")
+                put("payment_type", "cash")
+                put("payment_method", "cash")
+                put("amount", 8.75)
+                put("created_at", "2026-11-16T23:30:00.125-02:00")
+                put("business_day", "2026-11-16")
+            })
+            val invalidTimestampPaymentId = before.insertOrThrow("payments", null, ContentValues().apply {
+                put("uuid", "V65-INVALID-TIMESTAMP-PAYMENT")
+                put("payment_code", "V65-INVALID-TIMESTAMP-PAYMENT")
+                put("payment_type", "cash")
+                put("payment_method", "cash")
+                put("amount", 5.5)
+                put("created_at", "2026-11-16T25:45:00Z")
+                put("business_day", "2026-11-16")
+            })
+            val userId = before.insertOrThrow("users", null, ContentValues().apply {
+                put("uuid", "V65-TZ-USER")
+                put("username", "v65_tz_user")
+                put("password_hash", "test-only")
+                put("full_name", "V65 timezone fixture")
+                put("role_id", 1)
+                put("station_id", 1)
+                put("is_deleted", 0)
+            })
+            val shiftId = before.insertOrThrow("shifts", null, ContentValues().apply {
+                put("uuid", "V65-TZ-SHIFT")
+                put("shift_code", "V65-TZ-SHIFT")
+                put("station_id", 1)
+                put("shift_date", "2026-11-16")
+                put("shift_type", "night")
+                put("start_time", "2026-11-16 20:00:00")
+                put("cashier_id", userId)
+            })
+            val saleId = before.insertOrThrow("sales_transactions", null, ContentValues().apply {
+                put("uuid", "V65-TZ-SALE")
+                put("sale_code", "V65-TZ-SALE")
+                put("invoice_number", "V65-TZ-INVOICE")
+                put("station_id", 1)
+                put("shift_id", shiftId)
+                put("cashier_id", userId)
+                put("subtotal", 100.0)
+                put("gross_amount", 100.0)
+                put("net_amount", 100.0)
+                put("paid_amount", 30.0)
+                put("remaining_amount", 70.0)
+                put("created_at", "2026-11-16T21:30:00Z")
+                put("business_day", "2026-11-16")
+            })
+            val fuelSaleId = before.insertOrThrow("fuel_sales", null, ContentValues().apply {
+                put("uuid", "V65-TZ-FUEL")
+                put("sale_id", saleId)
+                put("station_id", 1)
+                put("quantity", 10.0)
+                put("price_per_liter", 10.0)
+                put("total_amount", 100.0)
+                put("created_at", "2026-11-16T22:00:00.500Z")
+                put("business_day", "2026-11-16")
+            })
+            val fuelSaleWithExplicitDateId = before.insertOrThrow("fuel_sales", null, ContentValues().apply {
+                put("uuid", "V65-TZ-FUEL-EXPLICIT")
+                put("sale_id", saleId)
+                put("station_id", 1)
+                put("quantity", 2.0)
+                put("price_per_liter", 10.0)
+                put("total_amount", 20.0)
+                put("sale_date", "2026-11-16")
+                put("created_at", "2026-11-16T22:00:00Z")
+                put("business_day", "2026-11-16")
+            })
+            val stockMovementId = before.insertOrThrow("stock_movements", null, ContentValues().apply {
+                put("uuid", "V65-TZ-STOCK")
+                put("movement_type", "in")
+                put("quantity", 3.0)
+                put("created_at", "2026-11-16T22:15:00+00:00")
+                put("business_day", "2026-11-16")
+            })
+            val stockMovementWithExplicitDateId = before.insertOrThrow("stock_movements", null, ContentValues().apply {
+                put("uuid", "V65-TZ-STOCK-EXPLICIT")
+                put("movement_type", "in")
+                put("quantity", 4.0)
+                put("movement_date", "2026-11-16")
+                put("created_at", "2026-11-16T22:15:00Z")
+                put("business_day", "2026-11-16")
+            })
+            val missingDayUtcPaymentId = before.insertOrThrow("payments", null, ContentValues().apply {
+                put("uuid", "V65-MISSING-DAY-UTC")
+                put("payment_code", "V65-MISSING-DAY-UTC")
+                put("payment_type", "cash")
+                put("payment_method", "cash")
+                put("amount", 11.0)
+                put("created_at", "2026-11-16T21:45:00Z")
+            })
+            val blankDayWallClockPaymentId = before.insertOrThrow("payments", null, ContentValues().apply {
+                put("uuid", "V65-BLANK-DAY-WALL-CLOCK")
+                put("payment_code", "V65-BLANK-DAY-WALL-CLOCK")
+                put("payment_type", "cash")
+                put("payment_method", "cash")
+                put("amount", 12.0)
+                put("created_at", "2026-11-16 21:45:00")
+                put("business_day", "")
+            })
+            val invalidUndatedPaymentId = before.insertOrThrow("payments", null, ContentValues().apply {
+                put("uuid", "V65-INVALID-UNDATED")
+                put("payment_code", "V65-INVALID-UNDATED")
+                put("payment_type", "cash")
+                put("payment_method", "cash")
+                put("amount", 13.0)
+                put("created_at", "2026-11-16T25:45:00Z")
+            })
+            val noTimestampPaymentId = before.insertOrThrow("payments", null, ContentValues().apply {
+                put("uuid", "V65-NO-TIMESTAMP")
+                put("payment_code", "V65-NO-TIMESTAMP")
+                put("payment_type", "cash")
+                put("payment_method", "cash")
+                put("amount", 14.0)
+                putNull("created_at")
+            })
+            val missingDayFuelSaleId = before.insertOrThrow("fuel_sales", null, ContentValues().apply {
+                put("uuid", "V65-MISSING-DAY-FUEL")
+                put("sale_id", saleId)
+                put("station_id", 1)
+                put("quantity", 1.0)
+                put("price_per_liter", 10.0)
+                put("total_amount", 10.0)
+                put("sale_date", "2026-11-15")
+                put("created_at", "2026-11-16T22:00:00Z")
+            })
+            val missingDayStockMovementId = before.insertOrThrow("stock_movements", null, ContentValues().apply {
+                put("uuid", "V65-MISSING-DAY-STOCK")
+                put("movement_type", "in")
+                put("quantity", 2.0)
+                put("movement_date", "2026-11-14")
+                put("created_at", "2026-11-16T22:15:00Z")
+            })
+            val preservedCounts = listOf("sales_transactions", "payments", "fuel_sales", "stock_movements").associateWith { table ->
+                before.rawQuery("SELECT COUNT(*) FROM $table", null).use { assertTrue(it.moveToFirst()); it.getInt(0) }
+            }
             before.version = 64
             DatabaseHelper.closeInstance()
 
@@ -461,6 +601,82 @@ class DatabaseHelperCompatibilityMatrixTest {
                 assertEquals("2026-11-17", it.getString(0))
                 assertEquals("2026-11-16T21:45:00Z", it.getString(1))
                 assertEquals(42.5, it.getDouble(2), 0.000001)
+            }
+            upgraded.rawQuery("SELECT business_day, created_at, amount FROM payments WHERE id=?", arrayOf(offsetPaymentId.toString())).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("2026-11-17", it.getString(0))
+                assertEquals("2026-11-16T23:30:00.125-02:00", it.getString(1))
+                assertEquals(8.75, it.getDouble(2), 0.000001)
+            }
+            upgraded.rawQuery("SELECT business_day, created_at, amount FROM payments WHERE id=?", arrayOf(invalidTimestampPaymentId.toString())).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("2026-11-16", it.getString(0))
+                assertEquals("2026-11-16T25:45:00Z", it.getString(1))
+                assertEquals(5.5, it.getDouble(2), 0.000001)
+            }
+            upgraded.rawQuery("SELECT business_day, created_at, net_amount, paid_amount, remaining_amount FROM sales_transactions WHERE id=?", arrayOf(saleId.toString())).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("2026-11-17", it.getString(0))
+                assertEquals("2026-11-16T21:30:00Z", it.getString(1))
+                assertEquals(100.0, it.getDouble(2), 0.000001)
+                assertEquals(30.0, it.getDouble(3), 0.000001)
+                assertEquals(70.0, it.getDouble(4), 0.000001)
+            }
+            upgraded.rawQuery("SELECT business_day, created_at, quantity, total_amount FROM fuel_sales WHERE id=?", arrayOf(fuelSaleId.toString())).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("2026-11-17", it.getString(0))
+                assertEquals("2026-11-16T22:00:00.500Z", it.getString(1))
+                assertEquals(10.0, it.getDouble(2), 0.000001)
+                assertEquals(100.0, it.getDouble(3), 0.000001)
+            }
+            upgraded.rawQuery("SELECT business_day, sale_date FROM fuel_sales WHERE id=?", arrayOf(fuelSaleWithExplicitDateId.toString())).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("2026-11-16", it.getString(0))
+                assertEquals("2026-11-16", it.getString(1))
+            }
+            upgraded.rawQuery("SELECT business_day, created_at, quantity FROM stock_movements WHERE id=?", arrayOf(stockMovementId.toString())).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("2026-11-17", it.getString(0))
+                assertEquals("2026-11-16T22:15:00+00:00", it.getString(1))
+                assertEquals(3.0, it.getDouble(2), 0.000001)
+            }
+            upgraded.rawQuery("SELECT business_day, movement_date FROM stock_movements WHERE id=?", arrayOf(stockMovementWithExplicitDateId.toString())).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("2026-11-16", it.getString(0))
+                assertEquals("2026-11-16", it.getString(1))
+            }
+            upgraded.rawQuery("SELECT business_day FROM payments WHERE id=?", arrayOf(missingDayUtcPaymentId.toString())).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("2026-11-17", it.getString(0))
+            }
+            upgraded.rawQuery("SELECT business_day FROM payments WHERE id=?", arrayOf(blankDayWallClockPaymentId.toString())).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("2026-11-16", it.getString(0))
+            }
+            upgraded.rawQuery("SELECT business_day FROM payments WHERE id=?", arrayOf(invalidUndatedPaymentId.toString())).use {
+                assertTrue(it.moveToFirst())
+                assertTrue("invalid explicit-offset timestamps must remain undated", it.isNull(0))
+            }
+            upgraded.rawQuery("SELECT business_day, created_at FROM payments WHERE id=?", arrayOf(noTimestampPaymentId.toString())).use {
+                assertTrue(it.moveToFirst())
+                assertTrue("missing timestamps must not be replaced with the device/current date", it.isNull(0))
+                assertTrue(it.isNull(1))
+            }
+            upgraded.rawQuery("SELECT business_day, sale_date FROM fuel_sales WHERE id=?", arrayOf(missingDayFuelSaleId.toString())).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("2026-11-15", it.getString(0))
+                assertEquals("2026-11-15", it.getString(1))
+            }
+            upgraded.rawQuery("SELECT business_day, movement_date FROM stock_movements WHERE id=?", arrayOf(missingDayStockMovementId.toString())).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("2026-11-14", it.getString(0))
+                assertEquals("2026-11-14", it.getString(1))
+            }
+            preservedCounts.forEach { (table, count) ->
+                val countAfter = upgraded.rawQuery("SELECT COUNT(*) FROM $table", null).use {
+                    assertTrue(it.moveToFirst()); it.getInt(0)
+                }
+                assertEquals("$table rows must not be lost during V64 -> V65", count, countAfter)
             }
             assertEquals("ok", upgraded.rawQuery("PRAGMA integrity_check", null).use {
                 assertTrue(it.moveToFirst()); it.getString(0)
