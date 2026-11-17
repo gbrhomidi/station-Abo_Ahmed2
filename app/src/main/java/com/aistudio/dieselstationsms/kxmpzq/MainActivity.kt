@@ -4997,6 +4997,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val data = JSONObject(jsonData).apply { put("station_id", stationId) }
                 val id = db.addFuelSale(data, stationId, activity.currentUserId)
                 DebugLogger.info("Sale", "Added sale id=$id")
+                runCatching { db.publishEvent(JSONObject().put("event_type", "fuel_sale_completed").put("payload", JSONObject().put("sale_id", id).put("shift_id", data.optLong("shift_id", 0L)).put("tank_id", data.optLong("tank_id", 0L)).put("fuel_type_id", data.optLong("fuel_type_id", 0L)).put("liters", data.optDouble("quantity", 0.0)).put("total", data.optDouble("total_amount", 0.0))), stationId) }
                 successResponse(id, "تم إضافة البيع بنجاح")
             } catch (e: Exception) {
                 DebugLogger.logException("Sale", e)
@@ -5020,6 +5021,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     if (isCreditSale) "اختر شرط الدفع قبل اعتماد البيع الآجل" else "لا يجوز تطبيق شروط دفع آجلة على فاتورة نقدية"
                 }
                 val result = db.completeSale(data, stationId, activity.currentUserId)
+                if (result.optBoolean("success", false)) {
+                    runCatching { db.publishEvent(JSONObject().put("event_type", "pos_sale_completed").put("payload", JSONObject().put("transaction_id", result.optLong("sale_id", 0L)).put("shift_id", data.optLong("shift_id", 0L)).put("lines", data.optJSONArray("products") ?: JSONArray())), stationId) }
+                }
                 if (result.optBoolean("success", false) && isCreditSale) {
                     val saleId = result.optLong("sale_id", 0L)
                     if (saleId > 0L) result.put("sms", queueCreditSaleSms(db, saleId, stationId, activity.currentUserId))
@@ -5377,6 +5381,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getInventoryAging(jsonData: String = "{}"): String { val helper=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); return try { val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(helper.getInventoryAging(requireCurrentStationId(helper,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)} }
         @JavascriptInterface
         fun getABCXYZAnalysis(jsonData: String = "{}"): String { val helper=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); return try { val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(helper.getABCXYZAnalysis(requireCurrentStationId(helper,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)} }
+
+        // Phase 3/4: Forecourt, procurement, durable events and local intelligence
+        @JavascriptInterface fun getForecourtSnapshot(jsonData: String = "{}"): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(h.getForecourtSnapshot(requireCurrentStationId(h,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)}
+        @JavascriptInterface fun createPurchaseOrder(jsonData: String): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(h.createPurchaseOrder(JSONObject(jsonData),requireCurrentStationId(h,a.currentUserId),a.currentUserId)) } catch(e:Exception){errorResponse(e.message)}
+        @JavascriptInterface fun receivePurchaseOrder(jsonData: String): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(h.receivePurchaseOrder(JSONObject(jsonData),requireCurrentStationId(h,a.currentUserId),a.currentUserId)) } catch(e:Exception){errorResponse(e.message)}
+        @JavascriptInterface fun matchInvoiceFourWay(jsonData: String): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(h.matchInvoiceFourWay(JSONObject(jsonData),requireCurrentStationId(h,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)}
+        @JavascriptInterface fun publishEvent(jsonData: String): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); successResponse(h.publishEvent(JSONObject(jsonData),requireCurrentStationId(h,a.currentUserId)),"تم نشر الحدث") } catch(e:Exception){errorResponse(e.message)}
+        @JavascriptInterface fun fetchPendingEvents(jsonData: String = "{}"): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(h.fetchPendingEvents(JSONObject(jsonData),requireCurrentStationId(h,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)}
+        @JavascriptInterface fun calculateVcf(jsonData: String): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); val d=JSONObject(jsonData); dataResponse(h.calculateVcf(d.optLong("fuel_type_id"),d.optDouble("temperature_c",15.0),requireCurrentStationId(h,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)}
+        @JavascriptInterface fun getDemandForecast(jsonData: String = "{}"): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(h.getDemandForecast(requireCurrentStationId(h,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)}
+        @JavascriptInterface fun runInventoryAnomalyDetection(jsonData: String = "{}"): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(h.runInventoryAnomalyDetection(requireCurrentStationId(h,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)}
+        @JavascriptInterface fun getInventoryHealthScore(jsonData: String = "{}"): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(JSONObject().put("health_score",h.calculateInventoryHealthScore(requireCurrentStationId(h,a.currentUserId)))) } catch(e:Exception){errorResponse(e.message)}
 
         // ============================================================
         // 9. المخزون
@@ -13804,6 +13820,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 } finally {
                     database.endTransaction()
                 }
+
+                runCatching { db.publishEvent(JSONObject().put("event_type", "fuel_sale_completed").put("payload", JSONObject().put("sale_id", saleId).put("shift_id", input.optLong("shift_id", 0L)).put("tank_id", input.optLong("tank_id", 0L)).put("fuel_type_id", input.optLong("fuel_type_id", 0L)).put("liters", input.optDouble("quantity", 0.0)).put("unit_price", unitPrice).put("total", input.optDouble("total_amount", 0.0))), stationScopeId) }
 
                 // Post-commit SMS is isolated: a queue error must not report a committed sale as failed.
                 val smsResult = if (creditSale) {

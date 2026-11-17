@@ -258,6 +258,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureOpenCompatibilitySchema(db)
             ensurePhase1WetStockSchema(db)
             ensurePhase2DryStockSchema(db)
+            ensurePhase3Phase4Schema(db)
             DebtDueDateRepository.ensureSchema(db)
             SupplierPayablesRepository.ensureSchema(db)
             CustomerReceivablesRepository.ensureSchema(db)
@@ -347,6 +348,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureOpenCompatibilitySchema(db)
             ensurePhase1WetStockSchema(db)
             ensurePhase2DryStockSchema(db)
+            ensurePhase3Phase4Schema(db)
             DebtDueDateRepository.ensureSchema(db)
             SupplierPayablesRepository.ensureSchema(db)
             CustomerReceivablesRepository.ensureSchema(db)
@@ -1902,6 +1904,53 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_sale_adjustments_station_date ON fuel_sale_adjustments(station_id, created_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_damaged_products_sale ON damaged_products(sale_id, sale_item_id, source_type)")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS uq_damaged_products_idempotency ON damaged_products(station_id, idempotency_key) WHERE idempotency_key IS NOT NULL AND idempotency_key <> ''")
+    }
+
+    /** Phase 3/4 additive schema: procurement loop, durable events, local analytics. */
+    private fun ensurePhase3Phase4Schema(db: SQLiteDatabase) {
+        db.execSQL("""CREATE TABLE IF NOT EXISTS purchase_orders (
+            po_id INTEGER PRIMARY KEY AUTOINCREMENT, po_number TEXT UNIQUE NOT NULL,
+            station_id INTEGER NOT NULL, supplier_id INTEGER, status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','submitted','approved','partial','received','cancelled')),
+            expected_at TEXT, total_amount REAL NOT NULL DEFAULT 0, created_by INTEGER, approved_by INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""".trimIndent())
+        db.execSQL("""CREATE TABLE IF NOT EXISTS purchase_order_lines (
+            line_id INTEGER PRIMARY KEY AUTOINCREMENT, po_id INTEGER NOT NULL REFERENCES purchase_orders(po_id) ON DELETE CASCADE,
+            item_type TEXT NOT NULL CHECK(item_type IN ('PRODUCT','FUEL')), item_id INTEGER NOT NULL, quantity REAL NOT NULL CHECK(quantity>0),
+            unit_price REAL NOT NULL DEFAULT 0, received_quantity REAL NOT NULL DEFAULT 0, invoice_quantity REAL NOT NULL DEFAULT 0,
+            movement_quantity REAL NOT NULL DEFAULT 0, batch_id INTEGER, notes TEXT
+        )""".trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_phase3_po_station_status ON purchase_orders(station_id,status)")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS events_outbox (
+            event_id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT NOT NULL, payload TEXT NOT NULL,
+            consumer TEXT NOT NULL DEFAULT 'stock-levels', status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','PROCESSING','DELIVERED','FAILED')),
+            attempts INTEGER NOT NULL DEFAULT 0, available_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, published_at TEXT, delivered_at TEXT,
+            last_error TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""".trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_phase3_events_pending ON events_outbox(consumer,status,available_at,event_id)")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS inventory_forecasts (
+            forecast_id INTEGER PRIMARY KEY AUTOINCREMENT, station_id INTEGER NOT NULL, item_type TEXT NOT NULL, item_id INTEGER NOT NULL,
+            forecast_date TEXT NOT NULL, demand_quantity REAL NOT NULL DEFAULT 0, days_of_cover REAL, reorder_quantity REAL NOT NULL DEFAULT 0,
+            method TEXT NOT NULL DEFAULT 'LOCAL_MOVING_AVERAGE', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(station_id,item_type,item_id,forecast_date)
+        )""".trimIndent())
+        db.execSQL("""CREATE TABLE IF NOT EXISTS inventory_anomalies (
+            anomaly_id INTEGER PRIMARY KEY AUTOINCREMENT, station_id INTEGER NOT NULL, item_type TEXT NOT NULL, item_id INTEGER NOT NULL,
+            anomaly_type TEXT NOT NULL, severity TEXT NOT NULL DEFAULT 'warning', metric_value REAL, threshold_value REAL,
+            status TEXT NOT NULL DEFAULT 'OPEN' CHECK(status IN ('OPEN','ACKNOWLEDGED','RESOLVED')), details TEXT, detected_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""".trimIndent())
+        db.execSQL("""CREATE TABLE IF NOT EXISTS inventory_health_snapshots (
+            snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT, station_id INTEGER NOT NULL, health_score REAL NOT NULL,
+            low_stock_ratio REAL NOT NULL DEFAULT 0, dead_stock_ratio REAL NOT NULL DEFAULT 0, variance_avg_pct REAL NOT NULL DEFAULT 0,
+            expiring_soon_ratio REAL NOT NULL DEFAULT 0, calculated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""".trimIndent())
+        db.execSQL("""CREATE TABLE IF NOT EXISTS fuel_temperature_coefficients (
+            fuel_type_id INTEGER PRIMARY KEY, coefficient_exp REAL NOT NULL DEFAULT 0.00095, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""".trimIndent())
+        db.execSQL("""CREATE TABLE IF NOT EXISTS role_scopes (
+            user_id INTEGER NOT NULL, station_id INTEGER NOT NULL, role_code TEXT NOT NULL, can_read INTEGER NOT NULL DEFAULT 1,
+            can_approve INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(user_id,station_id,role_code)
+        )""".trimIndent())
     }
 
     /** Phase 2 dry-stock schema. All additions are nullable/defaulted for legacy data. */
@@ -30160,6 +30209,14 @@ private fun postSalesReversalJournal(
                 WHERE t.station_id=? AND t.is_deleted=0 AND t.status<>'retired' AND t.deleted_at IS NULL
                 ORDER BY t.id
             """.trimIndent(), arrayOf(stationScopeId.toString())).use { cursorToJsonArray(it) }
+            for (i in 0 until tanks.length()) {
+                val tank = tanks.getJSONObject(i)
+                val temperature = if (tank.isNull("temperature_c")) 15.0 else tank.optDouble("temperature_c", 15.0)
+                val alpha = db.rawQuery("SELECT coefficient_exp FROM fuel_temperature_coefficients WHERE fuel_type_id=?", arrayOf(tank.optLong("fuel_type_id").toString())).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.00095 }
+                val delta = temperature - 15.0
+                val vcf = kotlin.math.exp(-alpha * delta - 0.8 * alpha * alpha * delta * delta)
+                tank.put("vcf", vcf).put("standard_liters_15c", tank.optDouble("current_liters", 0.0) * vcf)
+            }
             val kpis = JSONObject()
             db.rawQuery("SELECT COALESCE(SUM(COALESCE(r.current_liters,t.current_quantity)),0), COALESCE(SUM(t.capacity_liters-COALESCE(r.current_liters,t.current_quantity)),0) FROM tanks t LEFT JOIN tank_readings r ON r.reading_id=(SELECT r2.reading_id FROM tank_readings r2 WHERE r2.tank_id=t.id ORDER BY r2.reading_at DESC,r2.reading_id DESC LIMIT 1) WHERE t.station_id=? AND t.is_deleted=0 AND t.status<>'retired'", arrayOf(stationScopeId.toString())).use { c -> if (c.moveToFirst()) { kpis.put("total_liters", c.getDouble(0)); kpis.put("ullage_liters", c.getDouble(1)) } }
             val shift = getOpenShift(stationScopeId)
@@ -36638,6 +36695,37 @@ private fun postSalesReversalJournal(
         val kpis = JSONObject(); readableDatabase.rawQuery("SELECT COALESCE(SUM(quantity*purchase_price),0),SUM(CASE WHEN quantity<COALESCE(reorder_point,minimum_stock) THEN 1 ELSE 0 END),SUM(CASE WHEN quantity<minimum_stock THEN quantity*purchase_price ELSE 0 END) FROM products WHERE station_id=? AND is_deleted=0", arrayOf(stationScopeId.toString())).use { c -> if (c.moveToFirst()) { kpis.put("inventory_value", c.getDouble(0)); kpis.put("low_stock_count", c.getInt(1)); kpis.put("dead_stock_value", c.getDouble(2)) } }
         return JSONObject().put("products", products).put("kpis", kpis).put("aging", getInventoryAging(stationScopeId))
     }
+
+    // ========================================================================
+    // Phase 3/4: procurement, events, forecourt and local intelligence
+    // ========================================================================
+    fun createPurchaseOrder(data: JSONObject, stationScopeId: Int, actorId: Long): JSONObject {
+        val itemType=data.optString("item_type").uppercase(Locale.ROOT); val itemId=data.optLong("item_id",0); val quantity=data.optDouble("quantity",0.0)
+        require(itemType in listOf("PRODUCT","FUEL") && itemId>0 && quantity>0) { "بيانات أمر الشراء غير صالحة" }
+        dbLock.lock(); return try { val db=writableDatabase; db.beginTransaction(); try { val number="PO-${stationScopeId}-${System.currentTimeMillis()}"; val po=db.insertOrThrow("purchase_orders",null,ContentValues().apply{put("po_number",number);put("station_id",stationScopeId);data.optLong("supplier_id",0).takeIf{it>0}?.let{put("supplier_id",it)};put("created_by",actorId);put("expected_at",data.optString("expected_at").takeIf{it.isNotBlank()})});db.insertOrThrow("purchase_order_lines",null,ContentValues().apply{put("po_id",po);put("item_type",itemType);put("item_id",itemId);put("quantity",quantity);put("unit_price",data.optDouble("unit_price",0.0))});db.setTransactionSuccessful();JSONObject().put("po_id",po).put("po_number",number).put("status","draft")}finally{db.endTransaction()}}finally{dbLock.unlock()}
+    }
+
+    fun receivePurchaseOrder(data: JSONObject, stationScopeId: Int, actorId: Long): JSONObject {
+        val poId=data.optLong("po_id",0); val lines=data.optJSONArray("received_lines") ?: JSONArray(); require(poId>0 && lines.length()>0)
+        dbLock.lock(); return try { val db=writableDatabase; db.beginTransaction(); try { db.rawQuery("SELECT po_id FROM purchase_orders WHERE po_id=? AND station_id=? AND status IN ('draft','submitted','approved','partial')",arrayOf(poId.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "أمر الشراء غير موجود أو خارج نطاق المحطة" }};for(i in 0 until lines.length()){val l=lines.getJSONObject(i);val lineId=l.optLong("line_id",0);val received=l.optDouble("received_quantity",0.0);require(lineId>0&&received>0);val row=db.rawQuery("SELECT item_type,item_id,quantity,COALESCE(received_quantity,0) FROM purchase_order_lines WHERE line_id=? AND po_id=?",arrayOf(lineId.toString(),poId.toString())).use{c->require(c.moveToFirst()){ "بند التوريد غير موجود" };arrayOf(c.getString(0),c.getLong(1),c.getDouble(2),c.getDouble(3))};require(row[3] as Double + received <= row[2] as Double + 0.000001){"الكمية المستلمة تتجاوز أمر الشراء"};db.execSQL("UPDATE purchase_order_lines SET received_quantity=received_quantity+?,movement_quantity=movement_quantity+? WHERE line_id=?",arrayOf(received,received,lineId));if(row[0] as String=="PRODUCT"){db.insertOrThrow("product_batches",null,ContentValues().apply{put("product_id",row[1]);put("lot_number",l.optString("lot_number").takeIf{it.isNotBlank()});put("expiry_date",l.optString("expiry_date").takeIf{it.isNotBlank()});put("quantity",received);put("received_at",getCurrentDateTime());put("received_by",actorId)})}else{db.execSQL("UPDATE tanks SET current_quantity=COALESCE(current_quantity,0)+? WHERE id=?",arrayOf(received,row[1]))}};db.execSQL("UPDATE purchase_orders SET status=CASE WHEN EXISTS(SELECT 1 FROM purchase_order_lines WHERE po_id=? AND received_quantity<quantity) THEN 'partial' ELSE 'received' END,updated_at=CURRENT_TIMESTAMP WHERE po_id=?",arrayOf(poId,poId));db.setTransactionSuccessful();JSONObject().put("success",true).put("po_id",poId)}finally{db.endTransaction()}}finally{dbLock.unlock()}
+    }
+
+    fun matchInvoiceFourWay(data: JSONObject, stationScopeId: Int): JSONObject {
+        val poId=data.optLong("po_id",0);require(poId>0);val db=readableDatabase;val po=JSONObject();val diffs=JSONArray();db.rawQuery("SELECT po_id,po_number,status,total_amount FROM purchase_orders WHERE po_id=? AND station_id=?",arrayOf(poId.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "أمر الشراء غير موجود" };po.put("po_id",c.getLong(0)).put("po_number",c.getString(1)).put("status",c.getString(2)).put("amount",c.getDouble(3))};val delivery=db.rawQuery("SELECT COALESCE(SUM(received_quantity),0) FROM purchase_order_lines WHERE po_id=?",arrayOf(poId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0};val ordered=db.rawQuery("SELECT COALESCE(SUM(quantity),0) FROM purchase_order_lines WHERE po_id=?",arrayOf(poId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0};val invoice=data.optDouble("invoice_quantity",delivery);val movement=db.rawQuery("SELECT COALESCE(SUM(movement_quantity),0) FROM purchase_order_lines WHERE po_id=?",arrayOf(poId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0};if(kotlin.math.abs(ordered-invoice)>.000001)diffs.put(JSONObject().put("field","invoice_vs_po").put("difference",invoice-ordered));if(kotlin.math.abs(delivery-movement)>.000001)diffs.put(JSONObject().put("field","delivery_vs_movement").put("difference",delivery-movement));return JSONObject().put("match",JSONObject().put("po",ordered).put("delivery",delivery).put("movement",movement).put("invoice",invoice)).put("differences",diffs).put("matched",diffs.length()==0)
+    }
+
+    fun publishEvent(data: JSONObject, stationScopeId: Int): Long { val type=data.optString("event_type").trim();require(type.isNotBlank());return writableDatabase.insertOrThrow("events_outbox",null,ContentValues().apply{put("event_type",type);put("payload",data.optJSONObject("payload")?.toString() ?: data.toString());put("consumer",data.optString("consumer","stock-levels"))}) }
+    fun fetchPendingEvents(data: JSONObject, stationScopeId: Int): JSONArray { val consumer=data.optString("consumer","stock-levels");val limit=data.optInt("limit",100).coerceIn(1,500);return readableDatabase.rawQuery("SELECT * FROM events_outbox WHERE consumer=? AND status='PENDING' ORDER BY event_id LIMIT ?",arrayOf(consumer,limit.toString())).use{cursorToJsonArray(it)} }
+
+    fun getForecourtSnapshot(stationScopeId: Int): JSONObject { val db=readableDatabase;val shift=getCurrentShift(stationScopeId)?:JSONObject();val sales=JSONObject();db.rawQuery("SELECT COALESCE(SUM(quantity),0),COALESCE(SUM(total_amount),0),COUNT(*) FROM fuel_sales WHERE shift_id=? AND is_deleted=0",arrayOf(shift.optString("shift_id","0"))).use{c->if(c.moveToFirst()){sales.put("fuel_liters",c.getDouble(0));sales.put("fuel_amount",c.getDouble(1));sales.put("fuel_invoices",c.getInt(2))}};db.rawQuery("SELECT COALESCE(SUM(net_amount),0),COUNT(*) FROM sales_transactions WHERE station_id=? AND date(created_at)=date('now') AND status='completed'",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst()){sales.put("store_amount",c.getDouble(0));sales.put("store_invoices",c.getInt(1))}};val alerts=db.rawQuery("SELECT * FROM inventory_anomalies WHERE station_id=? AND status='OPEN' ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,anomaly_id DESC",arrayOf(stationScopeId.toString())).use{cursorToJsonArray(it)};val health=calculateInventoryHealthScore(stationScopeId);return JSONObject().put("shift",shift).put("sales",sales).put("alerts",alerts).put("health_score",health) }
+
+    fun calculateInventoryHealthScore(stationScopeId: Int): Double { val db=readableDatabase;val total=db.rawQuery("SELECT COUNT(*) FROM products WHERE station_id=? AND is_deleted=0",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0};val low=db.rawQuery("SELECT COUNT(*) FROM products WHERE station_id=? AND is_deleted=0 AND quantity<COALESCE(reorder_point,minimum_stock)",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0};val exp=db.rawQuery("SELECT COUNT(*) FROM product_batches b JOIN products p ON p.id=b.product_id WHERE p.station_id=? AND b.quantity>0 AND b.expiry_date IS NOT NULL AND date(b.expiry_date)<=date('now','+30 day')",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0};return (100.0-(if(total>0)low/total*30 else 0.0)-(if(total>0)exp/total*10 else 0.0)).coerceIn(0.0,100.0) }
+
+    fun calculateVcf(fuelTypeId: Long, temperatureC: Double, stationScopeId: Int): JSONObject { val alpha=readableDatabase.rawQuery("SELECT coefficient_exp FROM fuel_temperature_coefficients WHERE fuel_type_id=?",arrayOf(fuelTypeId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.00095};val delta=temperatureC-15.0;val vcf=kotlin.math.exp(-alpha*delta-0.8*alpha*alpha*delta*delta);return JSONObject().put("fuel_type_id",fuelTypeId).put("temperature_c",temperatureC).put("coefficient_exp",alpha).put("vcf",vcf).put("station_id",stationScopeId) }
+
+    fun getDemandForecast(stationScopeId: Int): JSONArray { val out=JSONArray();val db=readableDatabase;db.rawQuery("SELECT product_id,COALESCE(SUM(CASE WHEN movement_type='out' THEN quantity ELSE 0 END),0)/30.0 FROM inventory_movements WHERE station_id=? AND date(created_at)>=date('now','-30 day') GROUP BY product_id",arrayOf(stationScopeId.toString())).use{c->while(c.moveToNext()){val avg=c.getDouble(1);out.put(JSONObject().put("item_type","PRODUCT").put("item_id",c.getLong(0)).put("daily_demand",avg).put("forecast_7d",avg*7).put("method","LOCAL_MOVING_AVERAGE"))}};return out }
+
+    fun runInventoryAnomalyDetection(stationScopeId: Int): JSONArray { val out=JSONArray();val db=writableDatabase;db.rawQuery("SELECT id,tank_name,COALESCE((SELECT water_level_mm FROM tank_readings r WHERE r.tank_id=t.id ORDER BY r.reading_at DESC,r.reading_id DESC LIMIT 1),0),current_quantity,capacity_liters FROM tanks t WHERE station_id=? AND is_deleted=0",arrayOf(stationScopeId.toString())).use{c->while(c.moveToNext()){val tankId=c.getLong(0);val waterOpen=db.rawQuery("SELECT 1 FROM inventory_anomalies WHERE station_id=? AND item_id=? AND anomaly_type='WATER_LEVEL' AND status='OPEN' LIMIT 1",arrayOf(stationScopeId.toString(),tankId.toString())).use{q->q.moveToFirst()};if(c.getDouble(2)>50&&!waterOpen){val id=db.insertOrThrow("inventory_anomalies",null,ContentValues().apply{put("station_id",stationScopeId);put("item_type","FUEL");put("item_id",tankId);put("anomaly_type","WATER_LEVEL");put("severity","critical");put("metric_value",c.getDouble(2));put("threshold_value",50);put("details","مستوى الماء يتجاوز الحد")});out.put(JSONObject().put("anomaly_id",id).put("type","WATER_LEVEL"))};val lowOpen=db.rawQuery("SELECT 1 FROM inventory_anomalies WHERE station_id=? AND item_id=? AND anomaly_type='LOW_FUEL' AND status='OPEN' LIMIT 1",arrayOf(stationScopeId.toString(),tankId.toString())).use{q->q.moveToFirst()};if(c.getDouble(4)>0&&c.getDouble(3)/c.getDouble(4)<.15&&!lowOpen){val id=db.insertOrThrow("inventory_anomalies",null,ContentValues().apply{put("station_id",stationScopeId);put("item_type","FUEL");put("item_id",tankId);put("anomaly_type","LOW_FUEL");put("severity","critical");put("metric_value",c.getDouble(3));put("threshold_value",c.getDouble(4)*.15)});out.put(JSONObject().put("anomaly_id",id).put("type","LOW_FUEL"))}}};return out }
 
     private data class TraceOrigin(val id: Long, val reference: String, val station: Int, val date: String, val screen: String, val type: String)
 

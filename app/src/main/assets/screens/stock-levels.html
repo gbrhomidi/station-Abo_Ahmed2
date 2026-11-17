@@ -1036,7 +1036,13 @@
   <!-- المحتوى الرئيسي -->
   <div class="container">
    <!-- ===== قسم الملخص ===== -->
-   <div class="section active" id="summarySection">
+   <div class="section active" id="forecourtSection">
+    <div class="glass-card"><div class="chart-header"><h3 class="chart-title">🏪 المحطة ككل — Forecourt Live Strip</h3><div><button class="apply-btn" onclick="loadForecourt()">🔄 تحديث</button><button class="apply-btn apply-btn-secondary" onclick="runAnomalyScan()">فحص الشذوذ</button></div></div>
+     <div class="intelligence-kpis"><div class="intelligence-mini"><div class="mini-label">الوردية الحالية</div><div class="mini-value" id="forecourtShift">—</div></div><div class="intelligence-mini"><div class="mini-label">مبيعات الوقود</div><div class="mini-value" id="forecourtFuel">0 لتر</div></div><div class="intelligence-mini"><div class="mini-label">مبيعات المتجر</div><div class="mini-value" id="forecourtStore">0 ريال</div></div><div class="intelligence-mini"><div class="mini-label">Health Score</div><div class="mini-value" id="forecourtHealth">0%</div></div></div>
+     <div class="table-container"><table class="data-table intelligence-table"><thead><tr><th>المؤشر</th><th>القيمة</th><th>الوحدة/الحالة</th></tr></thead><tbody id="forecourtSnapshotBody"><tr><td colspan="3">جاري تحميل بيانات المحطة…</td></tr></tbody></table></div>
+    </div>
+   </div>
+   <div class="section" id="summarySection">
     <!-- رأس الصفحة -->
     <header class="glass-card page-header">
      <div class="logo-container">
@@ -1445,7 +1451,7 @@
       <div class="intelligence-mini"><div class="mini-label">مبيعات الوردية</div><div class="mini-value" id="wetShiftSales">0 لتر</div></div>
       <div class="intelligence-mini"><div class="mini-label">قيمة المبيعات</div><div class="mini-value" id="wetShiftAmount">0 ريال</div></div>
      </div>
-     <div class="table-container"><table class="data-table intelligence-table"><thead><tr><th>الخزان</th><th>السعة (لتر)</th><th>المستوى (لتر)</th><th>Ullage (لتر)</th><th>الحرارة (°م)</th><th>الماء (ملم)</th><th>المضخات</th><th>الإجراء</th></tr></thead><tbody id="wetTankBoard"><tr><td colspan="8">لا توجد بيانات فعلية</td></tr></tbody></table></div>
+     <div class="table-container"><table class="data-table intelligence-table"><thead><tr><th>الخزان</th><th>السعة (لتر)</th><th>المستوى (لتر)</th><th>المعياري @15°م</th><th>Ullage (لتر)</th><th>الحرارة (°م)</th><th>الماء (ملم)</th><th>المضخات</th><th>الإجراء</th></tr></thead><tbody id="wetTankBoard"><tr><td colspan="9">لا توجد بيانات فعلية</td></tr></tbody></table></div>
     </div>
     <div class="glass-card"><div class="chart-header"><h3 class="chart-title">تسوية الوردية وقراءات الغمس</h3></div><div class="table-container"><table class="data-table intelligence-table"><thead><tr><th>الوردية</th><th>الخزان</th><th>المتوقع (لتر)</th><th>الفعلي (لتر)</th><th>الفارق (لتر)</th><th>الفارق (%)</th></tr></thead><tbody id="wetReconciliationRows"><tr><td colspan="6">لا توجد تسويات</td></tr></tbody></table></div></div>
    </div>
@@ -1601,7 +1607,10 @@
   </div>
   <!-- القائمة السفلية -->
   <div class="footer-menu">
-   <div class="menu-item active" data-section="summary" onclick="switchSection('summary')">
+   <div class="menu-item active" data-section="forecourt" onclick="switchSection('forecourt')">
+    <i class="fas fa-store"></i><span>المحطة</span>
+   </div>
+   <div class="menu-item" data-section="summary" onclick="switchSection('summary')">
     <i class="fas fa-home">
     </i>
     <span>
@@ -1862,6 +1871,14 @@ function apiCall(action, params = {}) {
             return invokeBridge('getWetStockPage', [json]);
         case 'getDryStockPage':
             return invokeBridge('getDryStockPage', [json]);
+        case 'getForecourtSnapshot':
+            return invokeBridge('getForecourtSnapshot', [json]);
+        case 'createPurchaseOrder':
+            return invokeBridge('createPurchaseOrder', [json]);
+        case 'runInventoryAnomalyDetection':
+            return invokeBridge('runInventoryAnomalyDetection', [json]);
+        case 'getDemandForecast':
+            return invokeBridge('getDemandForecast', [json]);
         case 'getShiftReconciliation':
             return invokeBridge('getShiftReconciliation', [json]);
         case 'insertDipReading':
@@ -1922,6 +1939,7 @@ function switchSection(sectionId) {
     document.querySelector(`.menu-item[data-section="${sectionId}"]`).classList.add('active');
     
     // تحميل البيانات حسب القسم
+    if (sectionId === 'forecourt') loadForecourt();
     if (sectionId === 'dryStock') loadDryStock();
     if (sectionId === 'wetStock') loadWetStock();
     if (sectionId === 'movements') loadMovements();
@@ -1968,6 +1986,26 @@ async function loadInitialData() {
     }
 }
 
+async function createReorderPO(productId, quantity) {
+    if (quantity <= 0) { showToast('الصنف ليس تحت حد إعادة الطلب', 'info'); return; }
+    try { const result = await apiCall('createPurchaseOrder', {item_type:'PRODUCT', item_id:productId, quantity}); if (result.success) showToast('تم إنشاء أمر شراء مسودة فعليًا', 'success'); else throw new Error(result.error || 'تعذر إنشاء أمر الشراء'); } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function runAnomalyScan() {
+    try { const result = await apiCall('runInventoryAnomalyDetection', {}); showToast(`تم فحص المحطة وتسجيل ${(result.data || []).length} تنبيه فعلي`, 'success'); await loadForecourt(); } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function loadForecourt() {
+    try {
+        const result = await apiCall('getForecourtSnapshot', {}), data = result.data || {}, sales = data.sales || {};
+        document.getElementById('forecourtShift').textContent = data.shift?.shift_code || 'لا توجد وردية';
+        document.getElementById('forecourtFuel').textContent = Number(sales.fuel_liters || 0).toLocaleString('en') + ' لتر';
+        document.getElementById('forecourtStore').textContent = Number(sales.store_amount || 0).toLocaleString('en') + ' ريال';
+        document.getElementById('forecourtHealth').textContent = Number(data.health_score || 0).toFixed(1) + '%';
+        document.getElementById('forecourtSnapshotBody').innerHTML = `<tr><td>فواتير الوقود</td><td>${Number(sales.fuel_invoices || 0).toLocaleString('en')}</td><td>فاتورة</td></tr><tr><td>فواتير المتجر</td><td>${Number(sales.store_invoices || 0).toLocaleString('en')}</td><td>فاتورة</td></tr><tr><td>التنبيهات المفتوحة</td><td>${(data.alerts || []).length}</td><td>تنبيه</td></tr>`;
+    } catch (e) { showToast(e.message || 'تعذر تحميل لوحة المحطة', 'error'); }
+}
+
 async function loadDryStock() {
     try {
         const result = await apiCall('getDryStockPage', {}), data = result.data || {}, k = data.kpis || {};
@@ -1975,7 +2013,7 @@ async function loadDryStock() {
         document.getElementById('dryLowStock').textContent = Number(k.low_stock_count || 0).toLocaleString('en') + ' صنف';
         document.getElementById('dryDeadStock').textContent = Number(k.dead_stock_value || 0).toLocaleString('en') + ' ريال';
         const rows = data.products || [];
-        document.getElementById('dryProductBoard').innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.product_code || '')}</td><td>${escapeHtml(p.product_name_ar || p.product_name || '')}</td><td>${Number(p.quantity || 0).toLocaleString('en')}</td><td>${p.nearest_expiry ? escapeHtml(p.nearest_expiry) : '—'}</td><td>${Number(p.available_serials || 0)}</td><td>${[p.track_serial == 1 ? 'سيريال' : '',p.track_batch == 1 ? 'دفعة' : '',p.track_expiry == 1 ? 'صلاحية' : ''].filter(Boolean).join('، ') || '—'}</td><td><button class="apply-btn" onclick="showProductBatches(${Number(p.product_id)})">عرض الدفعات</button></td></tr>`).join('') : '<tr><td colspan="7">لا توجد منتجات فعلية للمحطة</td></tr>';
+        document.getElementById('dryProductBoard').innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.product_code || '')}</td><td>${escapeHtml(p.product_name_ar || p.product_name || '')}</td><td>${Number(p.quantity || 0).toLocaleString('en')}</td><td>${p.nearest_expiry ? escapeHtml(p.nearest_expiry) : '—'}</td><td>${Number(p.available_serials || 0)}</td><td>${[p.track_serial == 1 ? 'سيريال' : '',p.track_batch == 1 ? 'دفعة' : '',p.track_expiry == 1 ? 'صلاحية' : ''].filter(Boolean).join('، ') || '—'}</td><td><button class="apply-btn" onclick="showProductBatches(${Number(p.product_id)})">عرض الدفعات</button><button class="apply-btn apply-btn-secondary" onclick="createReorderPO(${Number(p.product_id)},${Math.max(0,Number(p.reorder_point||p.minimum_stock||0)-Number(p.quantity||0))})">طلب</button></td></tr>`).join('') : '<tr><td colspan="7">لا توجد منتجات فعلية للمحطة</td></tr>';
     } catch (e) { showToast(e.message || 'تعذر تحميل مخزون المنتجات', 'error'); }
 }
 
@@ -1994,8 +2032,8 @@ async function loadWetStock() {
         const rows = data.tanks || [];
         document.getElementById('wetTankBoard').innerHTML = rows.length ? rows.map(t => {
             const ullage = Number(t.capacity_liters || 0) - Number(t.current_liters || 0), water = Number(t.water_level_mm || 0);
-            return `<tr><td>${escapeHtml(t.tank_name || t.tank_code || '')}</td><td>${Number(t.capacity_liters||0).toLocaleString('en')} لتر</td><td>${Number(t.current_liters||0).toLocaleString('en')} لتر</td><td class="${ullage < Number(t.capacity_liters||0)*.2 ? 'risk-critical':''}">${ullage.toLocaleString('en')} لتر</td><td>${t.temperature_c == null ? '—' : Number(t.temperature_c).toFixed(1)+' °م'}</td><td class="${water > 50 ? 'risk-critical':''}">${water.toLocaleString('en')} ملم</td><td>${Number(t.active_pumps||0)} نشطة / ${Number(t.inactive_pumps||0)} متوقفة</td><td><button class="apply-btn" onclick="recordWetDip(${Number(t.tank_id)})">تسجيل غمس</button><button class="apply-btn apply-btn-secondary" onclick="reconcileWetTank(${Number(t.tank_id)})">تسوية</button></td></tr>`;
-        }).join('') : '<tr><td colspan="8">لا توجد خزانات أو قراءات فعلية للمحطة</td></tr>';
+            return `<tr><td>${escapeHtml(t.tank_name || t.tank_code || '')}</td><td>${Number(t.capacity_liters||0).toLocaleString('en')} لتر</td><td>${Number(t.current_liters||0).toLocaleString('en')} لتر</td><td>${Number(t.standard_liters_15c||0).toLocaleString('en')} لتر (VCF ${Number(t.vcf||1).toFixed(5)})</td><td class="${ullage < Number(t.capacity_liters||0)*.2 ? 'risk-critical':''}">${ullage.toLocaleString('en')} لتر</td><td>${t.temperature_c == null ? '—' : Number(t.temperature_c).toFixed(1)+' °م'}</td><td class="${water > 50 ? 'risk-critical':''}">${water.toLocaleString('en')} ملم</td><td>${Number(t.active_pumps||0)} نشطة / ${Number(t.inactive_pumps||0)} متوقفة</td><td><button class="apply-btn" onclick="recordWetDip(${Number(t.tank_id)})">تسجيل غمس</button><button class="apply-btn apply-btn-secondary" onclick="reconcileWetTank(${Number(t.tank_id)})">تسوية</button></td></tr>`;
+        }).join('') : '<tr><td colspan="9">لا توجد خزانات أو قراءات فعلية للمحطة</td></tr>';
         const recs = data.last_reconciliations || [];
         document.getElementById('wetReconciliationRows').innerHTML = recs.length ? recs.map(r => `<tr><td>${escapeHtml(r.shift_id)}</td><td>${escapeHtml(r.tank_name || r.tank_code || '')}</td><td>${Number(r.expected_liters||0).toLocaleString('en')} لتر</td><td>${Number(r.actual_liters||0).toLocaleString('en')} لتر</td><td>${Number(r.variance_liters||0).toFixed(2)} لتر</td><td>${Number(r.variance_pct||0).toFixed(2)}%</td></tr>`).join('') : '<tr><td colspan="6">لا توجد تسويات ورديات</td></tr>';
     } catch (e) { showToast(e.message || 'تعذر تحميل مخزون الوقود', 'error'); }
@@ -2779,6 +2817,8 @@ async function showAuditReport() {
 document.addEventListener('DOMContentLoaded', function() {
     loadSavedTheme();
     loadInitialData();
+    loadForecourt();
+    window.setInterval(loadForecourt, 30000);
     
     // أحداث التبديل
     document.getElementById('darkModeToggle').addEventListener('click', function() {
