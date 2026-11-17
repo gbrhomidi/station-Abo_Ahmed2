@@ -280,7 +280,22 @@ class DatabaseHelperCompatibilityMatrixTest {
                 put("net_amount", 100.0)
                 put("paid_amount", 25.0)
                 put("remaining_amount", 75.0)
-                put("created_at", "2026-11-16 21:30:00")
+                put("created_at", "2026-11-16T21:30:00Z")
+                put("business_day", "2026-11-16")
+            })
+            val ambiguousLocalSaleId = before.insertOrThrow("sales_transactions", null, ContentValues().apply {
+                put("uuid", "V44-TZ-SALE-LOCAL")
+                put("sale_code", "V44-TZ-SALE-LOCAL")
+                put("invoice_number", "V44-TZ-INVOICE-LOCAL")
+                put("station_id", 1)
+                put("shift_id", shiftId)
+                put("cashier_id", userId)
+                put("subtotal", 50.0)
+                put("gross_amount", 50.0)
+                put("net_amount", 50.0)
+                put("paid_amount", 50.0)
+                put("remaining_amount", 0.0)
+                put("created_at", "2026-11-16 23:45:00")
                 put("business_day", "2026-11-16")
             })
             val paymentId = before.insertOrThrow("payments", null, ContentValues().apply {
@@ -291,7 +306,7 @@ class DatabaseHelperCompatibilityMatrixTest {
                 put("payment_type", "cash")
                 put("payment_method", "cash")
                 put("amount", 25.0)
-                put("created_at", "2026-11-16 21:45:00")
+                put("created_at", "2026-11-16T21:45:00Z")
                 put("business_day", "2026-11-16")
             })
             val fuelSaleId = before.insertOrThrow("fuel_sales", null, ContentValues().apply {
@@ -301,7 +316,7 @@ class DatabaseHelperCompatibilityMatrixTest {
                 put("quantity", 10.0)
                 put("price_per_liter", 10.0)
                 put("total_amount", 100.0)
-                put("created_at", "2026-11-16 22:00:00")
+                put("created_at", "2026-11-16T22:00:00Z")
                 put("business_day", "2026-11-16")
             })
             val fuelSaleWithExplicitDateId = before.insertOrThrow("fuel_sales", null, ContentValues().apply {
@@ -319,7 +334,7 @@ class DatabaseHelperCompatibilityMatrixTest {
                 put("uuid", "V44-TZ-STOCK")
                 put("movement_type", "in")
                 put("quantity", 3.0)
-                put("created_at", "2026-11-16 22:15:00")
+                put("created_at", "2026-11-16T22:15:00Z")
                 put("business_day", "2026-11-16")
             })
             val stockMovementWithExplicitDateId = before.insertOrThrow("stock_movements", null, ContentValues().apply {
@@ -346,6 +361,14 @@ class DatabaseHelperCompatibilityMatrixTest {
                 }
 
             assertEquals("2026-11-17", businessDay("sales_transactions", saleId))
+            assertEquals("2026-11-16", businessDay("sales_transactions", ambiguousLocalSaleId))
+            upgraded.rawQuery(
+                "SELECT created_at FROM sales_transactions WHERE id=?",
+                arrayOf(ambiguousLocalSaleId.toString())
+            ).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("2026-11-16 23:45:00", it.getString(0))
+            }
             assertEquals("2026-11-17", businessDay("payments", paymentId))
             assertEquals("2026-11-17", businessDay("fuel_sales", fuelSaleId))
             assertEquals("2026-11-16", businessDay("fuel_sales", fuelSaleWithExplicitDateId))
@@ -357,7 +380,7 @@ class DatabaseHelperCompatibilityMatrixTest {
                 arrayOf(saleId.toString())
             ).use {
                 assertTrue(it.moveToFirst())
-                assertEquals("2026-11-16 21:30:00", it.getString(0))
+                assertEquals("2026-11-16T21:30:00Z", it.getString(0))
                 assertEquals(100.0, it.getDouble(1), 0.000001)
                 assertEquals(25.0, it.getDouble(2), 0.000001)
                 assertEquals(75.0, it.getDouble(3), 0.000001)
@@ -367,7 +390,7 @@ class DatabaseHelperCompatibilityMatrixTest {
                 arrayOf(paymentId.toString())
             ).use {
                 assertTrue(it.moveToFirst())
-                assertEquals("2026-11-16 21:45:00", it.getString(0))
+                assertEquals("2026-11-16T21:45:00Z", it.getString(0))
                 assertEquals(25.0, it.getDouble(1), 0.000001)
                 assertEquals(saleId, it.getLong(2))
             }
@@ -404,6 +427,15 @@ class DatabaseHelperCompatibilityMatrixTest {
                 put("payment_type", "cash")
                 put("payment_method", "cash")
                 put("amount", 42.5)
+                put("created_at", "2026-11-16T21:45:00Z")
+                put("business_day", "2026-11-16")
+            })
+            val localWallClockPaymentId = before.insertOrThrow("payments", null, ContentValues().apply {
+                put("uuid", "V65-LOCAL-WALL-CLOCK-PAYMENT")
+                put("payment_code", "V65-LOCAL-WALL-CLOCK-PAYMENT")
+                put("payment_type", "cash")
+                put("payment_method", "cash")
+                put("amount", 17.25)
                 put("created_at", "2026-11-16 21:45:00")
                 put("business_day", "2026-11-16")
             })
@@ -412,6 +444,15 @@ class DatabaseHelperCompatibilityMatrixTest {
 
             val upgraded = DatabaseHelper.getInstance(context).writableDatabase
             assertEquals(DatabaseHelper.VERSION, upgraded.version)
+            upgraded.rawQuery(
+                "SELECT business_day, created_at, amount FROM payments WHERE id=?",
+                arrayOf(localWallClockPaymentId.toString())
+            ).use {
+                assertTrue("zone-less local payment must survive V64 -> V65", it.moveToFirst())
+                assertEquals("2026-11-16", it.getString(0))
+                assertEquals("2026-11-16T21:45:00Z", it.getString(1))
+                assertEquals(17.25, it.getDouble(2), 0.000001)
+            }
             upgraded.rawQuery(
                 "SELECT business_day, created_at, amount FROM payments WHERE id=?",
                 arrayOf(paymentId.toString())

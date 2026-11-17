@@ -34341,10 +34341,11 @@ private fun postSalesReversalJournal(
      * created_at date prefix. V65 repeats the same idempotent repair for
      * installations that had already advanced to V64 before this fix shipped.
      *
-     * Only rows whose business_day still equals the UTC date prefix are eligible.
-     * For fuel_sales and stock_movements, rows with an explicit sale_date or
-     * movement_date are excluded because those are authoritative operational
-     * dates, not timestamp fallbacks. Invalid or missing timestamps are preserved.
+     * Only rows whose business_day still equals the timestamp date prefix and
+     * whose created_at contains an explicit Z/UTC offset are eligible. A naive
+     * timestamp has no reliable timezone provenance and must remain untouched.
+     * For fuel_sales and stock_movements, explicit sale_date/movement_date values
+     * remain authoritative. Invalid, missing, or zone-less timestamps are preserved.
      */
     private fun migrateV43ToV44(db: SQLiteDatabase) {
         migrateLegacyBusinessDaysToStationZone(db, "V43 -> V44")
@@ -34400,13 +34401,12 @@ private fun postSalesReversalJournal(
 
     private fun databaseUtcTimestampToLocalDate(value: String, zoneId: ZoneId): String? {
         val text = value.trim()
+        // A timestamp without Z or an explicit UTC offset is ambiguous: SQLite's
+        // CURRENT_TIMESTAMP is UTC, but legacy app writes may have stored station
+        // wall-clock time in the same zone-less format. Preserve such rows rather
+        // than silently shifting historical sales, payments, or debt dates.
         val instant = runCatching { Instant.parse(text) }.getOrNull()
             ?: runCatching { OffsetDateTime.parse(text.replace(' ', 'T')).toInstant() }.getOrNull()
-            ?: runCatching {
-                val localTimestamp = text.take(19).replace('T', ' ')
-                LocalDateTime.parse(localTimestamp, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-                    .toInstant(ZoneOffset.UTC)
-            }.getOrNull()
             ?: return null
         return instant.atZone(zoneId).toLocalDate().toString()
     }
