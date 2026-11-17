@@ -37,8 +37,10 @@ class DatabaseHelperBackupV62MigrationTest {
             val legacy = SQLiteDatabase.openDatabase(databaseFile.path, null, SQLiteDatabase.OPEN_READONLY)
             try {
                 assertEquals(62, legacy.version)
-                assertTrue("the V62 fixture must retain the full reference table set",
-                    scalarInt(legacy, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'") >= 247)
+                assertEquals("all 12 migration-surface tables must use the backup-derived V62 schema", 12,
+                    scalarInt(legacy, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN " +
+                        "('parties','vehicles','drivers','vehicle_trips','vehicle_locations','vehicle_expenses'," +
+                        "'vehicle_trip_events','deliveries','sales_transactions','payments','fuel_sales','stock_movements')"))
                 assertFalse("the V62 backup schema must not already contain vehicle_locations.trip_id",
                     tableColumns(legacy, "vehicle_locations").contains("trip_id"))
                 assertEquals(3, scalarInt(legacy, "SELECT COUNT(*) FROM vehicle_locations"))
