@@ -257,6 +257,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensurePricingV42Schema(db)
             ensureOpenCompatibilitySchema(db)
             ensurePhase1WetStockSchema(db)
+            ensurePhase2DryStockSchema(db)
             DebtDueDateRepository.ensureSchema(db)
             SupplierPayablesRepository.ensureSchema(db)
             CustomerReceivablesRepository.ensureSchema(db)
@@ -345,6 +346,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensurePricingV42Schema(db)
             ensureOpenCompatibilitySchema(db)
             ensurePhase1WetStockSchema(db)
+            ensurePhase2DryStockSchema(db)
             DebtDueDateRepository.ensureSchema(db)
             SupplierPayablesRepository.ensureSchema(db)
             CustomerReceivablesRepository.ensureSchema(db)
@@ -1900,6 +1902,64 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_sale_adjustments_station_date ON fuel_sale_adjustments(station_id, created_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_damaged_products_sale ON damaged_products(sale_id, sale_item_id, source_type)")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS uq_damaged_products_idempotency ON damaged_products(station_id, idempotency_key) WHERE idempotency_key IS NOT NULL AND idempotency_key <> ''")
+    }
+
+    /** Phase 2 dry-stock schema. All additions are nullable/defaulted for legacy data. */
+    private fun ensurePhase2DryStockSchema(db: SQLiteDatabase) {
+        ensureColumn(db, "products", "xyz_class", "TEXT")
+        ensureColumn(db, "products", "reorder_point", "REAL DEFAULT 0")
+        ensureColumn(db, "products", "safety_stock", "REAL DEFAULT 0")
+        ensureColumn(db, "products", "lead_time_days", "INTEGER DEFAULT 0")
+        ensureColumn(db, "products", "track_serial", "INTEGER DEFAULT 0")
+        ensureColumn(db, "products", "track_batch", "INTEGER DEFAULT 0")
+        ensureColumn(db, "products", "track_expiry", "INTEGER DEFAULT 0")
+        ensureColumn(db, "products", "track_warranty", "INTEGER DEFAULT 0")
+        ensureColumn(db, "products", "unit_of_measure", "TEXT")
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS stock_locations (
+                location_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
+                name TEXT NOT NULL,
+                type TEXT NOT NULL DEFAULT 'warehouse' CHECK(type IN ('store','workshop','technician_cart','quarantine','warehouse')),
+                is_active INTEGER NOT NULL DEFAULT 1
+            )
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS product_batches (
+                batch_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id INTEGER NOT NULL REFERENCES products(id),
+                lot_number TEXT,
+                expiry_date TEXT,
+                quantity REAL NOT NULL DEFAULT 0 CHECK(quantity >= 0),
+                location_id INTEGER REFERENCES stock_locations(location_id),
+                received_at TEXT NOT NULL,
+                received_by INTEGER REFERENCES users(id)
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_phase2_batches_fefo ON product_batches(product_id, expiry_date, received_at, batch_id)")
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS product_serials (
+                serial_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id INTEGER NOT NULL REFERENCES products(id),
+                serial_no TEXT UNIQUE NOT NULL,
+                batch_no TEXT,
+                supplier_id INTEGER REFERENCES parties(id),
+                received_at TEXT,
+                warranty_start_at TEXT,
+                warranty_end_at TEXT,
+                expiry_at TEXT,
+                status TEXT NOT NULL DEFAULT 'AVAILABLE' CHECK(status IN ('AVAILABLE','SOLD','RETURNED','DAMAGED','QUARANTINE')),
+                sale_id INTEGER REFERENCES sales_transactions(id),
+                location_id INTEGER REFERENCES stock_locations(location_id),
+                return_reason TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_phase2_serials_product_status ON product_serials(product_id, status)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_phase2_serials_warranty ON product_serials(warranty_end_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_phase2_serials_expiry ON product_serials(expiry_at)")
+        ensureColumn(db, "sale_items", "batch_id", "INTEGER REFERENCES product_batches(batch_id)")
+        ensureColumn(db, "sale_items", "serial_id", "INTEGER REFERENCES product_serials(serial_id)")
     }
 
     /**
@@ -12293,11 +12353,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 require(productId > 0L) { "المنتج في السطر ${i + 1} غير صالح" }
                 require(quantity.isFinite() && quantity > 0.0) { "كمية السطر ${i + 1} غير صالحة" }
                 val product = db.rawQuery(
-                    "SELECT id, product_name, COALESCE(purchase_price, 0) FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'active'",
+                    "SELECT id, product_name, COALESCE(purchase_price, 0), COALESCE(track_batch,0), COALESCE(track_expiry,0), COALESCE(track_serial,0) FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'active'",
                     arrayOf(productId.toString(), stationScopeId.toString())
                 ).use { cursor ->
                     require(cursor.moveToFirst()) { "المنتج في السطر ${i + 1} خارج نطاق المحطة أو غير نشط" }
-                    JSONObject().apply { put("id", cursor.getLong(0)); put("product_name", cursor.getString(1)); put("purchase_price", cursor.getDouble(2)) }
+                    JSONObject().apply { put("id", cursor.getLong(0)); put("product_name", cursor.getString(1)); put("purchase_price", cursor.getDouble(2)); put("track_batch", cursor.getInt(3)); put("track_expiry", cursor.getInt(4)); put("track_serial", cursor.getInt(5)) }
                 }
                 val inventoryUnitCost = db.rawQuery(
                     """SELECT CASE WHEN SUM(il.quantity_on_hand) > 0
@@ -12322,6 +12382,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("quantity_limit", resolvedPrice.quantityLimit ?: JSONObject.NULL)
                     put("occasion_code", data.optString("occasion_code", "").trim())
                     put("price_reason", resolvedPrice.reason ?: JSONObject.NULL); put("price_valid_until", resolvedPrice.validUntil ?: JSONObject.NULL)
+                    put("track_batch", product.optInt("track_batch", 0)); put("track_expiry", product.optInt("track_expiry", 0)); put("track_serial", product.optInt("track_serial", 0))
                 }
             }
             require(total.isFinite() && total >= 0.0) { "إجمالي البيع غير صالح" }
@@ -12368,6 +12429,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 return result
             }
             require(reserveFinancialIdempotency(db, "product_sale", stationScopeId, idempotencyKey)) { "مفتاح العملية مستخدم مسبقاً" }
+            prepared.forEach { resolveDryStockSelection(db, it) }
             prepared.forEach { item ->
                 val itemId = item.optLong("price_list_item_id", 0L).takeIf { it > 0L }
                 val cap = item.optDouble("quantity_limit", 0.0)
@@ -12443,6 +12505,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("line_number", index + 1)
                     put("item_type", "product")
                     put("product_id", productId)
+                    item.optLong("batch_id", 0L).takeIf { it > 0 }?.let { put("batch_id", it) }
+                    item.optLong("serial_id", 0L).takeIf { it > 0 }?.let { put("serial_id", it) }
                     put("quantity", quantity)
                     put("unit_price", unitPrice)
                     put("cost_price", item.optDouble("cost_price", 0.0).coerceAtLeast(0.0))
@@ -12451,6 +12515,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("line_total", quantity * unitPrice)
                 }
                 db.insertOrThrow("sale_items", null, cv)
+                consumeDryStockSelection(db, item, saleId)
                 ensureInventoryBaselineForProduct(db, productId, warehouseId, stationScopeId)
                 addStockMovementInternal(db,
                     JSONObject().apply {
@@ -12489,6 +12554,43 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             dbLock.unlock()
         }
         return result
+    }
+
+    private fun resolveDryStockSelection(db: SQLiteDatabase, item: JSONObject) {
+        val productId = item.getLong("product_id")
+        val quantity = item.getDouble("quantity")
+        if (item.optInt("track_batch", 0) == 1) {
+            val requested = item.optLong("batch_id", 0L)
+            val sql = if (requested > 0) "SELECT batch_id,expiry_date,quantity FROM product_batches WHERE batch_id=? AND product_id=? AND quantity>=?" else "SELECT batch_id,expiry_date,quantity FROM product_batches WHERE product_id=? AND quantity>=? ORDER BY CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END,expiry_date,received_at,batch_id LIMIT 1"
+            val args = if (requested > 0) arrayOf(requested.toString(), productId.toString(), quantity.toString()) else arrayOf(productId.toString(), quantity.toString())
+            db.rawQuery(sql, args).use { c ->
+                require(c.moveToFirst()) { "لا توجد دفعة متاحة بالكمية المطلوبة" }
+                val expiry = c.getString(1)
+                require(expiry.isNullOrBlank() || expiry >= getCurrentDate()) { "لا يمكن بيع دفعة منتهية الصلاحية" }
+                item.put("batch_id", c.getLong(0))
+            }
+        }
+        if (item.optInt("track_serial", 0) == 1) {
+            require(quantity == 1.0) { "يجب اختيار سيريال مستقل لكل قطعة" }
+            val serialId = item.optLong("serial_id", 0L)
+            require(serialId > 0) { "اختيار السيريال إلزامي لهذا المنتج" }
+            db.rawQuery("SELECT serial_id,expiry_at FROM product_serials WHERE serial_id=? AND product_id=? AND status='AVAILABLE'", arrayOf(serialId.toString(), productId.toString())).use { c ->
+                require(c.moveToFirst()) { "السيريال غير متاح أو لا ينتمي للمنتج" }
+                val expiry = c.getString(1)
+                require(expiry.isNullOrBlank() || expiry >= getCurrentDate()) { "السيريال منتهي الصلاحية" }
+            }
+        }
+    }
+
+    private fun consumeDryStockSelection(db: SQLiteDatabase, item: JSONObject, saleId: Long) {
+        val batchId = item.optLong("batch_id", 0L)
+        if (batchId > 0) {
+            val quantity = item.getDouble("quantity")
+            db.execSQL("UPDATE product_batches SET quantity=quantity-? WHERE batch_id=? AND quantity>=?", arrayOf(quantity, batchId, quantity))
+            db.rawQuery("SELECT quantity FROM product_batches WHERE batch_id=?", arrayOf(batchId.toString())).use { c -> require(c.moveToFirst() && c.getDouble(0) >= -0.000001) { "تعذر خصم الدفعة المختارة" } }
+        }
+        val serialId = item.optLong("serial_id", 0L)
+        if (serialId > 0) require(db.update("product_serials", ContentValues().apply { put("status", "SOLD"); put("sale_id", saleId); put("warranty_start_at", getCurrentDateTime()) }, "serial_id=? AND status='AVAILABLE'", arrayOf(serialId.toString())) == 1) { "تعذر تحديث حالة السيريال" }
     }
 
     private fun addStockMovementInternal(
@@ -36456,6 +36558,85 @@ private fun postSalesReversalJournal(
             require(cursor.moveToFirst()) { "المصدر الأصلي غير موجود أو خارج نطاق المحطة" }
             return TraceOrigin(cursor.getLong(0), cursor.getString(1).orEmpty(), cursor.getInt(2), cursor.getString(3).orEmpty(), screen, type)
         }
+    }
+
+    // ========================================================================
+    // Phase 2: Dry Stock contracts
+    // ========================================================================
+    fun getProductBatches(productId: Long, stationScopeId: Int): JSONArray {
+        require(productId > 0 && stationScopeId > 0)
+        return readableDatabase.rawQuery(
+            "SELECT b.*, p.product_name FROM product_batches b JOIN products p ON p.id=b.product_id WHERE b.product_id=? AND p.station_id=? ORDER BY CASE WHEN b.expiry_date IS NULL THEN 1 ELSE 0 END,b.expiry_date,b.received_at,b.batch_id",
+            arrayOf(productId.toString(), stationScopeId.toString())
+        ).use { cursorToJsonArray(it) }
+    }
+
+    fun getAvailableSerials(productId: Long, stationScopeId: Int): JSONArray {
+        require(productId > 0 && stationScopeId > 0)
+        return readableDatabase.rawQuery(
+            "SELECT s.serial_id,s.product_id,s.serial_no,s.batch_no,s.warranty_end_at,s.expiry_at,s.location_id FROM product_serials s JOIN products p ON p.id=s.product_id WHERE s.product_id=? AND p.station_id=? AND s.status='AVAILABLE' ORDER BY s.warranty_end_at,s.serial_id",
+            arrayOf(productId.toString(), stationScopeId.toString())
+        ).use { cursorToJsonArray(it) }
+    }
+
+    fun insertProductSerial(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
+        val productId = data.optLong("product_id", 0L)
+        val serialNo = data.optString("serial_no").trim()
+        require(productId > 0 && serialNo.isNotBlank()) { "المنتج والسيريال مطلوبان" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.rawQuery("SELECT id FROM products WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(productId.toString(), stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "المنتج خارج نطاق المحطة" } }
+            db.insertOrThrow("product_serials", null, ContentValues().apply {
+                put("product_id", productId); put("serial_no", serialNo)
+                data.optString("batch_no").takeIf { it.isNotBlank() }?.let { put("batch_no", it) }
+                data.optLong("supplier_id", 0L).takeIf { it > 0 }?.let { put("supplier_id", it) }
+                put("received_at", data.optString("received_at").ifBlank { getCurrentDateTime() })
+                listOf("warranty_start_at", "warranty_end_at", "expiry_at").forEach { key -> data.optString(key).takeIf { it.isNotBlank() }?.let { put(key, it) } }
+                data.optLong("location_id", 0L).takeIf { it > 0 }?.let { put("location_id", it) }
+                put("created_at", getCurrentDateTime())
+            })
+        } finally { dbLock.unlock() }
+    }
+
+    fun markSerialSold(serialId: Long, saleId: Long): Boolean {
+        require(serialId > 0 && saleId > 0)
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val startMissing = db.rawQuery("SELECT warranty_start_at FROM product_serials WHERE serial_id=? AND status='AVAILABLE'", arrayOf(serialId.toString())).use { c -> c.moveToFirst() && c.isNull(0) }
+            db.update("product_serials", ContentValues().apply { put("status", "SOLD"); put("sale_id", saleId); if (startMissing) put("warranty_start_at", getCurrentDateTime()) }, "serial_id=? AND status='AVAILABLE'", arrayOf(serialId.toString())) == 1
+        } finally { dbLock.unlock() }
+    }
+
+    fun getExpiringBatches(daysAhead: Int, stationScopeId: Int): JSONArray {
+        require(daysAhead >= 0)
+        return readableDatabase.rawQuery("SELECT b.*,p.product_name,p.product_name_ar FROM product_batches b JOIN products p ON p.id=b.product_id WHERE p.station_id=? AND b.quantity>0 AND b.expiry_date IS NOT NULL AND date(b.expiry_date) BETWEEN date('now') AND date('now','+'||?||' day') ORDER BY b.expiry_date", arrayOf(stationScopeId.toString(), daysAhead.toString())).use { cursorToJsonArray(it) }
+    }
+
+    fun getExpiringWarranties(daysAhead: Int, stationScopeId: Int): JSONArray {
+        require(daysAhead >= 0)
+        return readableDatabase.rawQuery("SELECT s.*,p.product_name,p.product_name_ar FROM product_serials s JOIN products p ON p.id=s.product_id WHERE p.station_id=? AND s.status='AVAILABLE' AND s.warranty_end_at IS NOT NULL AND date(s.warranty_end_at) BETWEEN date('now') AND date('now','+'||?||' day') ORDER BY s.warranty_end_at", arrayOf(stationScopeId.toString(), daysAhead.toString())).use { cursorToJsonArray(it) }
+    }
+
+    fun getInventoryAging(stationScopeId: Int): JSONObject {
+        val buckets = JSONArray()
+        val ranges = listOf("0-30" to "date(im.created_at)>=date('now','-30 day')", "31-60" to "date(im.created_at) BETWEEN date('now','-60 day') AND date('now','-31 day')", "61-90" to "date(im.created_at) BETWEEN date('now','-90 day') AND date('now','-61 day')", ">90" to "date(im.created_at)<date('now','-90 day')")
+        ranges.forEach { (label, clause) -> readableDatabase.rawQuery("SELECT COALESCE(SUM(il.quantity_on_hand*il.average_cost),0) FROM inventory_levels il JOIN warehouses w ON w.id=il.warehouse_id LEFT JOIN (SELECT product_id,MAX(created_at) created_at FROM inventory_movements WHERE station_id=? GROUP BY product_id) im ON im.product_id=il.product_id WHERE w.station_id=? AND ($clause OR im.created_at IS NULL)", arrayOf(stationScopeId.toString(), stationScopeId.toString())).use { c -> buckets.put(JSONObject().put("bucket", label).put("value", if (c.moveToFirst()) c.getDouble(0) else 0.0)) } }
+        return JSONObject().put("buckets", buckets)
+    }
+
+    fun getABCXYZAnalysis(stationScopeId: Int): JSONArray {
+        val db = readableDatabase; val result = JSONArray()
+        val total = db.rawQuery("SELECT COALESCE(SUM(quantity*purchase_price),0) FROM products WHERE station_id=? AND is_deleted=0", arrayOf(stationScopeId.toString())).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+        db.rawQuery("SELECT id,COALESCE(quantity*purchase_price,0),COALESCE(xyz_class,'X') FROM products WHERE station_id=? AND is_deleted=0 ORDER BY quantity*purchase_price DESC", arrayOf(stationScopeId.toString())).use { c -> var cumulative = 0.0; while (c.moveToNext()) { cumulative += c.getDouble(1); result.put(JSONObject().put("product_id", c.getLong(0)).put("abc", if (total <= 0) "C" else if (cumulative / total <= .7) "A" else if (cumulative / total <= .9) "B" else "C").put("xyz", c.getString(2))) } }
+        return result
+    }
+
+    fun getDryStockPage(filters: JSONObject, stationScopeId: Int): JSONObject {
+        val products = readableDatabase.rawQuery("SELECT p.id product_id,p.product_code,p.product_name,p.product_name_ar,p.quantity,p.minimum_stock,p.reorder_point,p.safety_stock,p.track_serial,p.track_batch,p.track_expiry,p.track_warranty,COALESCE((SELECT SUM(quantity) FROM product_batches b WHERE b.product_id=p.id),0) batch_quantity,COALESCE((SELECT MIN(expiry_date) FROM product_batches b WHERE b.product_id=p.id AND b.quantity>0),p.expiry_date) nearest_expiry,COALESCE((SELECT COUNT(*) FROM product_serials s WHERE s.product_id=p.id AND s.status='AVAILABLE'),0) available_serials FROM products p WHERE p.station_id=? AND p.is_deleted=0 AND p.status='active' ORDER BY p.product_name", arrayOf(stationScopeId.toString())).use { cursorToJsonArray(it) }
+        val kpis = JSONObject(); readableDatabase.rawQuery("SELECT COALESCE(SUM(quantity*purchase_price),0),SUM(CASE WHEN quantity<COALESCE(reorder_point,minimum_stock) THEN 1 ELSE 0 END),SUM(CASE WHEN quantity<minimum_stock THEN quantity*purchase_price ELSE 0 END) FROM products WHERE station_id=? AND is_deleted=0", arrayOf(stationScopeId.toString())).use { c -> if (c.moveToFirst()) { kpis.put("inventory_value", c.getDouble(0)); kpis.put("low_stock_count", c.getInt(1)); kpis.put("dead_stock_value", c.getDouble(2)) } }
+        return JSONObject().put("products", products).put("kpis", kpis).put("aging", getInventoryAging(stationScopeId))
     }
 
     private data class TraceOrigin(val id: Long, val reference: String, val station: Int, val date: String, val screen: String, val type: String)

@@ -1430,6 +1430,12 @@
     </div>
    </div>
    <!-- ===== قسم الحركات ===== -->
+   <div class="section" id="dryStockSection">
+    <div class="glass-card"><div class="chart-header"><h3 class="chart-title">🧴 مخزون المنتجات — Dry Stock</h3><button class="apply-btn" onclick="loadDryStock()">🔄 تحديث</button></div>
+     <div class="intelligence-kpis"><div class="intelligence-mini"><div class="mini-label">قيمة المخزون</div><div class="mini-value" id="dryInventoryValue">0 ريال</div></div><div class="intelligence-mini"><div class="mini-label">تحت الحد الأدنى</div><div class="mini-value" id="dryLowStock">0 صنف</div></div><div class="intelligence-mini"><div class="mini-label">المخزون الراكد</div><div class="mini-value" id="dryDeadStock">0 ريال</div></div></div>
+     <div class="table-container"><table class="data-table intelligence-table"><thead><tr><th>الكود</th><th>المنتج</th><th>الكمية</th><th>FEFO</th><th>سيريالات متاحة</th><th>التتبع</th><th>إجراء</th></tr></thead><tbody id="dryProductBoard"><tr><td colspan="7">لا توجد بيانات فعلية</td></tr></tbody></table></div>
+    </div>
+   </div>
    <div class="section" id="wetStockSection">
     <div class="glass-card">
      <div class="chart-header"><h3 class="chart-title">🛢️ مخزون الوقود — Wet Stock</h3><button class="apply-btn" onclick="loadWetStock()">🔄 تحديث</button></div>
@@ -1602,6 +1608,7 @@
      الملخص
     </span>
    </div>
+   <div class="menu-item" data-section="dryStock" onclick="switchSection('dryStock')"><i class="fas fa-boxes"></i><span>المنتجات</span></div>
    <div class="menu-item" data-section="wetStock" onclick="switchSection('wetStock')"><i class="fas fa-gas-pump"></i><span>الوقود</span></div>
    <div class="menu-item" data-section="movements" onclick="switchSection('movements')">
     <i class="fas fa-exchange-alt">
@@ -1853,6 +1860,8 @@ function apiCall(action, params = {}) {
             return invokeBridge('addProduct', [json]);
         case 'getWetStockPage':
             return invokeBridge('getWetStockPage', [json]);
+        case 'getDryStockPage':
+            return invokeBridge('getDryStockPage', [json]);
         case 'getShiftReconciliation':
             return invokeBridge('getShiftReconciliation', [json]);
         case 'insertDipReading':
@@ -1913,6 +1922,7 @@ function switchSection(sectionId) {
     document.querySelector(`.menu-item[data-section="${sectionId}"]`).classList.add('active');
     
     // تحميل البيانات حسب القسم
+    if (sectionId === 'dryStock') loadDryStock();
     if (sectionId === 'wetStock') loadWetStock();
     if (sectionId === 'movements') loadMovements();
     if (sectionId === 'values') loadStockValues();
@@ -1956,6 +1966,21 @@ async function loadInitialData() {
     } finally {
         showLoading(false);
     }
+}
+
+async function loadDryStock() {
+    try {
+        const result = await apiCall('getDryStockPage', {}), data = result.data || {}, k = data.kpis || {};
+        document.getElementById('dryInventoryValue').textContent = Number(k.inventory_value || 0).toLocaleString('en') + ' ريال';
+        document.getElementById('dryLowStock').textContent = Number(k.low_stock_count || 0).toLocaleString('en') + ' صنف';
+        document.getElementById('dryDeadStock').textContent = Number(k.dead_stock_value || 0).toLocaleString('en') + ' ريال';
+        const rows = data.products || [];
+        document.getElementById('dryProductBoard').innerHTML = rows.length ? rows.map(p => `<tr><td>${escapeHtml(p.product_code || '')}</td><td>${escapeHtml(p.product_name_ar || p.product_name || '')}</td><td>${Number(p.quantity || 0).toLocaleString('en')}</td><td>${p.nearest_expiry ? escapeHtml(p.nearest_expiry) : '—'}</td><td>${Number(p.available_serials || 0)}</td><td>${[p.track_serial == 1 ? 'سيريال' : '',p.track_batch == 1 ? 'دفعة' : '',p.track_expiry == 1 ? 'صلاحية' : ''].filter(Boolean).join('، ') || '—'}</td><td><button class="apply-btn" onclick="showProductBatches(${Number(p.product_id)})">عرض الدفعات</button></td></tr>`).join('') : '<tr><td colspan="7">لا توجد منتجات فعلية للمحطة</td></tr>';
+    } catch (e) { showToast(e.message || 'تعذر تحميل مخزون المنتجات', 'error'); }
+}
+
+async function showProductBatches(productId) {
+    try { const result = await invokeBridge('getProductBatches', [JSON.stringify({product_id: productId})]); const rows = (result.data || []).map(b => `${b.lot_number || 'بدون رقم'} — ${Number(b.quantity || 0).toLocaleString('en')} وحدة — ${b.expiry_date || 'بدون صلاحية'}`).join('<br>'); await Swal.fire({title:'دفعات FEFO',html:rows || 'لا توجد دفعات متاحة',confirmButtonText:'إغلاق'}); } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function loadWetStock() {

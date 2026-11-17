@@ -5346,6 +5346,38 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         } catch (e: Exception) { DebugLogger.logException("DipReading", e); errorResponse(e.message) }
         }
 
+        // Phase 2: Dry Stock (additive bridge contract)
+        @JavascriptInterface
+        fun getDryStockPage(jsonData: String = "{}"): String {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(helper.getDryStockPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(helper, activity.currentUserId))) } catch (e: Exception) { errorResponse(e.message) }
+        }
+        @JavascriptInterface
+        fun getProductBatches(jsonData: String): String {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val d=JSONObject(jsonData); dataResponse(helper.getProductBatches(d.optLong("product_id"), requireCurrentStationId(helper, activity.currentUserId))) } catch (e: Exception) { errorResponse(e.message) }
+        }
+        @JavascriptInterface
+        fun getAvailableSerials(jsonData: String): String {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val d=JSONObject(jsonData); dataResponse(helper.getAvailableSerials(d.optLong("product_id"), requireCurrentStationId(helper, activity.currentUserId))) } catch (e: Exception) { errorResponse(e.message) }
+        }
+        @JavascriptInterface
+        fun insertProductSerial(jsonData: String): String {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); successResponse(helper.insertProductSerial(JSONObject(jsonData), requireCurrentStationId(helper, activity.currentUserId), activity.currentUserId), "تم تسجيل السيريال") } catch (e: Exception) { errorResponse(e.message) }
+        }
+        @JavascriptInterface
+        fun markSerialSold(jsonData: String): String = try { val helper=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val d=JSONObject(jsonData); successResponse(helper.markSerialSold(d.optLong("serial_id"),d.optLong("sale_id")),"تم تحديث السيريال") } catch(e:Exception){errorResponse(e.message)}
+        @JavascriptInterface
+        fun getExpiringBatches(jsonData: String = "{}"): String { val helper=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); return try { val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(helper.getExpiringBatches(JSONObject(jsonData).optInt("days_ahead",30),requireCurrentStationId(helper,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)} }
+        @JavascriptInterface
+        fun getExpiringWarranties(jsonData: String = "{}"): String { val helper=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); return try { val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(helper.getExpiringWarranties(JSONObject(jsonData).optInt("days_ahead",30),requireCurrentStationId(helper,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)} }
+        @JavascriptInterface
+        fun getInventoryAging(jsonData: String = "{}"): String { val helper=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); return try { val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(helper.getInventoryAging(requireCurrentStationId(helper,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)} }
+        @JavascriptInterface
+        fun getABCXYZAnalysis(jsonData: String = "{}"): String { val helper=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); return try { val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(helper.getABCXYZAnalysis(requireCurrentStationId(helper,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)} }
+
         // ============================================================
         // 9. المخزون
         // ============================================================

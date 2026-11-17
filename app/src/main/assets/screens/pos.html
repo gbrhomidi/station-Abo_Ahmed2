@@ -4344,6 +4344,9 @@ function apiCall(action, params) {
             case 'getActivePriceListsForPricing': raw = AndroidInterface.getPriceListRecords(JSON.stringify(p || {})); break;
             case 'getNextInvoiceNumber': raw = AndroidInterface.getNextInvoiceNumber(); break;
             case 'completeSale': raw = AndroidInterface.completeSale(JSON.stringify(p)); break;
+            case 'getDryStockPage': raw = AndroidInterface.getDryStockPage(JSON.stringify(p || {})); break;
+            case 'getProductBatches': raw = AndroidInterface.getProductBatches(JSON.stringify(p || {})); break;
+            case 'getAvailableSerials': raw = AndroidInterface.getAvailableSerials(JSON.stringify(p || {})); break;
             case 'getCustomers': raw = AndroidInterface.getCustomers(); break;
             case 'getPaymentTerms': raw = AndroidInterface.getPaymentTerms(String(p.applies_to || 'customer')); break;
             case 'getCurrentStationProfile': raw = AndroidInterface.getCurrentStationProfile(); break;
@@ -5437,7 +5440,36 @@ function resetForm() {
     _lastSharePhone = '';
 }
 
-function completeSale() {
+async function prepareDryStockProducts(products) {
+    const page = await apiCall('getDryStockPage', {});
+    const catalog = page.data?.products || [];
+    for (const item of products) {
+        const product = catalog.find(p => Number(p.product_id) === Number(item.product_id));
+        if (!product) continue;
+        if (Number(product.track_batch) === 1) {
+            const batches = (await apiCall('getProductBatches', {product_id:Number(item.product_id)})).data || [];
+            const selected = batches.find(b => Number(b.quantity || 0) >= Number(item.quantity || 0));
+            if (!selected) throw new Error('لا توجد دفعة متاحة بالكمية المطلوبة للمنتج');
+            item.batch_id = Number(selected.batch_id);
+        }
+        if (Number(product.track_serial) === 1) {
+            if (Number(item.quantity) !== 1) throw new Error('يجب بيع القطع ذات السيريال قطعةً قطعة');
+            const serials = (await apiCall('getAvailableSerials', {product_id:Number(item.product_id)})).data || [];
+            if (!serials.length) throw new Error('لا يوجد سيريال متاح لهذا المنتج');
+            let selected = serials[0];
+            if (serials.length > 1) {
+                const options = Object.fromEntries(serials.map(s => [String(s.serial_id), `${s.serial_no}${s.warranty_end_at ? ' — ضمان حتى '+s.warranty_end_at : ''}`]));
+                const choice = await Swal.fire({title:'اختر السيريال',input:'select',inputOptions:options,showCancelButton:true,confirmButtonText:'اختيار',cancelButtonText:'إلغاء'});
+                if (!choice.isConfirmed) throw new Error('تم إلغاء اختيار السيريال');
+                selected = serials.find(s => String(s.serial_id) === String(choice.value));
+            }
+            item.serial_id = Number(selected.serial_id);
+        }
+    }
+    return products;
+}
+
+async function completeSale() {
     const subtotal = getInvoiceNumberValue('subtotal', 0);
     const discountAmount = getInvoiceNumberValue('discountAmount', 0);
     const taxAmount = getInvoiceNumberValue('taxAmount', 0);
@@ -5475,6 +5507,8 @@ function completeSale() {
     if (products.length === 0) { showToast('يرجى إضافة منتجات قبل الترحيل', 'error'); return; }
     const unresolved = Array.from(document.querySelectorAll('#productsTableBody tr')).some(row => row.dataset.priceResolved !== '1' || row.classList.contains('price-resolving'));
     if (unresolved) { showToast('انتظر حتى يكتمل احتساب أسعار القوائم الفعلية لجميع المنتجات', 'error'); return; }
+
+    try { await prepareDryStockProducts(products); } catch (error) { showToast(error.message || 'تعذر تجهيز الدفعة أو السيريال', 'error'); return; }
 
     const invoiceData = {
         invoice_number: document.getElementById('invoiceNumber').value,
