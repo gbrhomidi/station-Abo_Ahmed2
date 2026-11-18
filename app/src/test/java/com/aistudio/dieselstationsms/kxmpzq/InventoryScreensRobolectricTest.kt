@@ -298,6 +298,58 @@ class InventoryScreensRobolectricTest {
         assertEquals("An empty batch must resolve its prior expiry alert", 1, resolved.getInt("is_resolved"))
     }
 
+
+    @Test
+    fun unifiedAlertsIncludeWarrantyAnomaliesAndLatePurchaseOrdersWithSharedFilters() {
+        val db=helper.writableDatabase; val today=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Aden"))
+        val p1=createProduct(10.0,1.0); val p2=createProduct(10.0,1.0,2,stationTwoActorId)
+        val warrantyId=db.insertOrThrow("product_serials",null,ContentValues().apply {
+            put("product_id",p1); put("serial_no","WARRANTY-"+UUID.randomUUID()); put("status","SOLD"); put("warranty_end_at",today.plusDays(4).toString())
+        })
+        db.insertOrThrow("product_serials",null,ContentValues().apply {
+            put("product_id",p2); put("serial_no","OTHER-WARRANTY-"+UUID.randomUUID()); put("status","AVAILABLE"); put("warranty_end_at",today.plusDays(3).toString())
+        })
+        db.insertOrThrow("product_serials",null,ContentValues().apply {
+            put("product_id",p1); put("serial_no","RETURNED-WARRANTY-"+UUID.randomUUID()); put("status","RETURNED"); put("warranty_end_at",today.plusDays(2).toString())
+        })
+        val anomalyId=db.insertOrThrow("inventory_anomalies",null,ContentValues().apply {
+            put("station_id",1); put("item_type","PRODUCT"); put("item_id",p1); put("anomaly_type","COUNT_VARIANCE")
+            put("severity","critical"); put("metric_value",8.0); put("threshold_value",2.0); put("status","OPEN")
+            put("details","اختلاف جرد تجريبي"); put("detected_at",today.toString())
+        })
+        db.insertOrThrow("inventory_anomalies",null,ContentValues().apply {
+            put("station_id",2); put("item_type","PRODUCT"); put("item_id",p2); put("anomaly_type","COUNT_VARIANCE")
+            put("severity","critical"); put("status","OPEN"); put("detected_at",today.toString())
+        })
+        val poId=db.insertOrThrow("purchase_orders",null,ContentValues().apply {
+            put("po_number","PO-ALERT-"+UUID.randomUUID().toString().take(8)); put("station_id",1); put("status","approved")
+            put("expected_at",today.minusDays(5).toString()); put("total_amount",1250.0)
+        })
+        db.insertOrThrow("purchase_orders",null,ContentValues().apply {
+            put("po_number","PO-OTHER-"+UUID.randomUUID().toString().take(8)); put("station_id",2); put("status","partial")
+            put("expected_at",today.minusDays(3).toString()); put("total_amount",500.0)
+        })
+        db.insertOrThrow("purchase_orders",null,ContentValues().apply {
+            put("po_number","PO-RECEIVED-"+UUID.randomUUID().toString().take(8)); put("station_id",1); put("status","received")
+            put("expected_at",today.minusDays(10).toString()); put("total_amount",700.0)
+        })
+        fun rows(type:String,station:Int=1)=helper.getStockAlertRecordsContract(JSONObject().put("alert_type",type).put("limit",0),station).getJSONArray("rows")
+        val warranties=rows("warranty"); assertEquals(1,warranties.length()); assertEquals(warrantyId,warranties.getJSONObject(0).getLong("serial_id"))
+        assertEquals("critical",warranties.getJSONObject(0).getString("alert_level"))
+        val anomalies=rows("anomaly"); assertEquals(1,anomalies.length())
+        assertEquals(anomalyId,JSONObject(anomalies.getJSONObject(0).getString("extra_data")).getLong("anomaly_id"))
+        val late=rows("po_late"); assertEquals(1,late.length()); assertEquals(poId,late.getJSONObject(0).getLong("purchase_order_id"))
+        assertEquals(5,late.getJSONObject(0).getInt("days_overdue"))
+        assertEquals(1,rows("warranty",2).length()); assertTrue(rows("warranty",2).getJSONObject(0).getLong("serial_id")!=warrantyId)
+        assertEquals(1,rows("anomaly",2).length()); assertEquals(1,rows("po_late",2).length())
+        val all=helper.getStockAlertRecordsContract(JSONObject().put("limit",0),1); val stats=all.getJSONObject("statistics")
+        assertEquals(1,stats.getInt("warranty_count")); assertEquals(1,stats.getInt("anomaly_count")); assertEquals(1,stats.getInt("po_late_count"))
+        assertEquals(all.getInt("total_count"),stats.getInt("total_count"))
+        val page=helper.getStockAlertRecordsContract(JSONObject().put("limit",1).put("offset",0),1)
+        assertEquals(1,page.getJSONArray("rows").length()); assertTrue(page.getBoolean("has_next"))
+        assertEquals(all.getInt("total_count"),page.getInt("total_count"))
+    }
+
     @Test
     fun warehouseCrudIsStationScopedAndDeactivationPreservesLinkedRows() {
         val db = helper.writableDatabase

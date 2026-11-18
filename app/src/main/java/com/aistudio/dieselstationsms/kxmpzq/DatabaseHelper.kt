@@ -22403,6 +22403,75 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
             }
 
+            // Warranty alerts: sold units remain covered; returned/damaged/quarantined serials are excluded.
+            val alertToday = java.time.LocalDate.parse(getCurrentDate())
+            val warrantyCutoff = alertToday.plusDays(30)
+            db.rawQuery("""SELECT s.serial_id,s.product_id,s.serial_no,s.status,s.warranty_end_at,COALESCE(p.product_name_ar,p.product_name,p.product_code,'')
+                FROM product_serials s JOIN products p ON p.id=s.product_id
+                WHERE p.station_id=? AND p.is_deleted=0 AND s.status IN ('AVAILABLE','SOLD') AND s.warranty_end_at IS NOT NULL
+                AND date(s.warranty_end_at) BETWEEN date(?) AND date(?) ORDER BY date(s.warranty_end_at),s.serial_id""",
+                arrayOf(stationScopeId.toString(),alertToday.toString(),warrantyCutoff.toString())).use { c ->
+                while(c.moveToNext()) {
+                    val serialId=c.getLong(0); val productId=c.getLong(1); val serialNo=c.getString(2) ?: ""
+                    val serialStatus=c.getString(3) ?: ""; val due=c.getString(4)?.take(10) ?: continue; val name=c.getString(5) ?: ""
+                    val days=runCatching { java.time.temporal.ChronoUnit.DAYS.between(alertToday,java.time.LocalDate.parse(due)) }.getOrDefault(30L)
+                    if(search.isNotBlank() && !listOf(name,serialNo,serialStatus,due,"warranty","ضمان").joinToString(" ").contains(search,true)) continue
+                    mergedRows += JSONObject().apply {
+                        put("id",-1_000_000_000_000L-serialId); put("alert_id",-1_000_000_000_000L-serialId)
+                        put("item_type","warranty"); put("stock_type","warranty"); put("alert_type","warranty")
+                        put("alert_level",if(days<=7) "critical" else "warning"); put("product_id",productId); put("product_name",name)
+                        put("serial_id",serialId); put("serial_no",serialNo); put("serial_status",serialStatus); put("warranty_end_at",due)
+                        put("days_until_expiry",days); put("current_quantity",1); put("threshold_quantity",1); put("shortage_quantity",0)
+                        put("is_resolved",0); put("created_at",due); put("extra_data",JSONObject().put("serial_id",serialId).put("warranty_end_at",due).toString())
+                    }
+                }
+            }
+
+            // Open/acknowledged anomaly ledger rows are part of the same station-scoped feed.
+            db.rawQuery("""SELECT a.anomaly_id,a.item_type,a.item_id,a.anomaly_type,a.severity,a.metric_value,a.threshold_value,a.status,a.details,a.detected_at,
+                CASE WHEN a.item_type='PRODUCT' THEN (SELECT COALESCE(p.product_name_ar,p.product_name,p.product_code,'') FROM products p WHERE p.id=a.item_id AND p.station_id=a.station_id)
+                WHEN a.item_type='FUEL' THEN (SELECT COALESCE(t.tank_name_ar,t.tank_name,t.tank_code,'') FROM tanks t WHERE t.id=a.item_id AND t.station_id=a.station_id) ELSE '' END
+                FROM inventory_anomalies a WHERE a.station_id=? AND a.status IN ('OPEN','ACKNOWLEDGED') ORDER BY a.detected_at DESC,a.anomaly_id DESC""",
+                arrayOf(stationScopeId.toString())).use { c ->
+                while(c.moveToNext()) {
+                    val anomalyId=c.getLong(0); val sourceType=c.getString(1) ?: ""; val itemId=c.getLong(2)
+                    val anomalyType=c.getString(3) ?: "anomaly"; val severity=(c.getString(4) ?: "warning").lowercase(Locale.US)
+                    val metric=if(c.isNull(5)) 0.0 else c.getDouble(5); val threshold=if(c.isNull(6)) 0.0 else c.getDouble(6)
+                    val anomalyStatus=c.getString(7) ?: "OPEN"; val details=c.getString(8) ?: ""; val detected=c.getString(9) ?: ""; val name=c.getString(10) ?: ""
+                    if(search.isNotBlank() && !listOf(name,anomalyType,details,sourceType,itemId.toString(),severity).joinToString(" ").contains(search,true)) continue
+                    mergedRows += JSONObject().apply {
+                        put("id",-2_000_000_000_000L-anomalyId); put("alert_id",-2_000_000_000_000L-anomalyId)
+                        put("item_type","anomaly"); put("stock_type","anomaly"); put("alert_type","anomaly"); put("source_item_type",sourceType)
+                        put("item_id",itemId); put("anomaly_type",anomalyType); put("anomaly_status",anomalyStatus)
+                        put("alert_level",if(severity in setOf("critical","warning","info")) severity else "warning")
+                        put("product_name",name.ifBlank { anomalyType }); put("details",details); put("current_quantity",metric)
+                        put("threshold_quantity",threshold); put("shortage_quantity",0); put("is_resolved",0); put("created_at",detected)
+                        put("extra_data",JSONObject().put("anomaly_id",anomalyId).put("source_item_type",sourceType).put("item_id",itemId).toString())
+                    }
+                }
+            }
+
+            // Only outstanding submitted/approved/partial POs can become late alerts.
+            db.rawQuery("""SELECT po_id,po_number,supplier_id,status,expected_at,total_amount FROM purchase_orders
+                WHERE station_id=? AND status IN ('submitted','approved','partial') AND expected_at IS NOT NULL AND date(expected_at)<date(?)
+                ORDER BY date(expected_at),po_id""",arrayOf(stationScopeId.toString(),alertToday.toString())).use { c ->
+                while(c.moveToNext()) {
+                    val poId=c.getLong(0); val number=c.getString(1) ?: ""; val supplier=if(c.isNull(2)) 0L else c.getLong(2)
+                    val poStatus=c.getString(3) ?: ""; val expected=c.getString(4)?.take(10) ?: continue; val total=c.getDouble(5)
+                    if(search.isNotBlank() && !listOf(number,poStatus,supplier.toString(),expected,"purchase order","أمر شراء").joinToString(" ").contains(search,true)) continue
+                    val overdue=runCatching { java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.parse(expected),alertToday) }.getOrDefault(1L)
+                    mergedRows += JSONObject().apply {
+                        put("id",-3_000_000_000_000L-poId); put("alert_id",-3_000_000_000_000L-poId)
+                        put("item_type","purchase_order"); put("stock_type","purchase_orders"); put("alert_type","po_late")
+                        put("alert_level",if(overdue>7) "critical" else "warning"); put("purchase_order_id",poId); put("po_number",number)
+                        put("supplier_id",supplier); put("purchase_order_status",poStatus); put("expected_at",expected); put("days_overdue",overdue)
+                        put("current_quantity",0); put("threshold_quantity",0); put("shortage_quantity",0); put("total_amount",total)
+                        put("is_resolved",0); put("created_at",expected); put("product_name",number)
+                        put("extra_data",JSONObject().put("purchase_order_id",poId).put("supplier_id",supplier).put("expected_at",expected).toString())
+                    }
+                }
+            }
+
             val statusFilter = data.optString("status", "").trim().lowercase(Locale.US)
             val levelFilter = data.optString("alert_level", "").trim().lowercase(Locale.US)
             val typeFilter = data.optString("alert_type", "").trim().lowercase(Locale.US)
@@ -22421,7 +22490,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     "active", "unresolved", "open" -> !resolved
                     "resolved" -> resolved
                     "critical" -> !resolved && level == "critical"
-                    "low_stock", "out_of_stock", "overstock", "expiry" -> type == statusFilter
+                    "low_stock", "out_of_stock", "overstock", "expiry", "warranty", "anomaly", "po_late" -> type == statusFilter
                     else -> true
                 }
                 val resolvedMatches = when (resolvedFilter) {
@@ -22468,6 +22537,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val expiringRows = filteredRows.filter {
                 it.optString("alert_type") == "expiry" && it.optInt("is_resolved", 0) == 0
             }
+            val warrantyCount = filteredRows.count { it.optString("alert_type") == "warranty" && it.optInt("is_resolved", 0) == 0 }
+            val anomalyCount = filteredRows.count { it.optString("alert_type") == "anomaly" && it.optInt("is_resolved", 0) == 0 }
+            val latePurchaseOrderCount = filteredRows.count { it.optString("alert_type") == "po_late" && it.optInt("is_resolved", 0) == 0 }
             val expiringValue = expiringRows.sumOf {
                 (productPrices[it.optLong("product_id", 0L)] ?: 0.0) * it.optDouble("current_quantity", 0.0)
             }
@@ -22497,6 +22569,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("warning_count", warningCount)
                 put("resolved_count", resolvedCount)
                 put("expiring_count", expiringRows.size)
+                put("warranty_count", warrantyCount)
+                put("anomaly_count", anomalyCount)
+                put("po_late_count", latePurchaseOrderCount)
                 put("expiring_value", expiringValue)
                 put("audit_items", auditStats.optInt("audit_items", 0))
                 put("audit_variance", auditStats.optDouble("audit_variance", 0.0))
@@ -22518,6 +22593,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("statistics", statistics)
                 put("critical_count", criticalCount)
                 put("expiring_count", expiringRows.size)
+                put("warranty_count", warrantyCount)
+                put("anomaly_count", anomalyCount)
+                put("po_late_count", latePurchaseOrderCount)
                 put("expiring_value", expiringValue)
                 put("audit_items", auditStats.optInt("audit_items", 0))
                 put("audit_variance", auditStats.optDouble("audit_variance", 0.0))
