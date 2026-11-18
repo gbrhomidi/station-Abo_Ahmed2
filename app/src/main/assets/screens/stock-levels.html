@@ -909,6 +909,9 @@
         .badge-info { background: var(--primary-color); color: white; }
         .badge-purple { background: #9c27b0; color: white; }
   
+        /* Forecourt actions stay on one line on narrow and wide Android screens. */
+        .forecourt-actions { display:flex; flex-flow:row nowrap; align-items:center; justify-content:flex-end; gap:8px; min-width:0; }
+        .forecourt-actions .apply-btn { flex:1 1 0; min-width:0; padding:10px clamp(6px,2vw,18px); white-space:nowrap; font-size:clamp(11px,2.8vw,15px); }
         /* Stock levels: centered, deterministic responsive layout */
         .filters-panel { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; align-items:end; }
         .filters-panel .filter-group { min-width:0; text-align:center; }
@@ -1037,7 +1040,7 @@
   <div class="container">
    <!-- ===== قسم الملخص ===== -->
    <div class="section active" id="forecourtSection">
-    <div class="glass-card"><div class="chart-header"><h3 class="chart-title">🏪 المحطة ككل — Forecourt Live Strip</h3><div><button class="apply-btn" onclick="loadForecourt()">🔄 تحديث</button><button class="apply-btn apply-btn-secondary" onclick="runAnomalyScan()">فحص الشذوذ</button></div></div>
+    <div class="glass-card"><div class="chart-header"><h3 class="chart-title">🏪 المحطة ككل — Forecourt Live Strip</h3><div class="forecourt-actions"><button type="button" class="apply-btn" onclick="loadForecourt()">🔄 تحديث</button><button type="button" class="apply-btn apply-btn-secondary" onclick="runAnomalyScan()">فحص الشذوذ</button></div></div>
      <div class="intelligence-kpis"><div class="intelligence-mini"><div class="mini-label">الوردية الحالية</div><div class="mini-value" id="forecourtShift">—</div></div><div class="intelligence-mini"><div class="mini-label">مبيعات الوقود</div><div class="mini-value" id="forecourtFuel">0 لتر</div></div><div class="intelligence-mini"><div class="mini-label">مبيعات المتجر</div><div class="mini-value" id="forecourtStore">0 ريال</div></div><div class="intelligence-mini"><div class="mini-label">Health Score</div><div class="mini-value" id="forecourtHealth">0%</div></div></div>
      <div class="table-container"><table class="data-table intelligence-table"><thead><tr><th>المؤشر</th><th>القيمة</th><th>الوحدة/الحالة</th></tr></thead><tbody id="forecourtSnapshotBody"><tr><td colspan="3">جاري تحميل بيانات المحطة…</td></tr></tbody></table></div>
     </div>
@@ -1992,7 +1995,13 @@ async function createReorderPO(productId, quantity) {
 }
 
 async function runAnomalyScan() {
-    try { const result = await apiCall('runInventoryAnomalyDetection', {}); showToast(`تم فحص المحطة وتسجيل ${(result.data || []).length} تنبيه فعلي`, 'success'); await loadForecourt(); } catch (e) { showToast(e.message, 'error'); }
+    try {
+        const result = await apiCall('runInventoryAnomalyDetection', {});
+        if (!result || result.success === false) throw new Error(result?.message || result?.error || 'تعذر تنفيذ فحص الشذوذ');
+        const records = Array.isArray(result.data) ? result.data : (result.data?.rows || result.data?.alerts || []);
+        showToast(`اكتمل فحص المحطة؛ ${records.length} تنبيه جديد`, 'success');
+        await Promise.all([loadInitialData(), loadForecourt(), loadAlerts()]);
+    } catch (e) { showToast(e.message || 'فشل فحص الشذوذ', 'error'); }
 }
 
 async function loadForecourt() {
@@ -2798,13 +2807,44 @@ function downloadChart(chartId) {
     link.click();
 }
 
-function showCriticalProducts() {
-    loadLowStockProducts();
-    showToast('تم عرض المنتجات الحرجة', 'success');
+async function showCriticalProducts() {
+    try {
+        switchSection('summary');
+        await loadLowStockProducts();
+        const table = document.getElementById('lowStockTable');
+        if (table) table.scrollIntoView({behavior:'smooth', block:'start'});
+        showToast('تم تحميل الأصناف والوقود تحت الحد الأدنى من قاعدة البيانات', 'success');
+    } catch (e) { showToast(e.message || 'تعذر تحميل الأصناف الحرجة', 'error'); }
 }
 
 async function showExpiringProducts() {
-    showToast('⚠️ بيانات الصلاحية غير متاحة في Schema الحالي', 'warning');
+    try {
+        const result = await invokeBridge('getExpiringBatches', [JSON.stringify({days_ahead:30, limit:500})]);
+        if (!result || result.success === false) throw new Error(result?.message || result?.error || 'تعذر جلب دفعات المنتجات');
+        const payload = result.data ?? result;
+        const batches = Array.isArray(payload) ? payload : (payload.rows || payload.batches || payload.items || []);
+        const rows = batches.map(batch => ({
+            product_id: batch.product_id ?? batch.item_id ?? batch.id,
+            product_code: batch.product_code || batch.sku || '—',
+            product_name: batch.product_name || batch.product_name_ar || batch.item_name || 'منتج',
+            quantity: Number(batch.quantity ?? batch.remaining_quantity ?? 0),
+            minimum_stock: Number(batch.minimum_stock ?? batch.reorder_point ?? 0),
+            expiry_date: batch.expiry_date || batch.expiration_date || ''
+        }));
+        switchSection('summary');
+        populateLowStockTable(rows);
+        const tbody = document.getElementById('lowStockTableBody');
+        if (tbody && rows.length) {
+            tbody.querySelectorAll('tr').forEach((tr, index) => {
+                const dateCell = document.createElement('td');
+                dateCell.textContent = rows[index]?.expiry_date || '—';
+                tr.appendChild(dateCell);
+            });
+        }
+        const table = document.getElementById('lowStockTable');
+        if (table) table.scrollIntoView({behavior:'smooth', block:'start'});
+        showToast(rows.length ? `تم عرض ${rows.length} دفعة تنتهي خلال 30 يوماً` : 'لا توجد دفعات منتجات تنتهي خلال 30 يوماً', rows.length ? 'success' : 'info');
+    } catch (e) { showToast(e.message || 'تعذر تحميل المنتجات القريبة من الانتهاء', 'error'); }
 }
 
 async function showAuditReport() {
