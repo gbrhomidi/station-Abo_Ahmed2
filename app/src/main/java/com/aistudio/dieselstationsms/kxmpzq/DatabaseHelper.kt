@@ -22222,6 +22222,94 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
             }
         }
+
+        // Keep one durable expiry alert per active batch. The batch identity and
+        // expiry date live in extra_data because the legacy alert table has no batch_id.
+        val today = java.time.LocalDate.parse(getCurrentDate())
+        val expiryCutoff = today.plusDays(30)
+        val expiringBatches = mutableListOf<JSONObject>()
+        db.rawQuery(
+            """SELECT b.batch_id, b.product_id, b.expiry_date, b.quantity
+               FROM product_batches b
+               JOIN products p ON p.id = b.product_id
+               WHERE p.station_id = ?
+                 AND p.is_deleted = 0
+                 AND p.status = 'active'
+                 AND b.quantity > 0
+                 AND b.expiry_date IS NOT NULL
+                 AND date(b.expiry_date) IS NOT NULL
+                 AND date(b.expiry_date) <= date(?)
+               ORDER BY date(b.expiry_date), b.batch_id""",
+            arrayOf(stationScopeId.toString(), expiryCutoff.toString())
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                val expiryDate = cursor.getString(2)?.take(10) ?: continue
+                val parsedExpiry = runCatching { java.time.LocalDate.parse(expiryDate) }.getOrNull() ?: continue
+                expiringBatches += JSONObject()
+                    .put("batch_id", cursor.getLong(0))
+                    .put("product_id", cursor.getLong(1))
+                    .put("expiry_date", expiryDate)
+                    .put("quantity", cursor.getDouble(3))
+                    .put("days_until_expiry", java.time.temporal.ChronoUnit.DAYS.between(today, parsedExpiry))
+            }
+        }
+        val activeBatchIds = expiringBatches.map { it.getLong("batch_id") }.toSet()
+        val existingExpiryAlerts = mutableMapOf<Long, Long>()
+        db.rawQuery(
+            """SELECT id, extra_data FROM stock_alerts
+               WHERE station_id = ? AND alert_type = 'expiry' AND is_resolved = 0
+               ORDER BY id DESC""",
+            arrayOf(stationScopeId.toString())
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                val batchId = runCatching {
+                    JSONObject(cursor.getString(1) ?: "{}").optLong("batch_id", 0L)
+                }.getOrDefault(0L)
+                if (batchId > 0L) {
+                    if (batchId in activeBatchIds) {
+                        existingExpiryAlerts.putIfAbsent(batchId, cursor.getLong(0))
+                    } else {
+                        db.update("stock_alerts", ContentValues().apply {
+                            put("is_resolved", 1)
+                            put("resolved_at", getCurrentDateTime())
+                            put("resolution_notes", "تمت معالجة الدفعة أو لم تعد ضمن نطاق تنبيه الصلاحية")
+                        }, "id = ? AND station_id = ?", arrayOf(cursor.getLong(0).toString(), stationScopeId.toString()))
+                    }
+                }
+            }
+        }
+        expiringBatches.forEach { batch ->
+            val batchId = batch.getLong("batch_id")
+            val productId = batch.getLong("product_id")
+            val daysUntilExpiry = batch.getLong("days_until_expiry")
+            val quantity = batch.getDouble("quantity")
+            val expiryDate = batch.getString("expiry_date")
+            val extraData = JSONObject()
+                .put("batch_id", batchId)
+                .put("expiry_date", expiryDate)
+                .put("quantity", quantity)
+                .put("days_until_expiry", daysUntilExpiry)
+            val values = ContentValues().apply {
+                put("alert_type", "expiry")
+                put("alert_level", if (daysUntilExpiry <= 7L) "critical" else "warning")
+                put("current_quantity", quantity)
+                put("threshold_quantity", quantity)
+                put("shortage_quantity", 0.0)
+                put("is_resolved", 0)
+                put("extra_data", extraData.toString())
+                put("remarks", "دفعة رقم $batchId تنتهي صلاحيتها في $expiryDate")
+            }
+            val existingId = existingExpiryAlerts[batchId] ?: 0L
+            if (existingId > 0L) {
+                db.update("stock_alerts", values, "id = ? AND station_id = ?", arrayOf(existingId.toString(), stationScopeId.toString()))
+            } else {
+                values.put("uuid", UUID.randomUUID().toString())
+                values.put("product_id", productId)
+                values.put("station_id", stationScopeId)
+                values.put("created_at", getCurrentDateTime())
+                db.insertOrThrow("stock_alerts", null, values)
+            }
+        }
     }
 
     fun getStockAlertRecordsContract(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {

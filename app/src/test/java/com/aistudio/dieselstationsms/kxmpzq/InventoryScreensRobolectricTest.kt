@@ -236,6 +236,69 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun expiringBatchAlertsAreStationScopedDeduplicatedAndResolvedWhenBatchIsEmpty() {
+        val db = helper.writableDatabase
+        val today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Aden"))
+        val stationOneProduct = createProduct(10.0, 1.0)
+        val stationTwoProduct = createProduct(10.0, 1.0, 2, stationTwoActorId)
+        val expiringBatchId = db.insertOrThrow("product_batches", null, ContentValues().apply {
+            put("product_id", stationOneProduct)
+            put("lot_number", "EXP-" + UUID.randomUUID().toString().take(8))
+            put("expiry_date", today.plusDays(5).toString())
+            put("quantity", 4.0)
+            put("received_at", today.minusDays(10).toString())
+        })
+        db.insertOrThrow("product_batches", null, ContentValues().apply {
+            put("product_id", stationOneProduct)
+            put("lot_number", "FUTURE-" + UUID.randomUUID().toString().take(8))
+            put("expiry_date", today.plusDays(60).toString())
+            put("quantity", 3.0)
+            put("received_at", today.minusDays(2).toString())
+        })
+        db.insertOrThrow("product_batches", null, ContentValues().apply {
+            put("product_id", stationTwoProduct)
+            put("lot_number", "OTHER-" + UUID.randomUUID().toString().take(8))
+            put("expiry_date", today.plusDays(3).toString())
+            put("quantity", 2.0)
+            put("received_at", today.minusDays(2).toString())
+        })
+
+        fun expiryRows(stationId: Int) = helper.getStockAlertRecordsContract(
+            JSONObject().put("limit", 0).put("status", "expiry"),
+            stationId
+        ).getJSONArray("rows")
+
+        val first = expiryRows(1)
+        val firstBatchAlerts = (0 until first.length()).map { first.getJSONObject(it) }
+            .filter { runCatching { JSONObject(it.optString("extra_data")).optLong("batch_id") }.getOrDefault(0L) == expiringBatchId }
+        assertEquals(1, firstBatchAlerts.size)
+        assertEquals(stationOneProduct, firstBatchAlerts.single().getLong("product_id"))
+        assertEquals("critical", firstBatchAlerts.single().getString("alert_level"))
+        assertEquals(0, firstBatchAlerts.single().getInt("is_resolved"))
+
+        val second = expiryRows(1)
+        val secondBatchAlerts = (0 until second.length()).count {
+            runCatching { JSONObject(second.getJSONObject(it).optString("extra_data")).optLong("batch_id") }.getOrDefault(0L) == expiringBatchId
+        }
+        assertEquals("Repeated synchronization must not duplicate a batch alert", 1, secondBatchAlerts)
+
+        val stationTwoRows = expiryRows(2)
+        assertTrue((0 until stationTwoRows.length()).any {
+            runCatching { JSONObject(stationTwoRows.getJSONObject(it).optString("extra_data")).optLong("batch_id") }.getOrDefault(0L) > 0L
+        })
+        assertTrue((0 until stationTwoRows.length()).none {
+            runCatching { JSONObject(stationTwoRows.getJSONObject(it).optString("extra_data")).optLong("batch_id") }.getOrDefault(0L) == expiringBatchId
+        })
+
+        assertEquals(1, db.update("product_batches", ContentValues().apply { put("quantity", 0.0) },
+            "batch_id=?", arrayOf(expiringBatchId.toString())))
+        val afterReceipt = expiryRows(1)
+        val resolved = (0 until afterReceipt.length()).map { afterReceipt.getJSONObject(it) }
+            .first { runCatching { JSONObject(it.optString("extra_data")).optLong("batch_id") }.getOrDefault(0L) == expiringBatchId }
+        assertEquals("An empty batch must resolve its prior expiry alert", 1, resolved.getInt("is_resolved"))
+    }
+
+    @Test
     fun warehouseCrudIsStationScopedAndDeactivationPreservesLinkedRows() {
         val db = helper.writableDatabase
         val suffix = UUID.randomUUID().toString().take(8)
