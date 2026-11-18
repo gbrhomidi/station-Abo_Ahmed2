@@ -2255,8 +2255,14 @@ async function loadInventorySummary() {
 async function loadLowStockProducts() {
     try {
         const result = await apiCall('getLowStockProducts', { stock_type:'all', limit:500 });
-        if (result.success) populateLowStockTable((result.data || {}).low_stock_rows || []);
-    } catch (e) { populateLowStockTable([]); }
+        if (!result || result.success === false) throw new Error(result?.message || result?.error || 'تعذر جلب مستويات المخزون');
+        const rows = (result.data || {}).low_stock_rows || (result.data || {}).rows || [];
+        populateLowStockTable(rows);
+        return rows;
+    } catch (e) {
+        populateLowStockTable([]);
+        throw e;
+    }
 }
 
 function populateLowStockTable(products) {
@@ -2826,21 +2832,13 @@ async function showExpiringProducts() {
         const rows = batches.map(batch => ({
             product_id: batch.product_id ?? batch.item_id ?? batch.id,
             product_code: batch.product_code || batch.sku || '—',
-            product_name: batch.product_name || batch.product_name_ar || batch.item_name || 'منتج',
+            product_name: [batch.product_name || batch.product_name_ar || batch.item_name || 'منتج', batch.expiry_date || batch.expiration_date ? `(الصلاحية: ${batch.expiry_date || batch.expiration_date})` : ''].filter(Boolean).join(' '),
             quantity: Number(batch.quantity ?? batch.remaining_quantity ?? 0),
             minimum_stock: Number(batch.minimum_stock ?? batch.reorder_point ?? 0),
             expiry_date: batch.expiry_date || batch.expiration_date || ''
         }));
         switchSection('summary');
         populateLowStockTable(rows);
-        const tbody = document.getElementById('lowStockTableBody');
-        if (tbody && rows.length) {
-            tbody.querySelectorAll('tr').forEach((tr, index) => {
-                const dateCell = document.createElement('td');
-                dateCell.textContent = rows[index]?.expiry_date || '—';
-                tr.appendChild(dateCell);
-            });
-        }
         const table = document.getElementById('lowStockTable');
         if (table) table.scrollIntoView({behavior:'smooth', block:'start'});
         showToast(rows.length ? `تم عرض ${rows.length} دفعة تنتهي خلال 30 يوماً` : 'لا توجد دفعات منتجات تنتهي خلال 30 يوماً', rows.length ? 'success' : 'info');
