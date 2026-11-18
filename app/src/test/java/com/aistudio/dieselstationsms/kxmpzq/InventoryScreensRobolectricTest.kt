@@ -153,6 +153,52 @@ class InventoryScreensRobolectricTest {
         assertTrue((0 until aging.length()).any { aging.getJSONObject(it).getString("bucket") == "Unknown/No movement" })
     }
 
+
+    @Test
+    fun inventoryAgingAssignsEveryStockRowToExactlyOneBucketAndReconcilesStationValue() {
+        val db = helper.writableDatabase
+        val today = java.time.LocalDate.parse(DatabaseHelper.getDateOnlyFormat().format(java.util.Date()))
+        val expected = linkedMapOf(
+            "0-30" to createProduct(2.0, 1.0),
+            "31-60" to createProduct(3.0, 1.0),
+            "61-90" to createProduct(4.0, 1.0),
+            ">90" to createProduct(5.0, 1.0),
+            "Unknown/No movement" to createProduct(6.0, 1.0)
+        )
+        val ages = mapOf("0-30" to 10L, "31-60" to 45L, "61-90" to 75L, ">90" to 120L)
+        expected.forEach { (bucket, productId) ->
+            if (bucket == "Unknown/No movement") {
+                db.delete("inventory_movements", "product_id=?", arrayOf(productId.toString()))
+            } else {
+                val movementDate = today.minusDays(ages.getValue(bucket)).toString()
+                db.update("inventory_movements", ContentValues().apply { put("created_at", movementDate) },
+                    "product_id=?", arrayOf(productId.toString()))
+            }
+        }
+        // Invalid timestamps are also unknown; they must not be counted in any age range.
+        val invalidDateProduct = createProduct(1.0, 1.0)
+        db.update("inventory_movements", ContentValues().apply { put("created_at", "not-a-date") },
+            "product_id=?", arrayOf(invalidDateProduct.toString()))
+
+        createProduct(9.0, 1.0, 2, stationTwoActorId)
+        val aging = helper.getInventoryAging(1)
+        val buckets = aging.getJSONArray("buckets")
+        val values = (0 until buckets.length()).associate {
+            buckets.getJSONObject(it).getString("bucket") to buckets.getJSONObject(it).getDouble("value")
+        }
+        assertEquals(setOf("0-30", "31-60", "61-90", ">90", "Unknown/No movement"), values.keys)
+        assertEquals(20.0, values.getValue("0-30"), 0.0001)
+        assertEquals(30.0, values.getValue("31-60"), 0.0001)
+        assertEquals(40.0, values.getValue("61-90"), 0.0001)
+        assertEquals(50.0, values.getValue(">90"), 0.0001)
+        assertEquals(70.0, values.getValue("Unknown/No movement"), 0.0001)
+        val expectedTotal = 210.0
+        assertEquals(expectedTotal, aging.getDouble("total_value"), 0.0001)
+        assertEquals(expectedTotal, aging.getDouble("bucket_total"), 0.0001)
+        assertEquals(0.0, aging.getDouble("reconciliation_difference"), 0.0001)
+        assertEquals(today.toString(), aging.getString("business_date"))
+    }
+
     @Test
     fun dryStockPageAppliesSearchAndCategoryFilters() {
         val productId = createProduct(7.0, 2.0)

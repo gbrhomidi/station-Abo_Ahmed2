@@ -36886,31 +36886,71 @@ private fun postSalesReversalJournal(
 
     fun getInventoryAging(stationScopeId: Int): JSONObject {
         require(stationScopeId > 0) { "معرف المحطة غير صالح" }
-        val buckets = JSONArray()
         val db = readableDatabase
-        val lastMovement = """LEFT JOIN (
-            SELECT product_id, MAX(created_at) AS last_movement_at
-            FROM inventory_movements
-            WHERE station_id=? AND is_deleted=0 AND status='completed'
-            GROUP BY product_id
-        ) im ON im.product_id=il.product_id"""
-        val ranges = listOf(
-            "0-30" to "im.last_movement_at IS NOT NULL AND date(im.last_movement_at)>=date('now','-30 day')",
-            "31-60" to "im.last_movement_at IS NOT NULL AND date(im.last_movement_at)<date('now','-30 day') AND date(im.last_movement_at)>=date('now','-60 day')",
-            "61-90" to "im.last_movement_at IS NOT NULL AND date(im.last_movement_at)<date('now','-60 day') AND date(im.last_movement_at)>=date('now','-90 day')",
-            ">90" to "im.last_movement_at IS NOT NULL AND date(im.last_movement_at)<date('now','-90 day')"
-        )
-        ranges.forEach { (label, clause) ->
-            db.rawQuery(
-                "SELECT COALESCE(SUM(il.quantity_on_hand*il.average_cost),0) FROM inventory_levels il JOIN warehouses w ON w.id=il.warehouse_id $lastMovement WHERE w.station_id=? AND ($clause)",
-                arrayOf(stationScopeId.toString(), stationScopeId.toString())
-            ).use { c -> buckets.put(JSONObject().put("bucket", label).put("value", if (c.moveToFirst()) c.getDouble(0) else 0.0)) }
+        val businessDate = getCurrentDate()
+        val bucketLabels = listOf("0-30", "31-60", "61-90", ">90", "Unknown/No movement")
+        val bucketValues = linkedMapOf<String, Double>().apply {
+            bucketLabels.forEach { put(it, 0.0) }
         }
+
+        // One row per inventory_levels record and exactly one CASE bucket per row.
+        // Invalid/missing movement dates are treated as unknown, never as four separate ranges.
+        val sql = """
+            WITH last_movements AS (
+                SELECT product_id,
+                       MAX(CASE WHEN date(created_at) IS NOT NULL THEN date(created_at) END) AS last_movement_date
+                FROM inventory_movements
+                WHERE station_id = ? AND is_deleted = 0 AND status = 'completed'
+                GROUP BY product_id
+            ),
+            valued_stock AS (
+                SELECT
+                    COALESCE(il.quantity_on_hand, 0) * COALESCE(il.average_cost, 0) AS stock_value,
+                    CASE
+                        WHEN lm.last_movement_date IS NULL THEN 'Unknown/No movement'
+                        WHEN date(lm.last_movement_date) >= date(?, '-30 day') THEN '0-30'
+                        WHEN date(lm.last_movement_date) >= date(?, '-60 day') THEN '31-60'
+                        WHEN date(lm.last_movement_date) >= date(?, '-90 day') THEN '61-90'
+                        ELSE '>90'
+                    END AS aging_bucket
+                FROM inventory_levels il
+                JOIN warehouses w ON w.id = il.warehouse_id
+                LEFT JOIN last_movements lm ON lm.product_id = il.product_id
+                WHERE w.station_id = ?
+            )
+            SELECT aging_bucket, COALESCE(SUM(stock_value), 0)
+            FROM valued_stock
+            GROUP BY aging_bucket
+        """.trimIndent()
         db.rawQuery(
-            "SELECT COALESCE(SUM(il.quantity_on_hand*il.average_cost),0) FROM inventory_levels il JOIN warehouses w ON w.id=il.warehouse_id $lastMovement WHERE w.station_id=? AND im.last_movement_at IS NULL",
-            arrayOf(stationScopeId.toString(), stationScopeId.toString())
-        ).use { c -> buckets.put(JSONObject().put("bucket", "Unknown/No movement").put("value", if (c.moveToFirst()) c.getDouble(0) else 0.0)) }
-        return JSONObject().put("buckets", buckets)
+            sql,
+            arrayOf(stationScopeId.toString(), businessDate, businessDate, businessDate, stationScopeId.toString())
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                val bucket = cursor.getString(0)
+                if (bucketValues.containsKey(bucket)) bucketValues[bucket] = cursor.getDouble(1)
+            }
+        }
+
+        val buckets = JSONArray()
+        bucketValues.forEach { (label, value) ->
+            buckets.put(JSONObject().put("bucket", label).put("value", value))
+        }
+        val bucketTotal = bucketValues.values.sum()
+        val inventoryTotal = db.rawQuery(
+            """SELECT COALESCE(SUM(COALESCE(il.quantity_on_hand,0)*COALESCE(il.average_cost,0)),0)
+               FROM inventory_levels il
+               JOIN warehouses w ON w.id=il.warehouse_id
+               WHERE w.station_id=?""",
+            arrayOf(stationScopeId.toString())
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0 }
+
+        return JSONObject()
+            .put("buckets", buckets)
+            .put("total_value", inventoryTotal)
+            .put("bucket_total", bucketTotal)
+            .put("reconciliation_difference", inventoryTotal - bucketTotal)
+            .put("business_date", businessDate)
     }
 
     fun getABCXYZAnalysis(stationScopeId: Int): JSONArray {
