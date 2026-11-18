@@ -290,6 +290,9 @@ class InventoryScreensRobolectricTest {
         val freshProduct = createProduct(4.0, 1.0)
         val noMovementProduct = createProduct(3.0, 1.0)
         val warehouseId = helper.ensureOperationalWarehouse(1)
+        listOf(oldProduct, freshProduct, noMovementProduct).forEach { productId ->
+            db.delete("inventory_movements", "product_id=? AND station_id=?", arrayOf(productId.toString(), "1"))
+        }
         val oldMovement = helper.addStockMovement(
             JSONObject().put("product_id", oldProduct).put("warehouse_id", warehouseId)
                 .put("movement_type", "in").put("quantity", 1.0).put("unit_cost", 10.0)
