@@ -36956,59 +36956,84 @@ private fun postSalesReversalJournal(
     fun getABCXYZAnalysis(stationScopeId: Int): JSONArray {
         require(stationScopeId > 0) { "معرف المحطة غير صالح" }
         val db = readableDatabase
-        val result = JSONArray()
-        val total = db.rawQuery(
-            "SELECT COALESCE(SUM(quantity*purchase_price),0) FROM products WHERE station_id=? AND is_deleted=0",
-            arrayOf(stationScopeId.toString())
-        ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
-        val periods = (5 downTo 0).map {
-            java.time.YearMonth.now(ZoneId.of(BUSINESS_TIME_ZONE_ID)).minusMonths(it.toLong()).toString()
-        }
+        val businessMonth = java.time.YearMonth.parse(getCurrentDate().take(7))
+        val periods = (5 downTo 0).map { businessMonth.minusMonths(it.toLong()).toString() }
+        val periodStart = java.time.YearMonth.parse(periods.first()).atDay(1).toString()
+        val periodEndExclusive = businessMonth.plusMonths(1).atDay(1).toString()
         val monthlyDemand = mutableMapOf<Long, MutableMap<String, Double>>()
+        val consumptionValues = mutableMapOf<Long, Double>()
+
+        // Demand is actual completed outbound stock movement, not a static xyz_class
+        // or current stock value. Six complete calendar buckets include zero-demand months.
         db.rawQuery(
-            """SELECT product_id, strftime('%Y-%m', created_at) AS period,
-                      SUM(ABS(quantity_change)) AS demand
+            """SELECT product_id, strftime('%Y-%m', date(created_at)) AS period,
+                      SUM(ABS(quantity_change)) AS demand_quantity,
+                      SUM(ABS(quantity_change) * COALESCE(unit_cost, 0)) AS consumption_value
                FROM inventory_movements
                WHERE station_id=? AND is_deleted=0 AND status='completed'
-                 AND movement_type IN ('out','damage')
-                 AND date(created_at)>=date('now','start of month','-5 months')
-               GROUP BY product_id, strftime('%Y-%m', created_at)""",
-            arrayOf(stationScopeId.toString())
+                 AND movement_type='out'
+                 AND date(created_at)>=date(?) AND date(created_at)<date(?)
+               GROUP BY product_id, strftime('%Y-%m', date(created_at))""",
+            arrayOf(stationScopeId.toString(), periodStart, periodEndExclusive)
         ).use { c ->
             while (c.moveToNext()) {
                 val productId = c.getLong(0)
                 val period = c.getString(1) ?: continue
                 monthlyDemand.getOrPut(productId) { mutableMapOf() }[period] = c.getDouble(2)
+                consumptionValues[productId] = (consumptionValues[productId] ?: 0.0) + c.getDouble(3).coerceAtLeast(0.0)
             }
         }
+
+        val products = mutableListOf<Triple<Long, Double, List<Double>>>()
         db.rawQuery(
-            "SELECT id,COALESCE(quantity*purchase_price,0) FROM products WHERE station_id=? AND is_deleted=0 ORDER BY quantity*purchase_price DESC,id",
+            "SELECT id FROM products WHERE station_id=? AND is_deleted=0 AND status='active' ORDER BY id",
             arrayOf(stationScopeId.toString())
         ).use { c ->
-            var cumulative = 0.0
             while (c.moveToNext()) {
                 val productId = c.getLong(0)
-                val value = c.getDouble(1).coerceAtLeast(0.0)
-                cumulative += value
                 val demand = periods.map { monthlyDemand[productId]?.get(it) ?: 0.0 }
-                val mean = demand.average()
-                val variance = if (demand.isEmpty()) 0.0 else demand.sumOf { (it - mean) * (it - mean) } / demand.size
-                val cv = if (mean > 0.0) kotlin.math.sqrt(variance) / mean else 0.0
-                val xyz = when {
-                    mean <= 0.0 -> "Z"
-                    cv <= 0.25 -> "X"
-                    cv <= 0.50 -> "Y"
-                    else -> "Z"
-                }
-                result.put(
-                    JSONObject()
-                        .put("product_id", productId)
-                        .put("abc", if (total <= 0.0) "C" else if (cumulative / total <= 0.70) "A" else if (cumulative / total <= 0.90) "B" else "C")
-                        .put("xyz", xyz)
-                        .put("xyz_cv", cv)
-                        .put("monthly_demand", JSONArray(demand))
-                )
+                products += Triple(productId, consumptionValues[productId] ?: 0.0, demand)
             }
+        }
+
+        val totalConsumptionValue = products.sumOf { it.second }
+        val ranked = products.sortedWith(compareByDescending<Triple<Long, Double, List<Double>>> { it.second }.thenBy { it.first })
+        val abcByProduct = mutableMapOf<Long, String>()
+        var cumulativeValue = 0.0
+        ranked.forEach { (productId, value, _) ->
+            cumulativeValue += value
+            val cumulativeShare = if (totalConsumptionValue > 0.0) cumulativeValue / totalConsumptionValue else 1.0
+            abcByProduct[productId] = when {
+                totalConsumptionValue <= 0.0 -> "C"
+                cumulativeShare <= 0.70 -> "A"
+                cumulativeShare <= 0.90 -> "B"
+                else -> "C"
+            }
+        }
+
+        val result = JSONArray()
+        products.sortedBy { it.first }.forEach { (productId, consumptionValue, demand) ->
+            val mean = demand.average()
+            val variance = demand.sumOf { (it - mean) * (it - mean) } / demand.size.coerceAtLeast(1)
+            val cv = if (mean > 0.0) kotlin.math.sqrt(variance) / mean else 0.0
+            val xyz = when {
+                mean <= 0.0 -> "Z"
+                cv <= 0.25 -> "X"
+                cv <= 0.50 -> "Y"
+                else -> "Z"
+            }
+            result.put(
+                JSONObject()
+                    .put("product_id", productId)
+                    .put("abc", abcByProduct[productId] ?: "C")
+                    .put("xyz", xyz)
+                    .put("xyz_cv", cv)
+                    .put("monthly_demand", JSONArray(demand))
+                    .put("consumption_value", consumptionValue)
+                    .put("total_consumption_value", totalConsumptionValue)
+                    .put("period_start", periodStart)
+                    .put("period_end_exclusive", periodEndExclusive)
+            )
         }
         return result
     }
@@ -37016,6 +37041,10 @@ private fun postSalesReversalJournal(
     fun getDryStockPage(filters: JSONObject, stationScopeId: Int): JSONObject {
         require(stationScopeId > 0) { "معرف المحطة غير صالح" }
         val db = readableDatabase
+        val businessDate = java.time.LocalDate.parse(getCurrentDate())
+        val dateText = businessDate.toString()
+        val datePlus30 = businessDate.plusDays(30).toString()
+        val dateMinus90 = businessDate.minusDays(90).toString()
         val where = mutableListOf("p.station_id=?","p.is_deleted=0","p.status='active'")
         val args = mutableListOf(stationScopeId.toString())
         val categoryId = filters.optLong("category_id", filters.optLong("category", 0L))
@@ -37044,9 +37073,12 @@ private fun postSalesReversalJournal(
         }
         val nearestExpiry = "COALESCE((SELECT MIN(b.expiry_date) FROM product_batches b WHERE b.product_id=p.id AND b.quantity>0 AND b.expiry_date IS NOT NULL),p.expiry_date)"
         when (expiryStatus) {
-            "expired" -> where += "$nearestExpiry IS NOT NULL AND date($nearestExpiry)<date('now')"
-            "soon" -> where += "$nearestExpiry IS NOT NULL AND date($nearestExpiry)>=date('now') AND date($nearestExpiry)<=date('now','+30 day')"
-            "active" -> where += "($nearestExpiry IS NULL OR date($nearestExpiry)>date('now','+30 day'))"
+            "expired" -> { where += "$nearestExpiry IS NOT NULL AND date($nearestExpiry)<date(?)"; args += dateText }
+            "soon" -> {
+                where += "$nearestExpiry IS NOT NULL AND date($nearestExpiry)>=date(?) AND date($nearestExpiry)<=date(?)"
+                args += dateText; args += datePlus30
+            }
+            "active" -> { where += "($nearestExpiry IS NULL OR date($nearestExpiry)>date(?))"; args += datePlus30 }
             "", "all" -> Unit
             else -> throw IllegalArgumentException("مرشح صلاحية المخزون غير صالح")
         }
@@ -37061,19 +37093,68 @@ private fun postSalesReversalJournal(
         ).use { cursorToJsonArray(it) }
         val kpis = JSONObject()
         db.rawQuery(
-            """SELECT COALESCE(SUM(p.quantity*p.purchase_price),0),
+            """WITH last_movement AS (
+                   SELECT product_id, MAX(CASE WHEN date(created_at) IS NOT NULL THEN date(created_at) END) last_date
+                   FROM inventory_movements
+                   WHERE station_id=? AND is_deleted=0 AND status='completed'
+                   GROUP BY product_id
+               )
+               SELECT COALESCE(SUM(p.quantity*p.purchase_price),0),
                       COALESCE(SUM(CASE WHEN p.quantity<COALESCE(p.reorder_point,p.minimum_stock) THEN 1 ELSE 0 END),0),
-                      COALESCE(SUM(CASE WHEN p.quantity<p.minimum_stock THEN p.quantity*p.purchase_price ELSE 0 END),0)
-               FROM products p WHERE $whereSql""",
-            args.toTypedArray()
+                      COALESCE(SUM(CASE WHEN lm.last_date IS NOT NULL AND date(lm.last_date)<date(?) THEN p.quantity*p.purchase_price ELSE 0 END),0),
+                      COALESCE(SUM(CASE WHEN $nearestExpiry IS NOT NULL AND date($nearestExpiry)<date(?) THEN p.quantity*p.purchase_price ELSE 0 END),0),
+                      COALESCE(SUM(CASE WHEN $nearestExpiry IS NOT NULL AND date($nearestExpiry)>=date(?) AND date($nearestExpiry)<=date(?) THEN p.quantity*p.purchase_price ELSE 0 END),0),
+                      COALESCE(SUM(CASE WHEN lm.last_date IS NULL THEN p.quantity*p.purchase_price ELSE 0 END),0)
+               FROM products p
+               LEFT JOIN last_movement lm ON lm.product_id=p.id
+               WHERE $whereSql""",
+            (listOf(stationScopeId.toString(), dateMinus90, dateText, dateText, datePlus30) + args).toTypedArray()
         ).use { c ->
             if (c.moveToFirst()) {
                 kpis.put("inventory_value", c.getDouble(0))
                 kpis.put("low_stock_count", c.getInt(1))
                 kpis.put("dead_stock_value", c.getDouble(2))
+                kpis.put("expired_stock_value", c.getDouble(3))
+                kpis.put("expiring_soon_stock_value", c.getDouble(4))
+                kpis.put("unknown_age_value", c.getDouble(5))
             }
         }
-        return JSONObject().put("products", products).put("kpis", kpis).put("aging", getInventoryAging(stationScopeId))
+        val activeWarrantyCount = db.rawQuery(
+            """SELECT COUNT(*) FROM product_serials s
+               JOIN products p ON p.id=s.product_id
+               WHERE $whereSql AND s.status='SOLD' AND s.warranty_end_at IS NOT NULL
+                 AND date(s.warranty_end_at)>=date(?)""",
+            (args + dateText).toTypedArray()
+        ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+        val expiringWarrantyCount = db.rawQuery(
+            """SELECT COUNT(*) FROM product_serials s
+               JOIN products p ON p.id=s.product_id
+               WHERE $whereSql AND s.status='SOLD' AND s.warranty_end_at IS NOT NULL
+                 AND date(s.warranty_end_at)>=date(?) AND date(s.warranty_end_at)<=date(?)""",
+            (args + listOf(dateText, datePlus30)).toTypedArray()
+        ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+        kpis.put("active_warranty_count", activeWarrantyCount)
+        kpis.put("warranty_expiring_soon_count", expiringWarrantyCount)
+
+        val filteredIds = (0 until products.length()).map { products.getJSONObject(it).optLong("product_id") }.toSet()
+        val abcRows = getABCXYZAnalysis(stationScopeId)
+        val abcCounts = mutableMapOf("A" to 0, "B" to 0, "C" to 0)
+        for (i in 0 until abcRows.length()) {
+            val row = abcRows.getJSONObject(i)
+            if (row.optLong("product_id") in filteredIds) {
+                val key = row.optString("abc")
+                if (abcCounts.containsKey(key)) abcCounts[key] = (abcCounts[key] ?: 0) + 1
+            }
+        }
+        kpis.put("abc_a_count", abcCounts["A"] ?: 0)
+            .put("abc_b_count", abcCounts["B"] ?: 0)
+            .put("abc_c_count", abcCounts["C"] ?: 0)
+            .put("business_date", dateText)
+        return JSONObject()
+            .put("products", products)
+            .put("kpis", kpis)
+            .put("aging", getInventoryAging(stationScopeId))
+            .put("abc_xyz", abcRows)
     }
 
     // ========================================================================

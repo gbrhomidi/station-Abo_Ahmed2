@@ -224,6 +224,106 @@ class InventoryScreensRobolectricTest {
         assertEquals(today.toString(), aging.getString("business_date"))
     }
 
+
+    @Test
+    fun abcXyzUsesSixMonthCompletedOutboundDemandAndConsumptionValue() {
+        val db = helper.writableDatabase
+        val month = java.time.YearMonth.parse(helper.currentDateForBridge().take(7))
+        val periods = (5 downTo 0).map { month.minusMonths(it.toLong()) }
+        val productA = createProduct(500.0, 1.0)
+        val productB = createProduct(500.0, 1.0)
+        val productC = createProduct(500.0, 1.0)
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+        val demand = mapOf(
+            productA to listOf(10.0, 10.0, 10.0, 10.0, 10.0, 10.0),
+            productB to listOf(2.0, 4.0, 6.0, 3.0, 5.0, 5.0),
+            productC to listOf(0.0, 0.0, 0.0, 0.0, 0.0, 15.0)
+        )
+        demand.forEach { (productId, quantities) ->
+            quantities.forEachIndexed { index, quantity ->
+                if (quantity > 0.0) {
+                    val movementId = helper.addStockMovement(
+                        JSONObject().put("product_id", productId)
+                            .put("warehouse_id", warehouseId)
+                            .put("movement_type", "out")
+                            .put("quantity", quantity)
+                            .put("unit_cost", 10.0)
+                            .put("notes", "DB-06 six-month demand fixture"),
+                        1, actorId
+                    )
+                    assertTrue(movementId > 0L)
+                    val monthDate = periods[index].atDay(15).toString()
+                    assertEquals(1, db.update(
+                        "inventory_movements",
+                        ContentValues().apply { put("created_at", monthDate) },
+                        "product_id=? AND station_id=? AND movement_type='out' AND status='completed' AND is_deleted=0",
+                        arrayOf(productId.toString(), "1")
+                    ))
+                }
+            }
+        }
+        createProduct(20.0, 1.0, 2, stationTwoActorId)
+
+        val rows = helper.getABCXYZAnalysis(1)
+        val byId = (0 until rows.length()).associate {
+            val row = rows.getJSONObject(it)
+            row.getLong("product_id") to row
+        }
+        assertEquals("A", byId.getValue(productA).getString("abc"))
+        assertEquals("B", byId.getValue(productB).getString("abc"))
+        assertEquals("C", byId.getValue(productC).getString("abc"))
+        assertEquals("X", byId.getValue(productA).getString("xyz"))
+        assertEquals("Y", byId.getValue(productB).getString("xyz"))
+        assertEquals("Z", byId.getValue(productC).getString("xyz"))
+        assertEquals(600.0, byId.getValue(productA).getDouble("consumption_value"), 0.0001)
+        assertEquals(250.0, byId.getValue(productB).getDouble("consumption_value"), 0.0001)
+        assertEquals(150.0, byId.getValue(productC).getDouble("consumption_value"), 0.0001)
+        assertEquals(1000.0, byId.getValue(productA).getDouble("total_consumption_value"), 0.0001)
+        assertEquals(6, byId.getValue(productA).getJSONArray("monthly_demand").length())
+    }
+
+    @Test
+    fun dryStockKpisUseMovementAgeExpiryWarrantyAndFilteredAbcClassification() {
+        val db = helper.writableDatabase
+        val today = java.time.LocalDate.parse(helper.currentDateForBridge())
+        val oldProduct = createProduct(8.0, 1.0)
+        val freshProduct = createProduct(4.0, 1.0)
+        val noMovementProduct = createProduct(3.0, 1.0)
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+        val oldMovement = helper.addStockMovement(
+            JSONObject().put("product_id", oldProduct).put("warehouse_id", warehouseId)
+                .put("movement_type", "in").put("quantity", 1.0).put("unit_cost", 10.0)
+                .put("notes", "DB-08 stale fixture"), 1, actorId
+        )
+        assertTrue(oldMovement > 0L)
+        db.update("inventory_movements", ContentValues().apply {
+            put("created_at", today.minusDays(120).toString())
+        }, "id=?", arrayOf(oldMovement.toString()))
+        val freshMovement = helper.addStockMovement(
+            JSONObject().put("product_id", freshProduct).put("warehouse_id", warehouseId)
+                .put("movement_type", "in").put("quantity", 1.0).put("unit_cost", 10.0)
+                .put("notes", "DB-08 fresh fixture"), 1, actorId
+        )
+        assertTrue(freshMovement > 0L)
+        db.update("products", ContentValues().apply { put("expiry_date", today.plusDays(10).toString()) },
+            "id=?", arrayOf(freshProduct.toString()))
+        val soldSerialId = db.insertOrThrow("product_serials", null, ContentValues().apply {
+            put("product_id", freshProduct); put("serial_no", "DB08-" + UUID.randomUUID())
+            put("status", "SOLD"); put("warranty_end_at", today.plusDays(20).toString())
+        })
+        assertTrue(soldSerialId > 0L)
+        val page = helper.getDryStockPage(JSONObject().put("search", "Inventory screen test"), 1)
+        val kpis = page.getJSONObject("kpis")
+        assertTrue(kpis.getDouble("dead_stock_value") >= 80.0)
+        assertTrue(kpis.getDouble("unknown_age_value") >= 30.0)
+        assertTrue(kpis.getDouble("expiring_soon_stock_value") >= 40.0)
+        assertEquals(1, kpis.getInt("active_warranty_count"))
+        assertEquals(1, kpis.getInt("warranty_expiring_soon_count"))
+        assertEquals(3, kpis.getInt("abc_a_count") + kpis.getInt("abc_b_count") + kpis.getInt("abc_c_count"))
+        assertTrue(page.has("abc_xyz"))
+        assertTrue(noMovementProduct > 0L)
+    }
+
     @Test
     fun dryStockPageAppliesSearchAndCategoryFilters() {
         val productId = createProduct(7.0, 2.0)
