@@ -256,8 +256,8 @@ class InventoryScreensRobolectricTest {
                     assertEquals(1, db.update(
                         "inventory_movements",
                         ContentValues().apply { put("created_at", monthDate) },
-                        "product_id=? AND station_id=? AND movement_type='out' AND status='completed' AND is_deleted=0",
-                        arrayOf(productId.toString(), "1")
+                        "id=? AND product_id=? AND station_id=? AND movement_type='out' AND status='completed' AND is_deleted=0",
+                        arrayOf(movementId.toString(), productId.toString(), "1")
                     ))
                 }
             }
