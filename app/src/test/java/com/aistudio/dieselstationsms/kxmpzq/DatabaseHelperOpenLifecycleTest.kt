@@ -263,7 +263,7 @@ class DatabaseHelperOpenLifecycleTest {
 
 
     @Test
-    fun v65DatabaseMissingStockHealthTablesGetsAdditiveV66Repair() {
+    fun v65DatabaseMissingStockHealthTablesGetsAdditiveV67Repair() {
         val database = helper.writableDatabase
         database.execSQL(
             "CREATE TABLE v65_stock_schema_preservation (id INTEGER PRIMARY KEY, marker TEXT NOT NULL)"
@@ -281,9 +281,9 @@ class DatabaseHelperOpenLifecycleTest {
         helper.close()
 
         val upgraded = helper.writableDatabase
-        assertEquals(66, upgraded.version)
+        assertEquals(DatabaseHelper.VERSION, upgraded.version)
         listOf("inventory_anomalies", "product_batches", "tank_readings").forEach { table ->
-            assertTrue("V65 -> V66 must create $table", tableExists(upgraded, table))
+            assertTrue("V65 -> V67 must create $table", tableExists(upgraded, table))
         }
         val preserved = upgraded.rawQuery(
             "SELECT marker FROM v65_stock_schema_preservation WHERE id = 1", null
