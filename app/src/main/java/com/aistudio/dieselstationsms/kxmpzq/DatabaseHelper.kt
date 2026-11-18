@@ -36792,8 +36792,65 @@ private fun postSalesReversalJournal(
     }
 
     fun getDryStockPage(filters: JSONObject, stationScopeId: Int): JSONObject {
-        val products = readableDatabase.rawQuery("SELECT p.id product_id,p.product_code,p.product_name,p.product_name_ar,p.quantity,p.minimum_stock,p.reorder_point,p.safety_stock,p.track_serial,p.track_batch,p.track_expiry,p.track_warranty,COALESCE((SELECT SUM(quantity) FROM product_batches b WHERE b.product_id=p.id),0) batch_quantity,COALESCE((SELECT MIN(expiry_date) FROM product_batches b WHERE b.product_id=p.id AND b.quantity>0),p.expiry_date) nearest_expiry,COALESCE((SELECT COUNT(*) FROM product_serials s WHERE s.product_id=p.id AND s.status='AVAILABLE'),0) available_serials FROM products p WHERE p.station_id=? AND p.is_deleted=0 AND p.status='active' ORDER BY p.product_name", arrayOf(stationScopeId.toString())).use { cursorToJsonArray(it) }
-        val kpis = JSONObject(); readableDatabase.rawQuery("SELECT COALESCE(SUM(quantity*purchase_price),0),SUM(CASE WHEN quantity<COALESCE(reorder_point,minimum_stock) THEN 1 ELSE 0 END),SUM(CASE WHEN quantity<minimum_stock THEN quantity*purchase_price ELSE 0 END) FROM products WHERE station_id=? AND is_deleted=0", arrayOf(stationScopeId.toString())).use { c -> if (c.moveToFirst()) { kpis.put("inventory_value", c.getDouble(0)); kpis.put("low_stock_count", c.getInt(1)); kpis.put("dead_stock_value", c.getDouble(2)) } }
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        val db = readableDatabase
+        val where = mutableListOf("p.station_id=?","p.is_deleted=0","p.status='active'")
+        val args = mutableListOf(stationScopeId.toString())
+        val categoryId = filters.optLong("category_id", filters.optLong("category", 0L))
+        val locationId = filters.optLong("location_id", 0L)
+        val search = filters.optString("search", filters.optString("query", "")).trim()
+        val expiryStatus = filters.optString("expiry_status", filters.optString("expiry", "")).trim().lowercase(Locale.ROOT)
+        if (categoryId > 0L) {
+            db.rawQuery("SELECT id FROM product_categories WHERE id=? AND is_active=1 AND is_deleted=0", arrayOf(categoryId.toString())).use {
+                require(it.moveToFirst()) { "فئة المنتج غير موجودة أو غير نشطة" }
+            }
+            where += "p.category_id=?"
+            args += categoryId.toString()
+        }
+        if (search.isNotBlank()) {
+            where += "(p.product_name LIKE ? OR p.product_name_ar LIKE ? OR p.product_code LIKE ? OR COALESCE(p.barcode,'') LIKE ?)"
+            repeat(4) { args += "%$search%" }
+        }
+        if (locationId > 0L) {
+            db.rawQuery(
+                "SELECT sl.location_id FROM stock_locations sl JOIN warehouses w ON w.id=sl.warehouse_id WHERE sl.location_id=? AND sl.is_active=1 AND w.station_id=? AND w.is_active=1",
+                arrayOf(locationId.toString(), stationScopeId.toString())
+            ).use { require(it.moveToFirst()) { "الموقع غير موجود أو خارج نطاق المحطة" } }
+            where += "EXISTS (SELECT 1 FROM product_batches lb JOIN stock_locations ls ON ls.location_id=lb.location_id JOIN warehouses lw ON lw.id=ls.warehouse_id WHERE lb.product_id=p.id AND lb.quantity>0 AND ls.location_id=? AND ls.is_active=1 AND lw.station_id=? AND lw.is_active=1)"
+            args += locationId.toString()
+            args += stationScopeId.toString()
+        }
+        val nearestExpiry = "COALESCE((SELECT MIN(b.expiry_date) FROM product_batches b WHERE b.product_id=p.id AND b.quantity>0 AND b.expiry_date IS NOT NULL),p.expiry_date)"
+        when (expiryStatus) {
+            "expired" -> where += "$nearestExpiry IS NOT NULL AND date($nearestExpiry)<date('now')"
+            "soon" -> where += "$nearestExpiry IS NOT NULL AND date($nearestExpiry)>=date('now') AND date($nearestExpiry)<=date('now','+30 day')"
+            "active" -> where += "($nearestExpiry IS NULL OR date($nearestExpiry)>date('now','+30 day'))"
+            "", "all" -> Unit
+            else -> throw IllegalArgumentException("مرشح صلاحية المخزون غير صالح")
+        }
+        val whereSql = where.joinToString(" AND ")
+        val products = db.rawQuery(
+            """SELECT p.id product_id,p.product_code,p.product_name,p.product_name_ar,p.quantity,p.minimum_stock,p.reorder_point,p.safety_stock,p.track_serial,p.track_batch,p.track_expiry,p.track_warranty,
+                      COALESCE((SELECT SUM(quantity) FROM product_batches b WHERE b.product_id=p.id),0) batch_quantity,
+                      $nearestExpiry nearest_expiry,
+                      COALESCE((SELECT COUNT(*) FROM product_serials s WHERE s.product_id=p.id AND s.status='AVAILABLE'),0) available_serials
+               FROM products p WHERE $whereSql ORDER BY p.product_name,p.id""",
+            args.toTypedArray()
+        ).use { cursorToJsonArray(it) }
+        val kpis = JSONObject()
+        db.rawQuery(
+            """SELECT COALESCE(SUM(p.quantity*p.purchase_price),0),
+                      COALESCE(SUM(CASE WHEN p.quantity<COALESCE(p.reorder_point,p.minimum_stock) THEN 1 ELSE 0 END),0),
+                      COALESCE(SUM(CASE WHEN p.quantity<p.minimum_stock THEN p.quantity*p.purchase_price ELSE 0 END),0)
+               FROM products p WHERE $whereSql""",
+            args.toTypedArray()
+        ).use { c ->
+            if (c.moveToFirst()) {
+                kpis.put("inventory_value", c.getDouble(0))
+                kpis.put("low_stock_count", c.getInt(1))
+                kpis.put("dead_stock_value", c.getDouble(2))
+            }
+        }
         return JSONObject().put("products", products).put("kpis", kpis).put("aging", getInventoryAging(stationScopeId))
     }
 

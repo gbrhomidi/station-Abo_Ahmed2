@@ -154,6 +154,28 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun dryStockPageAppliesSearchAndCategoryFilters() {
+        val productId = createProduct(7.0, 2.0)
+        val db = helper.writableDatabase
+        val categoryId = db.rawQuery("SELECT category_id FROM products WHERE id=?", arrayOf(productId.toString())).use {
+            check(it.moveToFirst()); it.getLong(0)
+        }
+        db.update("products", ContentValues().apply {
+            put("product_name", "DRY-FILTER-UNIQUE")
+            put("product_name_ar", "صنف اختبار المرشحات")
+        }, "id=?", arrayOf(productId.toString()))
+
+        val page = helper.getDryStockPage(
+            JSONObject().put("search", "DRY-FILTER-UNIQUE").put("category_id", categoryId),
+            1
+        )
+        val rows = page.getJSONArray("products")
+        assertEquals(1, rows.length())
+        assertEquals(productId, rows.getJSONObject(0).getLong("product_id"))
+        assertEquals(70.0, page.getJSONObject("kpis").getDouble("inventory_value"), 0.0001)
+    }
+
+    @Test
     fun inventoryMovementsReturnRealRowsStatsAndArchiveOnlyScopedRows() {
         val productId = createProduct(5.0, 2.0)
         val warehouseId = helper.ensureOperationalWarehouse(1)
