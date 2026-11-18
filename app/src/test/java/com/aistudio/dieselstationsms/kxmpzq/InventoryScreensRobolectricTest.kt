@@ -125,6 +125,35 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun stockLevelsPaginationSlicesRowsAndReportsStableTotals() {
+        createProduct(4.0, 1.0)
+        createProduct(6.0, 1.0)
+        val first = helper.getStockLevelsPage(JSONObject().put("stock_type", "products").put("limit", 1).put("offset", 0), 1)
+        val lastOffset = first.getInt("total_count") - 1
+        val last = helper.getStockLevelsPage(JSONObject().put("stock_type", "products").put("limit", 1).put("offset", lastOffset), 1)
+        assertTrue(first.getInt("total_count") >= 2)
+        assertEquals(1, first.getJSONArray("rows").length())
+        assertEquals(1, last.getJSONArray("rows").length())
+        assertEquals(first.getInt("total_count"), last.getInt("total_count"))
+        assertTrue(first.getBoolean("has_next"))
+        assertFalse(last.getBoolean("has_next"))
+        assertTrue(last.getBoolean("has_previous"))
+    }
+
+    @Test
+    fun inventoryAgingDoesNotCountUnknownMovementStockInEveryBucket() {
+        val productId = createProduct(5.0, 1.0)
+        helper.writableDatabase.execSQL(
+            "DELETE FROM inventory_movements WHERE product_id=?",
+            arrayOf(productId)
+        )
+        val aging = helper.getInventoryAging(1).getJSONArray("buckets")
+        val values = (0 until aging.length()).map { aging.getJSONObject(it).getDouble("value") }
+        assertEquals(50.0, values.sum(), 0.0001)
+        assertTrue((0 until aging.length()).any { aging.getJSONObject(it).getString("bucket") == "Unknown/No movement" })
+    }
+
+    @Test
     fun inventoryMovementsReturnRealRowsStatsAndArchiveOnlyScopedRows() {
         val productId = createProduct(5.0, 2.0)
         val warehouseId = helper.ensureOperationalWarehouse(1)

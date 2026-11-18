@@ -14105,12 +14105,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             db.rawQuery(
                 """SELECT product_id,
                           COALESCE(SUM(CASE WHEN date(created_at)>=date('now','-29 day') THEN ABS(quantity_change) ELSE 0 END),0) demand30,
-                          COALESCE(SUM(ABS(quantity_change)),0) demand60,
+                          COALESCE(SUM(CASE WHEN date(created_at)>=date('now','-59 day') THEN ABS(quantity_change) ELSE 0 END),0) demand60,
                           COALESCE(MAX(created_at),'') last_out
                    FROM inventory_movements
                    WHERE station_id=? AND is_deleted=0 AND status='completed'
                      AND movement_type IN ('out','damage')
-                     AND date(created_at)>=date('now','-59 day')
                    GROUP BY product_id""",
                 arrayOf(stationScopeId.toString())
             ).use { c ->
@@ -14190,7 +14189,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
                 if (risk == "critical" || risk == "high") highRiskCount++
                 if (risk == "medium") mediumRiskCount++
-                val deadStock = quantity > 0.0 && demand60 <= 0.0
+                val deadStock = quantity > 0.0 && lastOut.isNotBlank() &&
+                    runCatching { java.time.LocalDate.parse(lastOut.take(10)).isBefore(java.time.LocalDate.now(ZoneId.of(BUSINESS_TIME_ZONE_ID)).minusDays(90)) }.getOrDefault(false)
                 val stockValue = item.optDouble("stock_value",quantity * unitCost)
                 val consumptionValue30 = demand30 * unitCost
                 totalConsumptionValue30 += consumptionValue30
@@ -14357,8 +14357,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val categoriesOptions=JSONArray()
             db.rawQuery("SELECT id category_id,category_name,category_name_ar FROM product_categories WHERE is_deleted=0 AND is_active=1 ORDER BY category_name",null).use { c -> while(c.moveToNext()) categoriesOptions.put(cursorToJsonObject(c)) }
 
+            val totalCount = rows.length()
+            val pageRows = JSONArray()
+            for (index in offset until minOf(totalCount, offset + limit)) {
+                rows.optJSONObject(index)?.let { pageRows.put(it) }
+            }
             JSONObject().apply {
-                put("rows",rows)
+                put("rows",pageRows)
                 put("low_stock_rows",lowRows)
                 put("values_rows",valuesRows)
                 put("alerts",alerts)
@@ -14372,10 +14377,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("warehouses",warehouses)
                 put("category_options",categoriesOptions)
                 put("intelligence",intelligence)
-                put("total_count",rows.length())
+                put("total_count",totalCount)
                 put("page",offset/limit+1)
                 put("page_size",limit)
-                put("has_next",false)
+                put("total_pages",if (totalCount == 0) 0 else (totalCount + limit - 1) / limit)
+                put("has_next",offset + limit < totalCount)
+                put("has_previous",offset > 0)
             }
         } finally {
             dbLock.unlock()
@@ -36696,16 +36703,91 @@ private fun postSalesReversalJournal(
     }
 
     fun getInventoryAging(stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
         val buckets = JSONArray()
-        val ranges = listOf("0-30" to "date(im.created_at)>=date('now','-30 day')", "31-60" to "date(im.created_at) BETWEEN date('now','-60 day') AND date('now','-31 day')", "61-90" to "date(im.created_at) BETWEEN date('now','-90 day') AND date('now','-61 day')", ">90" to "date(im.created_at)<date('now','-90 day')")
-        ranges.forEach { (label, clause) -> readableDatabase.rawQuery("SELECT COALESCE(SUM(il.quantity_on_hand*il.average_cost),0) FROM inventory_levels il JOIN warehouses w ON w.id=il.warehouse_id LEFT JOIN (SELECT product_id,MAX(created_at) created_at FROM inventory_movements WHERE station_id=? GROUP BY product_id) im ON im.product_id=il.product_id WHERE w.station_id=? AND ($clause OR im.created_at IS NULL)", arrayOf(stationScopeId.toString(), stationScopeId.toString())).use { c -> buckets.put(JSONObject().put("bucket", label).put("value", if (c.moveToFirst()) c.getDouble(0) else 0.0)) } }
+        val db = readableDatabase
+        val lastMovement = """LEFT JOIN (
+            SELECT product_id, MAX(created_at) AS last_movement_at
+            FROM inventory_movements
+            WHERE station_id=? AND is_deleted=0 AND status='completed'
+            GROUP BY product_id
+        ) im ON im.product_id=il.product_id"""
+        val ranges = listOf(
+            "0-30" to "im.last_movement_at IS NOT NULL AND date(im.last_movement_at)>=date('now','-30 day')",
+            "31-60" to "im.last_movement_at IS NOT NULL AND date(im.last_movement_at)<date('now','-30 day') AND date(im.last_movement_at)>=date('now','-60 day')",
+            "61-90" to "im.last_movement_at IS NOT NULL AND date(im.last_movement_at)<date('now','-60 day') AND date(im.last_movement_at)>=date('now','-90 day')",
+            ">90" to "im.last_movement_at IS NOT NULL AND date(im.last_movement_at)<date('now','-90 day')"
+        )
+        ranges.forEach { (label, clause) ->
+            db.rawQuery(
+                "SELECT COALESCE(SUM(il.quantity_on_hand*il.average_cost),0) FROM inventory_levels il JOIN warehouses w ON w.id=il.warehouse_id $lastMovement WHERE w.station_id=? AND ($clause)",
+                arrayOf(stationScopeId.toString(), stationScopeId.toString())
+            ).use { c -> buckets.put(JSONObject().put("bucket", label).put("value", if (c.moveToFirst()) c.getDouble(0) else 0.0)) }
+        }
+        db.rawQuery(
+            "SELECT COALESCE(SUM(il.quantity_on_hand*il.average_cost),0) FROM inventory_levels il JOIN warehouses w ON w.id=il.warehouse_id $lastMovement WHERE w.station_id=? AND im.last_movement_at IS NULL",
+            arrayOf(stationScopeId.toString(), stationScopeId.toString())
+        ).use { c -> buckets.put(JSONObject().put("bucket", "Unknown/No movement").put("value", if (c.moveToFirst()) c.getDouble(0) else 0.0)) }
         return JSONObject().put("buckets", buckets)
     }
 
     fun getABCXYZAnalysis(stationScopeId: Int): JSONArray {
-        val db = readableDatabase; val result = JSONArray()
-        val total = db.rawQuery("SELECT COALESCE(SUM(quantity*purchase_price),0) FROM products WHERE station_id=? AND is_deleted=0", arrayOf(stationScopeId.toString())).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
-        db.rawQuery("SELECT id,COALESCE(quantity*purchase_price,0),COALESCE(xyz_class,'X') FROM products WHERE station_id=? AND is_deleted=0 ORDER BY quantity*purchase_price DESC", arrayOf(stationScopeId.toString())).use { c -> var cumulative = 0.0; while (c.moveToNext()) { cumulative += c.getDouble(1); result.put(JSONObject().put("product_id", c.getLong(0)).put("abc", if (total <= 0) "C" else if (cumulative / total <= .7) "A" else if (cumulative / total <= .9) "B" else "C").put("xyz", c.getString(2))) } }
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        val db = readableDatabase
+        val result = JSONArray()
+        val total = db.rawQuery(
+            "SELECT COALESCE(SUM(quantity*purchase_price),0) FROM products WHERE station_id=? AND is_deleted=0",
+            arrayOf(stationScopeId.toString())
+        ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+        val periods = (5 downTo 0).map {
+            java.time.YearMonth.now(ZoneId.of(BUSINESS_TIME_ZONE_ID)).minusMonths(it.toLong()).toString()
+        }
+        val monthlyDemand = mutableMapOf<Long, MutableMap<String, Double>>()
+        db.rawQuery(
+            """SELECT product_id, strftime('%Y-%m', created_at) AS period,
+                      SUM(ABS(quantity_change)) AS demand
+               FROM inventory_movements
+               WHERE station_id=? AND is_deleted=0 AND status='completed'
+                 AND movement_type IN ('out','damage')
+                 AND date(created_at)>=date('now','start of month','-5 months')
+               GROUP BY product_id, strftime('%Y-%m', created_at)""",
+            arrayOf(stationScopeId.toString())
+        ).use { c ->
+            while (c.moveToNext()) {
+                val productId = c.getLong(0)
+                val period = c.getString(1) ?: continue
+                monthlyDemand.getOrPut(productId) { mutableMapOf() }[period] = c.getDouble(2)
+            }
+        }
+        db.rawQuery(
+            "SELECT id,COALESCE(quantity*purchase_price,0) FROM products WHERE station_id=? AND is_deleted=0 ORDER BY quantity*purchase_price DESC,id",
+            arrayOf(stationScopeId.toString())
+        ).use { c ->
+            var cumulative = 0.0
+            while (c.moveToNext()) {
+                val productId = c.getLong(0)
+                val value = c.getDouble(1).coerceAtLeast(0.0)
+                cumulative += value
+                val demand = periods.map { monthlyDemand[productId]?.get(it) ?: 0.0 }
+                val mean = demand.average()
+                val variance = if (demand.isEmpty()) 0.0 else demand.sumOf { (it - mean) * (it - mean) } / demand.size
+                val cv = if (mean > 0.0) kotlin.math.sqrt(variance) / mean else 0.0
+                val xyz = when {
+                    mean <= 0.0 -> "Z"
+                    cv <= 0.25 -> "X"
+                    cv <= 0.50 -> "Y"
+                    else -> "Z"
+                }
+                result.put(
+                    JSONObject()
+                        .put("product_id", productId)
+                        .put("abc", if (total <= 0.0) "C" else if (cumulative / total <= 0.70) "A" else if (cumulative / total <= 0.90) "B" else "C")
+                        .put("xyz", xyz)
+                        .put("xyz_cv", cv)
+                        .put("monthly_demand", JSONArray(demand))
+                )
+            }
+        }
         return result
     }
 
