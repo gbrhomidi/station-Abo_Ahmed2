@@ -54,14 +54,14 @@ class InventorySchemaV67UpgradeTest {
 
         helper = DatabaseHelper.getInstance(context)
         val upgraded = helper.writableDatabase
-        assertEquals(68, upgraded.version)
+        assertEquals(69, upgraded.version)
 
         listOf("tank_readings", "product_batches", "inventory_anomalies").forEach { table ->
             val exists = upgraded.rawQuery(
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
                 arrayOf(table)
             ).use { it.moveToFirst() }
-            assertTrue("V68 migration must recreate $table", exists)
+            assertTrue("V69 migration must preserve/recreate $table", exists)
         }
 
         // Exercise the exact Kotlin/SQLite read paths that previously failed.
