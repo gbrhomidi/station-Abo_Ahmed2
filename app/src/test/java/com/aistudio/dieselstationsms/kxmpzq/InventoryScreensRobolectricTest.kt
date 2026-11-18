@@ -2,6 +2,7 @@ package com.aistudio.dieselstationsms.kxmpzq
 
 import android.content.ContentValues
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
 import org.json.JSONObject
 import org.junit.After
@@ -643,6 +644,71 @@ class InventoryScreensRobolectricTest {
         assertEquals("a low-stock product and foreign warehouse balance in station 1 must not leak into station 2", stationTwoBefore + 1,
             helper.getDashboardStatsForDate(2, JSONObject(), "2026-11-05").getInt("low_stock"))
         assertTrue(otherStationProductId > 0L)
+    }
+
+
+    @Test
+    fun v66UpgradeRepairsMissingInventorySchemasBeforeScreenQueriesRun() {
+        // Reproduce an already-installed V66 database from an APK that did not
+        // ship the Phase 1-4 tables. Keep all legacy business tables and rows intact.
+        val db = helper.writableDatabase
+        listOf(
+            "purchase_order_lines", "purchase_orders", "events_outbox",
+            "inventory_forecasts", "inventory_anomalies", "inventory_health_snapshots",
+            "fuel_temperature_coefficients", "role_scopes",
+            "product_serials", "product_batches", "stock_locations",
+            "shift_reconciliations", "tank_dip_readings", "tank_readings",
+            "inventory_reason_codes"
+        ).forEach { table -> db.execSQL("DROP TABLE IF EXISTS $table") }
+
+        DatabaseHelper.closeInstance()
+        val installedDb = SQLiteDatabase.openDatabase(
+            context.getDatabasePath(DatabaseHelper.DATABASE_NAME).path,
+            null,
+            SQLiteDatabase.OPEN_READWRITE
+        )
+        try {
+            installedDb.version = 66
+        } finally {
+            installedDb.close()
+        }
+
+        // Opening through the real SQLiteOpenHelper must run V66 -> V67.
+        helper = DatabaseHelper.getInstance(context)
+        val upgraded = helper.writableDatabase
+        val requiredTables = listOf(
+            "tank_readings", "inventory_reason_codes", "tank_dip_readings",
+            "shift_reconciliations", "stock_locations", "product_batches",
+            "product_serials", "purchase_orders", "purchase_order_lines",
+            "events_outbox", "inventory_forecasts", "inventory_anomalies",
+            "inventory_health_snapshots", "fuel_temperature_coefficients", "role_scopes"
+        )
+        requiredTables.forEach { table ->
+            val exists = upgraded.rawQuery(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                arrayOf(table)
+            ).use { it.moveToFirst() }
+            assertTrue("V67 migration must create $table", exists)
+        }
+
+        val productId = createProduct(8.0, 2.0)
+        val tankId = createLowFuelTank(1, "V67")
+        val dryStock = helper.getDryStockPage(JSONObject(), 1)
+        assertTrue((0 until dryStock.getJSONArray("products").length()).any {
+            dryStock.getJSONArray("products").getJSONObject(it).optLong("product_id") == productId
+        })
+        val wetStock = helper.getWetStockPage(1)
+        assertTrue((0 until wetStock.getJSONArray("tanks").length()).any {
+            wetStock.getJSONArray("tanks").getJSONObject(it).optLong("tank_id") == tankId
+        })
+
+        // These are the exact read paths that previously failed with SQLITE_ERROR.
+        helper.runInventoryAnomalyDetection(1)
+        helper.getForecourtSnapshot(1)
+        assertTrue(upgraded.rawQuery("PRAGMA integrity_check", null).use {
+            it.moveToFirst() && it.getString(0) == "ok"
+        })
+        assertTrue(upgraded.rawQuery("PRAGMA foreign_key_check", null).use { !it.moveToFirst() })
     }
 
 }
