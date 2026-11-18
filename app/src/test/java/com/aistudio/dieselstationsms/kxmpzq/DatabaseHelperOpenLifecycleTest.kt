@@ -261,6 +261,87 @@ class DatabaseHelperOpenLifecycleTest {
         }
     }
 
+
+    @Test
+    fun v65DatabaseMissingStockHealthTablesGetsAdditiveV66Repair() {
+        val database = helper.writableDatabase
+        database.execSQL(
+            "CREATE TABLE v65_stock_schema_preservation (id INTEGER PRIMARY KEY, marker TEXT NOT NULL)"
+        )
+        database.execSQL(
+            "INSERT INTO v65_stock_schema_preservation(id, marker) VALUES (1, 'keep-existing-data')"
+        )
+
+        // Model a V65 installation created before the Phase 1–4 ensure functions
+        // were added without advancing SQLiteOpenHelper's version.
+        database.execSQL("DROP TABLE IF EXISTS inventory_anomalies")
+        database.execSQL("DROP TABLE IF EXISTS product_batches")
+        database.execSQL("DROP TABLE IF EXISTS tank_readings")
+        database.version = 65
+        helper.close()
+
+        val upgraded = helper.writableDatabase
+        assertEquals(66, upgraded.version)
+        listOf("inventory_anomalies", "product_batches", "tank_readings").forEach { table ->
+            assertTrue("V65 -> V66 must create $table", tableExists(upgraded, table))
+        }
+        val preserved = upgraded.rawQuery(
+            "SELECT marker FROM v65_stock_schema_preservation WHERE id = 1", null
+        ).use { cursor ->
+            assertTrue("pre-existing V65 row must survive the upgrade", cursor.moveToFirst())
+            cursor.getString(0)
+        }
+        assertEquals("keep-existing-data", preserved)
+
+        val anomalyColumns = tableColumns(upgraded, "inventory_anomalies")
+        assertTrue("anomaly_id is required by stock-level anomaly queries", "anomaly_id" in anomalyColumns)
+        assertTrue("station_id is required by station-scoped anomaly queries", "station_id" in anomalyColumns)
+        assertTrue("status is required by OPEN anomaly filtering", "status" in anomalyColumns)
+
+        val batchColumns = tableColumns(upgraded, "product_batches")
+        assertTrue("batch expiry is required by product stock-level summaries", "expiry_date" in batchColumns)
+        assertTrue("batch quantity is required by product stock-level summaries", "quantity" in batchColumns)
+        assertTrue("batch product linkage is required", "product_id" in batchColumns)
+
+        val readingColumns = tableColumns(upgraded, "tank_readings")
+        listOf("reading_id", "tank_id", "reading_at", "water_level_mm").forEach { column ->
+            assertTrue("tank_readings.$column must exist", column in readingColumns)
+        }
+        assertTrue(
+            "tank reading lookup index must be installed",
+            upgraded.rawQuery(
+                "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_phase1_tank_readings_tank_at'",
+                null
+            ).use { it.moveToFirst() }
+        )
+        assertEquals("ok", upgraded.rawQuery("PRAGMA integrity_check", null).use {
+            assertTrue(it.moveToFirst()); it.getString(0).lowercase()
+        })
+        assertFalse("upgrade must not introduce foreign-key violations",
+            upgraded.rawQuery("PRAGMA foreign_key_check", null).use { it.moveToFirst() })
+
+        helper.close()
+        val reopened = helper.writableDatabase
+        assertEquals(DatabaseHelper.VERSION, reopened.version)
+        listOf("inventory_anomalies", "product_batches", "tank_readings").forEach { table ->
+            assertTrue("$table must remain after closing and reopening", tableExists(reopened, table))
+        }
+        assertEquals("keep-existing-data", reopened.rawQuery(
+            "SELECT marker FROM v65_stock_schema_preservation WHERE id = 1", null
+        ).use { cursor -> assertTrue(cursor.moveToFirst()); cursor.getString(0) })
+        assertEquals("ok", reopened.rawQuery("PRAGMA integrity_check", null).use {
+            assertTrue(it.moveToFirst()); it.getString(0).lowercase()
+        })
+        assertFalse(reopened.rawQuery("PRAGMA foreign_key_check", null).use { it.moveToFirst() })
+    }
+
+    private fun tableColumns(database: SQLiteDatabase, table: String): Set<String> =
+        database.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
+            buildSet {
+                while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+            }
+        }
+
     private fun markerValue(): String = helper.readableDatabase.rawQuery(
         "SELECT value FROM restore_round_trip_marker WHERE id = 1", null
     ).use { cursor ->

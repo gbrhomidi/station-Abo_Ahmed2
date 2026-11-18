@@ -52,7 +52,7 @@ class DatabaseHelperBackupV62MigrationTest {
 
             // This opens the prebuilt V62 file through the production SQLiteOpenHelper.
             val upgraded = DatabaseHelper.getInstance(context).writableDatabase
-            assertEquals("the actual V62 Android helper upgrade must finish at V65",
+            assertEquals("the actual V62 Android helper upgrade must finish at V66",
                 DatabaseHelper.VERSION, upgraded.version)
             assertEquals("permission migration must not create grants for missing role foreign keys", 0,
                 scalarInt(upgraded, """
@@ -72,7 +72,7 @@ class DatabaseHelperBackupV62MigrationTest {
             }
 
             val locationColumns = tableColumns(upgraded, "vehicle_locations")
-            assertTrue("V62 -> V65 must add vehicle_locations.trip_id", "trip_id" in locationColumns)
+            assertTrue("V62 -> V66 must add vehicle_locations.trip_id", "trip_id" in locationColumns)
             assertEquals(3, scalarInt(upgraded, "SELECT COUNT(*) FROM vehicle_locations"))
             assertEquals(3, scalarInt(upgraded, "SELECT COUNT(*) FROM vehicle_trips"))
             assertEquals(1, scalarInt(upgraded, "SELECT COUNT(*) FROM vehicle_expenses"))
@@ -141,9 +141,9 @@ class DatabaseHelperBackupV62MigrationTest {
             ).associateWith { table -> scalarInt(upgraded, "SELECT COUNT(*) FROM $table") }
             DatabaseHelper.closeInstance()
             val reopened = DatabaseHelper.getInstance(context).writableDatabase
-            assertEquals(65, reopened.version)
+            assertEquals(DatabaseHelper.VERSION, reopened.version)
             stableCounts.forEach { (table, expected) ->
-                assertEquals("reopening an upgraded V65 database must not duplicate or lose $table rows",
+                assertEquals("reopening an upgraded V66 database must not duplicate or lose $table rows",
                     expected, scalarInt(reopened, "SELECT COUNT(*) FROM $table"))
             }
             assertEquals(3, scalarInt(reopened,
