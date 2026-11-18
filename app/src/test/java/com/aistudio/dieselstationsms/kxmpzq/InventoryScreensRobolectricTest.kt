@@ -158,27 +158,52 @@ class InventoryScreensRobolectricTest {
     fun inventoryAgingAssignsEveryStockRowToExactlyOneBucketAndReconcilesStationValue() {
         val db = helper.writableDatabase
         val today = java.time.LocalDate.parse(DatabaseHelper.getDateOnlyFormat().format(java.util.Date()))
+        val quantities = mapOf("0-30" to 2.0, "31-60" to 3.0, "61-90" to 4.0, ">90" to 5.0)
         val expected = linkedMapOf(
-            "0-30" to createProduct(2.0, 1.0),
-            "31-60" to createProduct(3.0, 1.0),
-            "61-90" to createProduct(4.0, 1.0),
-            ">90" to createProduct(5.0, 1.0),
+            "0-30" to createProduct(0.0, 1.0),
+            "31-60" to createProduct(0.0, 1.0),
+            "61-90" to createProduct(0.0, 1.0),
+            ">90" to createProduct(0.0, 1.0),
             "Unknown/No movement" to createProduct(6.0, 1.0)
         )
+        val warehouseId = helper.ensureOperationalWarehouse(1)
         val ages = mapOf("0-30" to 10L, "31-60" to 45L, "61-90" to 75L, ">90" to 120L)
+
+        // Opening balances are inserted directly; seed completed movements explicitly.
         expected.forEach { (bucket, productId) ->
-            if (bucket == "Unknown/No movement") {
-                db.delete("inventory_movements", "product_id=?", arrayOf(productId.toString()))
-            } else {
+            if (bucket != "Unknown/No movement") {
+                helper.addStockMovement(JSONObject()
+                    .put("product_id", productId)
+                    .put("warehouse_id", warehouseId)
+                    .put("movement_type", "in")
+                    .put("quantity", quantities.getValue(bucket))
+                    .put("unit_cost", 10.0)
+                    .put("notes", "DB-05 aging fixture"), 1, actorId)
                 val movementDate = today.minusDays(ages.getValue(bucket)).toString()
-                db.update("inventory_movements", ContentValues().apply { put("created_at", movementDate) },
-                    "product_id=?", arrayOf(productId.toString()))
+                assertEquals(1, db.update(
+                    "inventory_movements",
+                    ContentValues().apply { put("created_at", movementDate) },
+                    "product_id=? AND station_id=? AND status='completed' AND is_deleted=0",
+                    arrayOf(productId.toString(), "1")
+                ))
             }
         }
-        // Invalid timestamps are also unknown; they must not be counted in any age range.
-        val invalidDateProduct = createProduct(1.0, 1.0)
-        db.update("inventory_movements", ContentValues().apply { put("created_at", "not-a-date") },
-            "product_id=?", arrayOf(invalidDateProduct.toString()))
+
+        // Missing movement history and malformed movement dates both belong only to Unknown.
+        val invalidDateProduct = createProduct(0.0, 1.0)
+        helper.addStockMovement(JSONObject()
+            .put("product_id", invalidDateProduct)
+            .put("warehouse_id", warehouseId)
+            .put("movement_type", "in")
+            .put("quantity", 1.0)
+            .put("unit_cost", 10.0)
+            .put("notes", "DB-05 invalid-date fixture"), 1, actorId)
+        assertEquals(1, db.update(
+            "inventory_movements",
+            ContentValues().apply { put("created_at", "not-a-date") },
+            "product_id=? AND station_id=? AND status='completed' AND is_deleted=0",
+            arrayOf(invalidDateProduct.toString(), "1")
+        ))
 
         createProduct(9.0, 1.0, 2, stationTwoActorId)
         val aging = helper.getInventoryAging(1)
