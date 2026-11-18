@@ -1951,7 +1951,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureColumn(db, "events_outbox", "idempotency_key", "TEXT")
         ensureColumn(db, "events_outbox", "claimed_at", "TEXT")
         ensureColumn(db, "events_outbox", "lease_until", "TEXT")
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_phase3_events_pending ON events_outbox(station_id,consumer,status,available_at,event_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_phase3_events_station_pending ON events_outbox(station_id,consumer,status,available_at,event_id)")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_phase3_events_idempotency ON events_outbox(station_id,consumer,idempotency_key) WHERE idempotency_key IS NOT NULL")
         db.execSQL("""CREATE TABLE IF NOT EXISTS inventory_forecasts (
             forecast_id INTEGER PRIMARY KEY AUTOINCREMENT, station_id INTEGER NOT NULL, item_type TEXT NOT NULL, item_id INTEGER NOT NULL,
@@ -36918,7 +36918,7 @@ private fun postSalesReversalJournal(
             db.rawQuery("""SELECT event_id FROM events_outbox WHERE station_id=? AND consumer=? AND status='PENDING'
                 AND datetime(available_at)<=datetime('now') ORDER BY event_id LIMIT ?""",arrayOf(stationScopeId.toString(),consumer,limit.toString())).use { c -> while(c.moveToNext()) ids+=c.getLong(0) }
             ids.forEach { id -> db.execSQL("""UPDATE events_outbox SET status='PROCESSING',attempts=attempts+1,claimed_at=CURRENT_TIMESTAMP,
-                lease_until=datetime('now',' +'||?||' seconds') WHERE event_id=? AND station_id=? AND consumer=? AND status='PENDING'""",arrayOf(lease,id,stationScopeId,consumer)) }
+                lease_until=datetime('now','+'||?||' seconds') WHERE event_id=? AND station_id=? AND consumer=? AND status='PENDING'""",arrayOf(lease,id,stationScopeId,consumer)) }
             val result=JSONArray()
             if(ids.isNotEmpty()) { val marks=ids.joinToString(",") { "?" }; db.rawQuery("SELECT * FROM events_outbox WHERE station_id=? AND event_id IN ($marks) AND status='PROCESSING' ORDER BY event_id",(listOf(stationScopeId.toString())+ids.map { it.toString() }).toTypedArray()).use { c -> while(c.moveToNext()) result.put(cursorToJsonObject(c)) } }
             db.setTransactionSuccessful(); return result

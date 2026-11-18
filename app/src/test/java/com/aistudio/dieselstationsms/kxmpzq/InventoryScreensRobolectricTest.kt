@@ -793,4 +793,16 @@ class InventoryScreensRobolectricTest {
         assertEquals("PENDING",row.first); assertEquals(1,row.second); assertTrue(row.third==null)
     }
 
+    @Test
+    fun outboxExpiredProcessingLeaseIsRecoveredAfterWorkerCrash() {
+        val id=helper.publishEvent(JSONObject().put("event_type","pos_sale_completed"),1)
+        assertEquals(1,helper.claimPendingEvents(JSONObject(),1).length())
+        helper.writableDatabase.execSQL("UPDATE events_outbox SET lease_until='2000-01-01 00:00:00' WHERE event_id=?",arrayOf(id))
+        val recovered=helper.claimPendingEvents(JSONObject(),1)
+        assertEquals(1,recovered.length())
+        assertEquals(id,recovered.getJSONObject(0).getLong("event_id"))
+        assertEquals(2,recovered.getJSONObject(0).getInt("attempts"))
+        assertEquals("PROCESSING",recovered.getJSONObject(0).getString("status"))
+    }
+
 }
