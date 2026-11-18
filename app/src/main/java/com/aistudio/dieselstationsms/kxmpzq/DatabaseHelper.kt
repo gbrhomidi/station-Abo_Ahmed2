@@ -57,7 +57,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 68
+        const val VERSION = 69
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -343,6 +343,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         ensurePhase3Phase4Schema(db)
                     }
                     67 -> { /* V67 -> V68: re-apply additive inventory schema repair for installed V67 databases. */ }
+                    68 -> { /* V68 -> V69: add durable station-scoped outbox metadata. */ }
                 }
             }
             // V64 repairs Fleet schema for every legacy database, including installations already at V63.
@@ -1946,7 +1947,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             attempts INTEGER NOT NULL DEFAULT 0, available_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, published_at TEXT, delivered_at TEXT,
             last_error TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""".trimIndent())
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_phase3_events_pending ON events_outbox(consumer,status,available_at,event_id)")
+        ensureColumn(db, "events_outbox", "station_id", "INTEGER NOT NULL DEFAULT 0")
+        ensureColumn(db, "events_outbox", "idempotency_key", "TEXT")
+        ensureColumn(db, "events_outbox", "claimed_at", "TEXT")
+        ensureColumn(db, "events_outbox", "lease_until", "TEXT")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_phase3_events_pending ON events_outbox(station_id,consumer,status,available_at,event_id)")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_phase3_events_idempotency ON events_outbox(station_id,consumer,idempotency_key) WHERE idempotency_key IS NOT NULL")
         db.execSQL("""CREATE TABLE IF NOT EXISTS inventory_forecasts (
             forecast_id INTEGER PRIMARY KEY AUTOINCREMENT, station_id INTEGER NOT NULL, item_type TEXT NOT NULL, item_id INTEGER NOT NULL,
             forecast_date TEXT NOT NULL, demand_quantity REAL NOT NULL DEFAULT 0, days_of_cover REAL, reorder_quantity REAL NOT NULL DEFAULT 0,
@@ -36699,7 +36705,17 @@ private fun postSalesReversalJournal(
 
     fun getExpiringWarranties(daysAhead: Int, stationScopeId: Int): JSONArray {
         require(daysAhead >= 0)
-        return readableDatabase.rawQuery("SELECT s.*,p.product_name,p.product_name_ar FROM product_serials s JOIN products p ON p.id=s.product_id WHERE p.station_id=? AND s.status='AVAILABLE' AND s.warranty_end_at IS NOT NULL AND date(s.warranty_end_at) BETWEEN date('now') AND date('now','+'||?||' day') ORDER BY s.warranty_end_at", arrayOf(stationScopeId.toString(), daysAhead.toString())).use { cursorToJsonArray(it) }
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        // Sold units remain covered until warranty expiry; returned/damaged/quarantined units are excluded.
+        return readableDatabase.rawQuery(
+            """SELECT s.*,p.product_name,p.product_name_ar FROM product_serials s
+               JOIN products p ON p.id=s.product_id
+               WHERE p.station_id=? AND p.is_deleted=0 AND s.status IN ('AVAILABLE','SOLD')
+                 AND s.warranty_end_at IS NOT NULL
+                 AND date(s.warranty_end_at) BETWEEN date('now') AND date('now','+'||?||' day')
+               ORDER BY s.warranty_end_at,s.serial_id""",
+            arrayOf(stationScopeId.toString(), daysAhead.toString())
+        ).use { cursorToJsonArray(it) }
     }
 
     fun getInventoryAging(stationScopeId: Int): JSONObject {
@@ -36872,8 +36888,65 @@ private fun postSalesReversalJournal(
         val poId=data.optLong("po_id",0);require(poId>0);val db=readableDatabase;val po=JSONObject();val diffs=JSONArray();db.rawQuery("SELECT po_id,po_number,status,total_amount FROM purchase_orders WHERE po_id=? AND station_id=?",arrayOf(poId.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "أمر الشراء غير موجود" };po.put("po_id",c.getLong(0)).put("po_number",c.getString(1)).put("status",c.getString(2)).put("amount",c.getDouble(3))};val delivery=db.rawQuery("SELECT COALESCE(SUM(received_quantity),0) FROM purchase_order_lines WHERE po_id=?",arrayOf(poId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0};val ordered=db.rawQuery("SELECT COALESCE(SUM(quantity),0) FROM purchase_order_lines WHERE po_id=?",arrayOf(poId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0};val invoice=data.optDouble("invoice_quantity",delivery);val movement=db.rawQuery("SELECT COALESCE(SUM(movement_quantity),0) FROM purchase_order_lines WHERE po_id=?",arrayOf(poId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0};if(kotlin.math.abs(ordered-invoice)>.000001)diffs.put(JSONObject().put("field","invoice_vs_po").put("difference",invoice-ordered));if(kotlin.math.abs(delivery-movement)>.000001)diffs.put(JSONObject().put("field","delivery_vs_movement").put("difference",delivery-movement));return JSONObject().put("match",JSONObject().put("po",ordered).put("delivery",delivery).put("movement",movement).put("invoice",invoice)).put("differences",diffs).put("matched",diffs.length()==0)
     }
 
-    fun publishEvent(data: JSONObject, stationScopeId: Int): Long { val type=data.optString("event_type").trim();require(type.isNotBlank());return writableDatabase.insertOrThrow("events_outbox",null,ContentValues().apply{put("event_type",type);put("payload",data.optJSONObject("payload")?.toString() ?: data.toString());put("consumer",data.optString("consumer","stock-levels"))}) }
-    fun fetchPendingEvents(data: JSONObject, stationScopeId: Int): JSONArray { val consumer=data.optString("consumer","stock-levels");val limit=data.optInt("limit",100).coerceIn(1,500);return readableDatabase.rawQuery("SELECT * FROM events_outbox WHERE consumer=? AND status='PENDING' ORDER BY event_id LIMIT ?",arrayOf(consumer,limit.toString())).use{cursorToJsonArray(it)} }
+    fun publishEvent(data: JSONObject, stationScopeId: Int): Long {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        val eventType=data.optString("event_type").trim(); val consumer=data.optString("consumer","stock-levels").trim()
+        require(eventType.isNotBlank() && consumer.isNotBlank()) { "نوع الحدث والمستهلك مطلوبان" }
+        val key=data.optString("idempotency_key").trim().takeIf { it.isNotBlank() }
+        val db=writableDatabase; db.beginTransaction()
+        try {
+            val values=ContentValues().apply { put("event_type",eventType); put("payload",data.optJSONObject("payload")?.toString() ?: data.toString()); put("consumer",consumer); put("station_id",stationScopeId); if(key!=null) put("idempotency_key",key) }
+            val inserted=db.insertWithOnConflict("events_outbox",null,values,SQLiteDatabase.CONFLICT_IGNORE)
+            val id=if(inserted>0L) inserted else {
+                require(key!=null) { "تعذر حفظ الحدث" }
+                db.rawQuery("SELECT event_id FROM events_outbox WHERE station_id=? AND consumer=? AND idempotency_key=?",arrayOf(stationScopeId.toString(),consumer,key)).use { c -> require(c.moveToFirst()); c.getLong(0) }
+            }
+            db.setTransactionSuccessful(); return id
+        } finally { db.endTransaction() }
+    }
+
+    fun claimPendingEvents(data: JSONObject, stationScopeId: Int): JSONArray {
+        require(stationScopeId>0) { "معرف المحطة غير صالح" }
+        val consumer=data.optString("consumer","stock-levels").trim(); require(consumer.isNotBlank())
+        val limit=data.optInt("limit",50).coerceIn(1,200); val lease=data.optInt("lease_seconds",120).coerceIn(30,3600)
+        val db=writableDatabase; db.beginTransaction()
+        try {
+            db.execSQL("""UPDATE events_outbox SET status='PENDING',claimed_at=NULL,lease_until=NULL,available_at=CURRENT_TIMESTAMP,
+                last_error=COALESCE(last_error,'انتهت مهلة الحجز؛ أعيد الحدث إلى قائمة الانتظار')
+                WHERE station_id=? AND consumer=? AND status='PROCESSING' AND lease_until IS NOT NULL AND datetime(lease_until)<=datetime('now')""",arrayOf(stationScopeId,consumer))
+            val ids=mutableListOf<Long>()
+            db.rawQuery("""SELECT event_id FROM events_outbox WHERE station_id=? AND consumer=? AND status='PENDING'
+                AND datetime(available_at)<=datetime('now') ORDER BY event_id LIMIT ?""",arrayOf(stationScopeId.toString(),consumer,limit.toString())).use { c -> while(c.moveToNext()) ids+=c.getLong(0) }
+            ids.forEach { id -> db.execSQL("""UPDATE events_outbox SET status='PROCESSING',attempts=attempts+1,claimed_at=CURRENT_TIMESTAMP,
+                lease_until=datetime('now',' +'||?||' seconds') WHERE event_id=? AND station_id=? AND consumer=? AND status='PENDING'""",arrayOf(lease,id,stationScopeId,consumer)) }
+            val result=JSONArray()
+            if(ids.isNotEmpty()) { val marks=ids.joinToString(",") { "?" }; db.rawQuery("SELECT * FROM events_outbox WHERE station_id=? AND event_id IN ($marks) AND status='PROCESSING' ORDER BY event_id",(listOf(stationScopeId.toString())+ids.map { it.toString() }).toTypedArray()).use { c -> while(c.moveToNext()) result.put(cursorToJsonObject(c)) } }
+            db.setTransactionSuccessful(); return result
+        } finally { db.endTransaction() }
+    }
+
+    fun acknowledgeEvent(eventId: Long, stationScopeId: Int, consumer: String): Boolean {
+        require(eventId>0 && stationScopeId>0 && consumer.isNotBlank())
+        val values=ContentValues().apply { put("status","DELIVERED"); put("delivered_at",getCurrentDateTime()); putNull("claimed_at"); putNull("lease_until"); putNull("last_error") }
+        return writableDatabase.update("events_outbox",values,"event_id=? AND station_id=? AND consumer=? AND status='PROCESSING'",arrayOf(eventId.toString(),stationScopeId.toString(),consumer))==1
+    }
+
+    fun failEvent(eventId: Long, stationScopeId: Int, consumer: String, error: String, maxAttempts: Int = 8): Boolean {
+        require(eventId>0 && stationScopeId>0 && consumer.isNotBlank())
+        val db=writableDatabase
+        val attempts=db.rawQuery("SELECT attempts FROM events_outbox WHERE event_id=? AND station_id=? AND consumer=? AND status='PROCESSING'",arrayOf(eventId.toString(),stationScopeId.toString(),consumer)).use { c -> if(c.moveToFirst()) c.getInt(0) else return false }
+        val terminal=attempts>=maxAttempts.coerceAtLeast(1); val delay=(30L shl (attempts-1).coerceIn(0,7)).coerceAtMost(3600L)
+        val available=if(terminal) getCurrentDateTime() else db.rawQuery("SELECT datetime('now',?)",arrayOf("+$delay seconds")).use { c -> if(c.moveToFirst()) c.getString(0) else getCurrentDateTime() }
+        val values=ContentValues().apply { put("status",if(terminal) "FAILED" else "PENDING"); put("available_at",available); put("last_error",error.take(1000)); putNull("claimed_at"); putNull("lease_until") }
+        return db.update("events_outbox",values,"event_id=? AND station_id=? AND consumer=? AND status='PROCESSING'",arrayOf(eventId.toString(),stationScopeId.toString(),consumer))==1
+    }
+
+    fun fetchPendingEvents(data: JSONObject, stationScopeId: Int): JSONArray {
+        require(stationScopeId>0) { "معرف المحطة غير صالح" }
+        val consumer=data.optString("consumer","stock-levels").trim(); val limit=data.optInt("limit",100).coerceIn(1,500)
+        return readableDatabase.rawQuery("""SELECT * FROM events_outbox WHERE station_id=? AND consumer=? AND status='PENDING'
+            AND datetime(available_at)<=datetime('now') ORDER BY event_id LIMIT ?""",arrayOf(stationScopeId.toString(),consumer,limit.toString())).use { cursorToJsonArray(it) }
+    }
 
     fun getForecourtSnapshot(stationScopeId: Int): JSONObject { val db=readableDatabase;val shift=getCurrentShift(stationScopeId)?:JSONObject();val sales=JSONObject();db.rawQuery("SELECT COALESCE(SUM(quantity),0),COALESCE(SUM(total_amount),0),COUNT(*) FROM fuel_sales WHERE shift_id=? AND is_deleted=0",arrayOf(shift.optString("shift_id","0"))).use{c->if(c.moveToFirst()){sales.put("fuel_liters",c.getDouble(0));sales.put("fuel_amount",c.getDouble(1));sales.put("fuel_invoices",c.getInt(2))}};db.rawQuery("SELECT COALESCE(SUM(net_amount),0),COUNT(*) FROM sales_transactions WHERE station_id=? AND date(created_at)=date('now') AND status='completed'",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst()){sales.put("store_amount",c.getDouble(0));sales.put("store_invoices",c.getInt(1))}};val alerts=db.rawQuery("SELECT * FROM inventory_anomalies WHERE station_id=? AND status='OPEN' ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,anomaly_id DESC",arrayOf(stationScopeId.toString())).use{cursorToJsonArray(it)};val health=calculateInventoryHealthScore(stationScopeId);return JSONObject().put("shift",shift).put("sales",sales).put("alerts",alerts).put("health_score",health) }
 

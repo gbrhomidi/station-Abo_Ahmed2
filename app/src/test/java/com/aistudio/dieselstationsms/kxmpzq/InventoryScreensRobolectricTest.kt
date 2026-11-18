@@ -762,4 +762,35 @@ class InventoryScreensRobolectricTest {
         assertTrue(upgraded.rawQuery("PRAGMA foreign_key_check", null).use { !it.moveToFirst() })
     }
 
+    @Test
+    fun warrantyQueryIncludesSoldSerialsAndExcludesReturnedSerials() {
+        val productId=createProduct(3.0,1.0); val db=helper.writableDatabase
+        val sold=db.insertOrThrow("product_serials",null,ContentValues().apply { put("product_id",productId); put("serial_no","SOLD-"+UUID.randomUUID()); put("status","SOLD"); put("warranty_end_at","2099-12-31") })
+        val returned=db.insertOrThrow("product_serials",null,ContentValues().apply { put("product_id",productId); put("serial_no","RETURNED-"+UUID.randomUUID()); put("status","RETURNED"); put("warranty_end_at","2099-12-31") })
+        val rows=helper.getExpiringWarranties(36500,1)
+        assertTrue((0 until rows.length()).any { rows.getJSONObject(it).getLong("serial_id")==sold })
+        assertFalse((0 until rows.length()).any { rows.getJSONObject(it).getLong("serial_id")==returned })
+    }
+
+    @Test
+    fun outboxUsesStationScopedIdempotencyClaimAndAcknowledgement() {
+        val event=JSONObject().put("event_type","pos_sale_completed").put("consumer","stock-levels").put("idempotency_key","acceptance-sale-1").put("payload",JSONObject().put("sale_id",1001))
+        val id=helper.publishEvent(event,1); assertEquals(id,helper.publishEvent(event,1))
+        val claimed=helper.claimPendingEvents(JSONObject(),1); assertEquals(1,claimed.length())
+        assertEquals("PROCESSING",claimed.getJSONObject(0).getString("status")); assertEquals(1,claimed.getJSONObject(0).getInt("attempts"))
+        assertFalse(helper.acknowledgeEvent(id,2,"stock-levels"))
+        assertTrue(helper.acknowledgeEvent(id,1,"stock-levels")); assertFalse(helper.acknowledgeEvent(id,1,"stock-levels"))
+        val status=helper.writableDatabase.rawQuery("SELECT status FROM events_outbox WHERE event_id=?",arrayOf(id.toString())).use { c -> check(c.moveToFirst()); c.getString(0) }
+        assertEquals("DELIVERED",status)
+    }
+
+    @Test
+    fun outboxFailureReturnsClaimedEventToRetryQueue() {
+        val id=helper.publishEvent(JSONObject().put("event_type","fuel_sale_completed"),1)
+        assertEquals(1,helper.claimPendingEvents(JSONObject(),1).length())
+        assertTrue(helper.failEvent(id,1,"stock-levels","temporary failure"))
+        val row=helper.writableDatabase.rawQuery("SELECT status,attempts,lease_until FROM events_outbox WHERE event_id=?",arrayOf(id.toString())).use { c -> check(c.moveToFirst()); Triple(c.getString(0),c.getInt(1),c.getString(2)) }
+        assertEquals("PENDING",row.first); assertEquals(1,row.second); assertTrue(row.third==null)
+    }
+
 }
