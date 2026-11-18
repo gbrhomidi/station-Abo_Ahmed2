@@ -57,7 +57,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 67
+        const val VERSION = 68
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -342,6 +342,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         ensurePhase2DryStockSchema(db)
                         ensurePhase3Phase4Schema(db)
                     }
+                    67 -> { /* V67 -> V68: re-apply additive inventory schema repair for installed V67 databases. */ }
                 }
             }
             // V64 repairs Fleet schema for every legacy database, including installations already at V63.
