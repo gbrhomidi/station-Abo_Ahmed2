@@ -287,8 +287,10 @@ class InventoryScreensRobolectricTest {
         val db = helper.writableDatabase
         val month = java.time.YearMonth.parse(helper.currentDateForBridge().take(7))
         val periods = (5 downTo 0).map { month.minusMonths(it.toLong()) }
-        val productX = createProduct(20.0, 1.0)
-        val productY = createProduct(20.0, 1.0)
+        // Each six-month fixture consumes 60 units; seed sufficient stock so
+        // the test exercises CV classification rather than stock-underflow validation.
+        val productX = createProduct(100.0, 1.0)
+        val productY = createProduct(100.0, 1.0)
         val warehouseId = helper.ensureOperationalWarehouse(1)
         val root3 = kotlin.math.sqrt(3.0)
         val fixtures = listOf(
