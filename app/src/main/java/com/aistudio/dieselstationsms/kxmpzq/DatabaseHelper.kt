@@ -37404,7 +37404,70 @@ private fun postSalesReversalJournal(
     }
 
     fun matchInvoiceFourWay(data: JSONObject, stationScopeId: Int): JSONObject {
-        val poId=data.optLong("po_id",0);require(poId>0);val db=readableDatabase;val po=JSONObject();val diffs=JSONArray();db.rawQuery("SELECT po_id,po_number,status,total_amount FROM purchase_orders WHERE po_id=? AND station_id=?",arrayOf(poId.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "أمر الشراء غير موجود" };po.put("po_id",c.getLong(0)).put("po_number",c.getString(1)).put("status",c.getString(2)).put("amount",c.getDouble(3))};val delivery=db.rawQuery("SELECT COALESCE(SUM(received_quantity),0) FROM purchase_order_lines WHERE po_id=?",arrayOf(poId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0};val ordered=db.rawQuery("SELECT COALESCE(SUM(quantity),0) FROM purchase_order_lines WHERE po_id=?",arrayOf(poId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0};val invoice=data.optDouble("invoice_quantity",delivery);val movement=db.rawQuery("SELECT COALESCE(SUM(movement_quantity),0) FROM purchase_order_lines WHERE po_id=?",arrayOf(poId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0};if(kotlin.math.abs(ordered-invoice)>.000001)diffs.put(JSONObject().put("field","invoice_vs_po").put("difference",invoice-ordered));if(kotlin.math.abs(delivery-movement)>.000001)diffs.put(JSONObject().put("field","delivery_vs_movement").put("difference",delivery-movement));return JSONObject().put("match",JSONObject().put("po",ordered).put("delivery",delivery).put("movement",movement).put("invoice",invoice)).put("differences",diffs).put("matched",diffs.length()==0)
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        val poId = data.optLong("po_id", 0L)
+        require(poId > 0L) { "معرف أمر الشراء مطلوب" }
+        val invoiceProvided = data.has("invoice_quantity") && !data.isNull("invoice_quantity")
+        val invoice = if (invoiceProvided) data.optDouble("invoice_quantity", Double.NaN) else Double.NaN
+        require(!invoiceProvided || (invoice.isFinite() && invoice >= 0.0)) {
+            "كمية الفاتورة غير صالحة"
+        }
+
+        val db = readableDatabase
+        val po = JSONObject()
+        val differences = JSONArray()
+        db.rawQuery(
+            """SELECT po_id,po_number,status,total_amount FROM purchase_orders
+               WHERE po_id=? AND station_id=?""",
+            arrayOf(poId.toString(), stationScopeId.toString())
+        ).use { cursor ->
+            require(cursor.moveToFirst()) { "أمر الشراء غير موجود أو خارج نطاق المحطة" }
+            po.put("po_id", cursor.getLong(0))
+                .put("po_number", cursor.getString(1))
+                .put("status", cursor.getString(2))
+                .put("amount", cursor.getDouble(3))
+        }
+        val quantities = db.rawQuery(
+            """SELECT COALESCE(SUM(l.quantity),0),
+                      COALESCE(SUM(l.received_quantity),0),
+                      COALESCE(SUM(l.movement_quantity),0)
+               FROM purchase_order_lines l
+               INNER JOIN purchase_orders p ON p.po_id=l.po_id
+               WHERE l.po_id=? AND p.station_id=?""",
+            arrayOf(poId.toString(), stationScopeId.toString())
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            Triple(cursor.getDouble(0), cursor.getDouble(1), cursor.getDouble(2))
+        }
+        val ordered = quantities.first
+        val delivered = quantities.second
+        val moved = quantities.third
+        if (!invoiceProvided) {
+            differences.put(JSONObject()
+                .put("field", "invoice_missing")
+                .put("difference", JSONObject.NULL)
+                .put("requires_review", true))
+        } else if (kotlin.math.abs(ordered - invoice) > 0.000001) {
+            differences.put(JSONObject()
+                .put("field", "invoice_vs_po")
+                .put("difference", invoice - ordered))
+        }
+        if (kotlin.math.abs(delivered - moved) > 0.000001) {
+            differences.put(JSONObject()
+                .put("field", "delivery_vs_movement")
+                .put("difference", delivered - moved))
+        }
+        val match = JSONObject()
+            .put("po", ordered)
+            .put("delivery", delivered)
+            .put("movement", moved)
+            .put("invoice", if (invoiceProvided) invoice else JSONObject.NULL)
+            .put("invoice_provided", invoiceProvided)
+        return JSONObject()
+            .put("po", po)
+            .put("match", match)
+            .put("differences", differences)
+            .put("matched", invoiceProvided && differences.length() == 0)
     }
 
     fun publishEvent(data: JSONObject, stationScopeId: Int): Long {

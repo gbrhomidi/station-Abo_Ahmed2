@@ -83,6 +83,55 @@ class SupplierPayablesRobolectricTest {
 
 
     @Test
+    fun fourWayInvoiceMatchNeverTreatsMissingInvoiceAsDeliveredQuantity() {
+        val poId = db.insertOrThrow("purchase_orders", null, ContentValues().apply {
+            put("po_number", "FOUR-WAY-MISSING-${UUID.randomUUID()}")
+            put("station_id", 1)
+            put("status", "received")
+            put("total_amount", 100.0)
+        })
+        db.insertOrThrow("purchase_order_lines", null, ContentValues().apply {
+            put("po_id", poId)
+            put("item_type", "PRODUCT")
+            put("item_id", 1)
+            put("quantity", 10.0)
+            put("unit_price", 10.0)
+            put("received_quantity", 10.0)
+            put("movement_quantity", 10.0)
+        })
+
+        val missingInvoice = helper.matchInvoiceFourWay(JSONObject().put("po_id", poId), 1)
+        assertFalse(missingInvoice.getBoolean("matched"))
+        assertFalse(missingInvoice.getJSONObject("match").getBoolean("invoice_provided"))
+        assertTrue(missingInvoice.getJSONObject("match").isNull("invoice"))
+        assertEquals("invoice_missing", missingInvoice.getJSONArray("differences")
+            .getJSONObject(0).getString("field"))
+
+        val matchingInvoice = helper.matchInvoiceFourWay(
+            JSONObject().put("po_id", poId).put("invoice_quantity", 10.0), 1
+        )
+        assertTrue(matchingInvoice.getBoolean("matched"))
+
+        val mismatchingInvoice = helper.matchInvoiceFourWay(
+            JSONObject().put("po_id", poId).put("invoice_quantity", 9.0), 1
+        )
+        assertFalse(mismatchingInvoice.getBoolean("matched"))
+        assertEquals("invoice_vs_po", mismatchingInvoice.getJSONArray("differences")
+            .getJSONObject(0).getString("field"))
+
+        assertTrue(runCatching {
+            helper.matchInvoiceFourWay(
+                JSONObject().put("po_id", poId).put("invoice_quantity", Double.NaN), 1
+            )
+        }.isFailure)
+        assertTrue(runCatching {
+            helper.matchInvoiceFourWay(
+                JSONObject().put("po_id", poId).put("invoice_quantity", 10.0), 2
+            )
+        }.isFailure)
+    }
+
+    @Test
     fun supplierTaskSynchronizationRejectsInvalidOrNonCanonicalBusinessDates() {
         val invalidDates = listOf("not-a-date", "2026-02-30", "2026-11-13T10:00:00", "2026-1-3")
         invalidDates.forEach { invalid ->
