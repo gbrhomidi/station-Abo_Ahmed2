@@ -108,8 +108,12 @@ class SupplierPayablesRobolectricTest {
         })
         assertFalse(missingInvoice.getJSONObject("match").getBoolean("invoice_provided"))
         assertTrue(missingInvoice.getJSONObject("match").isNull("invoice"))
-        assertEquals("invoice_missing", missingInvoice.getJSONArray("differences")
-            .getJSONObject(0).getString("field"))
+        assertTrue((0 until missingInvoice.getJSONArray("differences").length()).any {
+            missingInvoice.getJSONArray("differences").getJSONObject(it).getString("field") == "invoice_quantity_missing"
+        })
+        assertTrue((0 until missingInvoice.getJSONArray("differences").length()).any {
+            missingInvoice.getJSONArray("differences").getJSONObject(it).getString("field") == "invoice_amount_missing"
+        })
 
         val matchingInvoice = helper.matchInvoiceFourWay(
             JSONObject().put("po_id", poId).put("invoice_quantity", 10.0).put("invoice_amount", 100.0), 1
