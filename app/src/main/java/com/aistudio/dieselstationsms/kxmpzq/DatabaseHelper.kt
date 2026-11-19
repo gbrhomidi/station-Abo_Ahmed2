@@ -37529,6 +37529,13 @@ private fun postSalesReversalJournal(
                     require(c.moveToFirst()) { "أمر الشراء غير موجود أو خارج نطاق المحطة أو مغلق" }
                     Pair(c.getString(0), if (c.isNull(1)) null else c.getLong(1))
                 }
+                val supplierId = requireNotNull(po.second) { "لا يمكن استلام أمر شراء دون مورد محدد" }
+                require(db.rawQuery(
+                    """SELECT 1 FROM parties
+                       WHERE id=? AND is_active=1 AND is_deleted=0
+                         AND (station_id IS NULL OR station_id=?) LIMIT 1""",
+                    arrayOf(supplierId.toString(), stationScopeId.toString())
+                ).use { it.moveToFirst() }) { "مورد أمر الشراء غير نشط أو خارج نطاق المحطة" }
                 val receiptId = db.insertOrThrow("purchase_order_receipts", null, ContentValues().apply {
                     put("station_id", stationScopeId); put("po_id", poId); put("receipt_key", key)
                     put("actor_id", actorId); put("created_at", getCurrentDateTime())
@@ -37668,44 +37675,51 @@ private fun postSalesReversalJournal(
         val quantities = db.rawQuery(
             """SELECT COALESCE(SUM(l.quantity),0),
                       COALESCE(SUM(l.received_quantity),0),
-                      COALESCE(SUM(l.movement_quantity),0)
+                      COALESCE(SUM(l.movement_quantity),0),
+                      COALESCE(SUM(l.quantity*l.unit_price),0)
                FROM purchase_order_lines l
                INNER JOIN purchase_orders p ON p.po_id=l.po_id
                WHERE l.po_id=? AND p.station_id=?""",
             arrayOf(poId.toString(), stationScopeId.toString())
         ).use { cursor ->
             check(cursor.moveToFirst())
-            Triple(cursor.getDouble(0), cursor.getDouble(1), cursor.getDouble(2))
+            doubleArrayOf(cursor.getDouble(0), cursor.getDouble(1), cursor.getDouble(2), cursor.getDouble(3))
         }
-        val ordered = quantities.first
-        val delivered = quantities.second
-        val moved = quantities.third
+        val ordered = quantities[0]
+        val delivered = quantities[1]
+        val moved = quantities[2]
+        val orderedValue = quantities[3]
+        val invoiceAmountProvided = data.has("invoice_amount") && !data.isNull("invoice_amount")
+        val invoiceAmount = if (invoiceAmountProvided) data.optDouble("invoice_amount", Double.NaN) else Double.NaN
+        require(!invoiceAmountProvided || (invoiceAmount.isFinite() && invoiceAmount >= 0.0)) {
+            "قيمة فاتورة المورد غير صالحة"
+        }
         if (!invoiceProvided) {
-            differences.put(JSONObject()
-                .put("field", "invoice_missing")
-                .put("difference", JSONObject.NULL)
-                .put("requires_review", true))
+            differences.put(JSONObject().put("field", "invoice_quantity_missing")
+                .put("difference", JSONObject.NULL).put("requires_review", true))
         } else if (kotlin.math.abs(ordered - invoice) > 0.000001) {
-            differences.put(JSONObject()
-                .put("field", "invoice_vs_po")
-                .put("difference", invoice - ordered))
+            differences.put(JSONObject().put("field", "invoice_quantity_vs_po").put("difference", invoice - ordered))
+        }
+        if (!invoiceAmountProvided) {
+            differences.put(JSONObject().put("field", "invoice_amount_missing")
+                .put("difference", JSONObject.NULL).put("requires_review", true))
+        } else if (kotlin.math.abs(orderedValue - invoiceAmount) > 0.01) {
+            differences.put(JSONObject().put("field", "invoice_amount_vs_po").put("difference", invoiceAmount - orderedValue))
         }
         if (kotlin.math.abs(delivered - moved) > 0.000001) {
-            differences.put(JSONObject()
-                .put("field", "delivery_vs_movement")
-                .put("difference", delivered - moved))
+            differences.put(JSONObject().put("field", "delivery_vs_movement").put("difference", delivered - moved))
         }
         val match = JSONObject()
-            .put("po", ordered)
-            .put("delivery", delivered)
-            .put("movement", moved)
-            .put("invoice", if (invoiceProvided) invoice else JSONObject.NULL)
-            .put("invoice_provided", invoiceProvided)
+            .put("po", ordered).put("delivery", delivered).put("movement", moved)
+            .put("po_value", orderedValue)
+            .put("invoice_quantity", if (invoiceProvided) invoice else JSONObject.NULL)
+            .put("invoice_amount", if (invoiceAmountProvided) invoiceAmount else JSONObject.NULL)
+            .put("invoice_provided", invoiceProvided && invoiceAmountProvided)
         return JSONObject()
             .put("po", po)
             .put("match", match)
             .put("differences", differences)
-            .put("matched", invoiceProvided && differences.length() == 0)
+            .put("matched", invoiceProvided && invoiceAmountProvided && differences.length() == 0)
     }
 
     fun publishEvent(data: JSONObject, stationScopeId: Int): Long {
