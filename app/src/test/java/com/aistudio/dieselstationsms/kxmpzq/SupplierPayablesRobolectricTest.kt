@@ -132,6 +132,41 @@ class SupplierPayablesRobolectricTest {
     }
 
     @Test
+    fun purchaseOrderProductReceiptIsAtomicAndIdempotent() {
+        val actorId = createFinanceActor()
+        val categoryId = db.rawQuery("SELECT id FROM product_categories WHERE is_deleted=0 ORDER BY id LIMIT 1", null)
+            .use { c -> check(c.moveToFirst()); c.getLong(0) }
+        val unitId = db.rawQuery("SELECT id FROM units ORDER BY id LIMIT 1", null)
+            .use { c -> check(c.moveToFirst()); c.getLong(0) }
+        val productId = helper.insertProduct(
+            JSONObject().put("product_name","PO receipt test").put("product_name_ar","اختبار الاستلام")
+                .put("category_id",categoryId).put("unit_id",unitId).put("purchase_price",5.0)
+                .put("sale_price",8.0).put("quantity",0.0).put("minimum_stock",0.0),1,actorId
+        )
+        helper.ensureOperationalWarehouse(1)
+        val po = helper.createPurchaseOrder(
+            JSONObject().put("item_type","PRODUCT").put("item_id",productId)
+                .put("quantity",10.0).put("unit_price",5.0).put("supplier_id",supplierId),1,actorId
+        )
+        val poId = po.getLong("po_id")
+        val lineId = db.rawQuery("SELECT line_id FROM purchase_order_lines WHERE po_id=?",arrayOf(poId.toString()))
+            .use { c -> check(c.moveToFirst()); c.getLong(0) }
+        val request = JSONObject().put("po_id",poId).put("receipt_key","receipt-${UUID.randomUUID()}")
+            .put("received_lines",JSONArray().put(JSONObject().put("line_id",lineId).put("received_quantity",4.0)))
+        val first = helper.receivePurchaseOrder(request,1,actorId)
+        assertFalse(first.getBoolean("replayed"))
+        assertTrue(helper.receivePurchaseOrder(JSONObject(request.toString()),1,actorId).getBoolean("replayed"))
+        assertEquals(4.0,db.rawQuery("SELECT quantity_on_hand FROM inventory_levels WHERE product_id=?",arrayOf(productId.toString()))
+            .use { c -> c.moveToFirst(); c.getDouble(0) },0.0001)
+        assertEquals(4.0,db.rawQuery("SELECT quantity FROM products WHERE id=?",arrayOf(productId.toString()))
+            .use { c -> c.moveToFirst(); c.getDouble(0) },0.0001)
+        assertEquals(1,db.rawQuery("SELECT COUNT(*) FROM inventory_movements WHERE product_id=? AND movement_type='in'",arrayOf(productId.toString()))
+            .use { c -> c.moveToFirst(); c.getInt(0) })
+        assertEquals(1,db.rawQuery("SELECT COUNT(*) FROM events_outbox WHERE station_id=1 AND idempotency_key LIKE 'po-receipt:%'",null)
+            .use { c -> c.moveToFirst(); c.getInt(0) })
+    }
+
+    @Test
     fun supplierTaskSynchronizationRejectsInvalidOrNonCanonicalBusinessDates() {
         val invalidDates = listOf("not-a-date", "2026-02-30", "2026-11-13T10:00:00", "2026-1-3")
         invalidDates.forEach { invalid ->
