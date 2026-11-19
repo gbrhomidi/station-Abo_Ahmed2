@@ -1178,6 +1178,44 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun vcfRejectsInvalidInputsAndUsesConfiguredFuelTypeCoefficient() {
+        val db = helper.writableDatabase
+        db.insertOrThrow("fuel_temperature_coefficients", null, ContentValues().apply {
+            put("fuel_type_id", 987654L)
+            put("coefficient_exp", 0.001)
+        })
+        val standard = helper.calculateVcf(987654L, 15.0, 1)
+        assertEquals(1.0, standard.getDouble("vcf"), 0.0000001)
+        assertEquals(0.001, standard.getDouble("coefficient_exp"), 0.0000001)
+        assertEquals(15.0, standard.getDouble("reference_temperature_c"), 0.0001)
+        val warm = helper.calculateVcf(987654L, 35.0, 1)
+        assertTrue(warm.getDouble("vcf") < 1.0)
+        assertTrue(runCatching { helper.calculateVcf(0L, 20.0, 1) }.isFailure)
+        assertTrue(runCatching { helper.calculateVcf(987654L, Double.NaN, 1) }.isFailure)
+        assertTrue(runCatching { helper.calculateVcf(987654L, 20.0, 0) }.isFailure)
+    }
+
+    @Test
+    fun anomalyDetectionDoesNotInventMissingWaterAndDeduplicatesAcknowledgedAlerts() {
+        val db = helper.writableDatabase
+        val tankId = createLowFuelTank(1, "ANOMALY")
+        val first = helper.runInventoryAnomalyDetection(1)
+        val lowFuel = (0 until first.length()).map { first.getJSONObject(it) }
+            .filter { it.optString("type") == "LOW_FUEL" }
+        assertEquals(1, lowFuel.size)
+        val anomalyId = lowFuel.single().getLong("anomaly_id")
+        db.update("inventory_anomalies", ContentValues().apply { put("status", "ACKNOWLEDGED") },
+            "anomaly_id=?", arrayOf(anomalyId.toString()))
+        val second = helper.runInventoryAnomalyDetection(1)
+        assertEquals(0, (0 until second.length()).count { second.getJSONObject(it).optString("type") == "LOW_FUEL" })
+        val waterCount = db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_anomalies WHERE station_id=1 AND item_id=? AND anomaly_type='WATER_LEVEL'",
+            arrayOf(tankId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) }
+        assertEquals(0, waterCount)
+    }
+
+    @Test
     fun demandForecastPersistsDailyProductForecastWithXyzMethod() {
         val db = helper.writableDatabase
         val productId = createProduct(12.0, 2.0)

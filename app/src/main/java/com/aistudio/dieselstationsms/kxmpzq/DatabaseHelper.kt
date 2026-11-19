@@ -37355,7 +37355,29 @@ private fun postSalesReversalJournal(
         return score
     }
 
-    fun calculateVcf(fuelTypeId: Long, temperatureC: Double, stationScopeId: Int): JSONObject { val alpha=readableDatabase.rawQuery("SELECT coefficient_exp FROM fuel_temperature_coefficients WHERE fuel_type_id=?",arrayOf(fuelTypeId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.00095};val delta=temperatureC-15.0;val vcf=kotlin.math.exp(-alpha*delta-0.8*alpha*alpha*delta*delta);return JSONObject().put("fuel_type_id",fuelTypeId).put("temperature_c",temperatureC).put("coefficient_exp",alpha).put("vcf",vcf).put("station_id",stationScopeId) }
+    fun calculateVcf(fuelTypeId: Long, temperatureC: Double, stationScopeId: Int): JSONObject {
+        require(fuelTypeId > 0L) { "نوع الوقود غير صالح" }
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        require(temperatureC.isFinite() && temperatureC in -50.0..100.0) { "درجة الحرارة خارج النطاق التشغيلي" }
+        val alpha = readableDatabase.rawQuery(
+            "SELECT coefficient_exp FROM fuel_temperature_coefficients WHERE fuel_type_id=?",
+            arrayOf(fuelTypeId.toString())
+        ).use { c ->
+            if (c.moveToFirst()) c.getDouble(0) else 0.00095
+        }
+        require(alpha.isFinite() && alpha in 0.0001..0.003) { "معامل تمدد الوقود غير صالح" }
+        val delta = temperatureC - 15.0
+        val vcf = kotlin.math.exp(-alpha * delta - 0.8 * alpha * alpha * delta * delta)
+        require(vcf.isFinite() && vcf > 0.0) { "تعذر حساب معامل تصحيح الحجم" }
+        return JSONObject()
+            .put("fuel_type_id", fuelTypeId)
+            .put("temperature_c", temperatureC)
+            .put("reference_temperature_c", 15.0)
+            .put("coefficient_exp", alpha)
+            .put("vcf", vcf)
+            .put("measured_liters_required", true)
+            .put("station_id", stationScopeId)
+    }
 
     fun getDemandForecast(stationScopeId: Int): JSONArray {
         require(stationScopeId > 0) { "معرف المحطة غير صالح" }
@@ -37423,7 +37445,59 @@ private fun postSalesReversalJournal(
         return out
     }
 
-    fun runInventoryAnomalyDetection(stationScopeId: Int): JSONArray { val out=JSONArray();val db=writableDatabase;db.rawQuery("SELECT id,tank_name,COALESCE((SELECT water_level_mm FROM tank_readings r WHERE r.tank_id=t.id ORDER BY r.reading_at DESC,r.reading_id DESC LIMIT 1),0),current_quantity,capacity_liters FROM tanks t WHERE station_id=? AND is_deleted=0",arrayOf(stationScopeId.toString())).use{c->while(c.moveToNext()){val tankId=c.getLong(0);val waterOpen=db.rawQuery("SELECT 1 FROM inventory_anomalies WHERE station_id=? AND item_id=? AND anomaly_type='WATER_LEVEL' AND status='OPEN' LIMIT 1",arrayOf(stationScopeId.toString(),tankId.toString())).use{q->q.moveToFirst()};if(c.getDouble(2)>50&&!waterOpen){val id=db.insertOrThrow("inventory_anomalies",null,ContentValues().apply{put("station_id",stationScopeId);put("item_type","FUEL");put("item_id",tankId);put("anomaly_type","WATER_LEVEL");put("severity","critical");put("metric_value",c.getDouble(2));put("threshold_value",50);put("details","مستوى الماء يتجاوز الحد")});out.put(JSONObject().put("anomaly_id",id).put("type","WATER_LEVEL"))};val lowOpen=db.rawQuery("SELECT 1 FROM inventory_anomalies WHERE station_id=? AND item_id=? AND anomaly_type='LOW_FUEL' AND status='OPEN' LIMIT 1",arrayOf(stationScopeId.toString(),tankId.toString())).use{q->q.moveToFirst()};if(c.getDouble(4)>0&&c.getDouble(3)/c.getDouble(4)<.15&&!lowOpen){val id=db.insertOrThrow("inventory_anomalies",null,ContentValues().apply{put("station_id",stationScopeId);put("item_type","FUEL");put("item_id",tankId);put("anomaly_type","LOW_FUEL");put("severity","critical");put("metric_value",c.getDouble(3));put("threshold_value",c.getDouble(4)*.15)});out.put(JSONObject().put("anomaly_id",id).put("type","LOW_FUEL"))}}};return out }
+    fun runInventoryAnomalyDetection(stationScopeId: Int): JSONArray {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        val out = JSONArray()
+        val db = writableDatabase
+        db.rawQuery(
+            """SELECT t.id,t.tank_name,r.water_level_mm,t.current_quantity,t.capacity_liters
+               FROM tanks t
+               LEFT JOIN tank_readings r ON r.reading_id=(
+                   SELECT r2.reading_id FROM tank_readings r2
+                   WHERE r2.tank_id=t.id
+                   ORDER BY datetime(r2.reading_at) DESC,r2.reading_id DESC LIMIT 1
+               )
+               WHERE t.station_id=? AND t.is_deleted=0""",
+            arrayOf(stationScopeId.toString())
+        ).use { c ->
+            while (c.moveToNext()) {
+                val tankId = c.getLong(0)
+                fun hasActive(type: String): Boolean = db.rawQuery(
+                    """SELECT 1 FROM inventory_anomalies
+                       WHERE station_id=? AND item_type='FUEL' AND item_id=?
+                         AND anomaly_type=? AND status IN ('OPEN','ACKNOWLEDGED') LIMIT 1""",
+                    arrayOf(stationScopeId.toString(), tankId.toString(), type)
+                ).use { it.moveToFirst() }
+
+                // Missing sensor data is not interpreted as a zero-water reading.
+                if (!c.isNull(2)) {
+                    val waterMm = c.getDouble(2)
+                    if (waterMm > 50.0 && !hasActive("WATER_LEVEL")) {
+                        val id = db.insertOrThrow("inventory_anomalies", null, ContentValues().apply {
+                            put("station_id", stationScopeId); put("item_type", "FUEL"); put("item_id", tankId)
+                            put("anomaly_type", "WATER_LEVEL"); put("severity", "critical")
+                            put("metric_value", waterMm); put("threshold_value", 50.0)
+                            put("details", "مستوى الماء يتجاوز الحد؛ مصدر القياس tank_readings")
+                        })
+                        out.put(JSONObject().put("anomaly_id", id).put("type", "WATER_LEVEL"))
+                    }
+                }
+                val capacity = c.getDouble(4)
+                val quantity = c.getDouble(3)
+                if (capacity > 0.0 && quantity >= 0.0 &&
+                    quantity / capacity < 0.15 && !hasActive("LOW_FUEL")) {
+                    val id = db.insertOrThrow("inventory_anomalies", null, ContentValues().apply {
+                        put("station_id", stationScopeId); put("item_type", "FUEL"); put("item_id", tankId)
+                        put("anomaly_type", "LOW_FUEL"); put("severity", "critical")
+                        put("metric_value", quantity); put("threshold_value", capacity * 0.15)
+                        put("details", "مخزون الخزان أقل من 15% من سعته")
+                    })
+                    out.put(JSONObject().put("anomaly_id", id).put("type", "LOW_FUEL"))
+                }
+            }
+        }
+        return out
+    }
 
     private data class TraceOrigin(val id: Long, val reference: String, val station: Int, val date: String, val screen: String, val type: String)
 
