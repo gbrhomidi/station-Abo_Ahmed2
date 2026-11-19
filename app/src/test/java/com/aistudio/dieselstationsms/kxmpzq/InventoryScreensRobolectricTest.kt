@@ -140,7 +140,45 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
-    fun warrantyExposureIncludesSoldOnlyAndUsesStationBusinessDate() {
+    fun serialReceiptEnforcesProductTrackingBatchWarrantySupplierAndLocationScope() {
+        val db = helper.writableDatabase
+        val productId = createProduct(0.0, 1.0)
+        db.update("products", ContentValues().apply {
+            put("track_serial", 1); put("track_batch", 1)
+            put("track_expiry", 1); put("track_warranty", 1)
+        }, "id=?", arrayOf(productId.toString()))
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+        val locationId = db.insertOrThrow("stock_locations", null, ContentValues().apply {
+            put("warehouse_id", warehouseId); put("name", "DB20 serial location")
+            put("type", "warehouse"); put("is_active", 1)
+        })
+        val lot = "DB20-" + UUID.randomUUID().toString()
+        db.insertOrThrow("product_batches", null, ContentValues().apply {
+            put("product_id", productId); put("lot_number", lot); put("quantity", 4.0)
+            put("location_id", locationId); put("received_at", helper.currentDateForBridge())
+        })
+        val base = JSONObject().put("product_id", productId).put("serial_no", "SN-" + UUID.randomUUID())
+            .put("batch_no", lot).put("location_id", locationId)
+        assertTrue(runCatching { helper.insertProductSerial(base, 1, actorId) }.isFailure)
+        val complete = JSONObject(base.toString())
+            .put("warranty_end_at", helper.currentDateForBridge())
+            .put("expiry_at", helper.currentDateForBridge())
+        val serialId = helper.insertProductSerial(complete, 1, actorId)
+        assertTrue(serialId > 0)
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM product_serials WHERE serial_id=? AND product_id=? AND batch_no=? AND location_id=?",
+            arrayOf(serialId.toString(), productId.toString(), lot, locationId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+        assertTrue(runCatching {
+            helper.insertProductSerial(
+                JSONObject(complete.toString()).put("serial_no", "SN-CROSS-" + UUID.randomUUID()),
+                2, actorId
+            )
+        }.isFailure)
+    }
+
+    @Test
+    fun warrantyExposureIncludesAvailableAndSoldAndUsesStationBusinessDate() {
         val productId = createProduct(2.0, 1.0)
         val db = helper.writableDatabase
         val today = java.time.LocalDate.parse(helper.currentDateForBridge())
@@ -154,7 +192,7 @@ class InventoryScreensRobolectricTest {
         serial("SOLD", today.plusDays(5).toString())
         serial("SOLD", today.minusDays(1).toString())
         val rows = helper.getExpiringWarranties(30, 1)
-        assertEquals(1, (0 until rows.length()).count {
+        assertEquals(2, (0 until rows.length()).count {
             rows.getJSONObject(it).optLong("product_id") == productId
         })
     }

@@ -37037,20 +37037,84 @@ private fun postSalesReversalJournal(
     fun insertProductSerial(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
         val productId = data.optLong("product_id", 0L)
         val serialNo = data.optString("serial_no").trim()
-        require(productId > 0 && serialNo.isNotBlank()) { "المنتج والسيريال مطلوبان" }
+        val batchNo = data.optString("batch_no").trim()
+        val supplierId = data.optLong("supplier_id", 0L)
+        val locationId = data.optLong("location_id", 0L)
+        val warrantyStart = data.optString("warranty_start_at").trim()
+        val warrantyEnd = data.optString("warranty_end_at").trim()
+        val expiryAt = data.optString("expiry_at").trim()
+        require(stationScopeId > 0 && productId > 0 && serialNo.isNotBlank()) {
+            "المحطة والمنتج والسيريال مطلوبة"
+        }
+        require(supplierId >= 0 && locationId >= 0) { "مرجع المورد أو الموقع غير صالح" }
         dbLock.lock()
         return try {
             val db = writableDatabase
-            db.rawQuery("SELECT id FROM products WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(productId.toString(), stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "المنتج خارج نطاق المحطة" } }
-            db.insertOrThrow("product_serials", null, ContentValues().apply {
-                put("product_id", productId); put("serial_no", serialNo)
-                data.optString("batch_no").takeIf { it.isNotBlank() }?.let { put("batch_no", it) }
-                data.optLong("supplier_id", 0L).takeIf { it > 0 }?.let { put("supplier_id", it) }
-                put("received_at", data.optString("received_at").ifBlank { getCurrentDateTime() })
-                listOf("warranty_start_at", "warranty_end_at", "expiry_at").forEach { key -> data.optString(key).takeIf { it.isNotBlank() }?.let { put(key, it) } }
-                data.optLong("location_id", 0L).takeIf { it > 0 }?.let { put("location_id", it) }
-                put("created_at", getCurrentDateTime())
-            })
+            db.beginTransaction()
+            try {
+                val tracking = db.rawQuery(
+                    """SELECT track_serial,track_batch,track_expiry,track_warranty
+                       FROM products WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'""",
+                    arrayOf(productId.toString(), stationScopeId.toString())
+                ).use { c ->
+                    require(c.moveToFirst()) { "المنتج غير موجود أو خارج نطاق المحطة" }
+                    intArrayOf(c.getInt(0), c.getInt(1), c.getInt(2), c.getInt(3))
+                }
+                require(tracking[0] == 1) { "لا يمكن إدخال سيريال لمنتج لا يفرض تتبع السيريال" }
+                if (tracking[1] == 1) {
+                    require(batchNo.isNotBlank()) { "رقم الدفعة مطلوب لهذا المنتج" }
+                    db.rawQuery(
+                        """SELECT batch_id FROM product_batches
+                           WHERE product_id=? AND lot_number=? AND quantity>0
+                             AND (location_id IS NULL OR ?=0 OR location_id=?) LIMIT 1""",
+                        arrayOf(productId.toString(), batchNo, locationId.toString(), locationId.toString())
+                    ).use { require(it.moveToFirst()) { "الدفعة غير موجودة للمنتج أو لا تطابق الموقع" } }
+                } else if (batchNo.isNotBlank()) {
+                    db.rawQuery(
+                        "SELECT batch_id FROM product_batches WHERE product_id=? AND lot_number=? LIMIT 1",
+                        arrayOf(productId.toString(), batchNo)
+                    ).use { require(it.moveToFirst()) { "الدفعة لا تخص المنتج المحدد" } }
+                }
+                if (tracking[2] == 1) require(expiryAt.isNotBlank()) {
+                    "تاريخ انتهاء الصلاحية مطلوب لهذا المنتج"
+                }
+                if (tracking[3] == 1) require(warrantyEnd.isNotBlank()) {
+                    "تاريخ انتهاء الضمان مطلوب لهذا المنتج"
+                }
+                if (supplierId > 0) {
+                    db.rawQuery(
+                        """SELECT id FROM parties
+                           WHERE id=? AND is_active=1 AND is_deleted=0
+                             AND (station_id IS NULL OR station_id=?)""",
+                        arrayOf(supplierId.toString(), stationScopeId.toString())
+                    ).use { require(it.moveToFirst()) { "المورد غير نشط أو خارج نطاق المحطة" } }
+                }
+                if (locationId > 0) {
+                    db.rawQuery(
+                        """SELECT sl.location_id FROM stock_locations sl
+                           JOIN warehouses w ON w.id=sl.warehouse_id
+                           WHERE sl.location_id=? AND sl.is_active=1
+                             AND w.station_id=? AND w.is_active=1""",
+                        arrayOf(locationId.toString(), stationScopeId.toString())
+                    ).use { require(it.moveToFirst()) { "موقع التخزين غير نشط أو خارج نطاق المحطة" } }
+                }
+                val serialId = db.insertOrThrow("product_serials", null, ContentValues().apply {
+                    put("product_id", productId)
+                    put("serial_no", serialNo)
+                    if (batchNo.isNotBlank()) put("batch_no", batchNo)
+                    if (supplierId > 0) put("supplier_id", supplierId)
+                    put("received_at", data.optString("received_at").ifBlank { getCurrentDateTime() })
+                    if (warrantyStart.isNotBlank()) put("warranty_start_at", warrantyStart)
+                    if (warrantyEnd.isNotBlank()) put("warranty_end_at", warrantyEnd)
+                    if (expiryAt.isNotBlank()) put("expiry_at", expiryAt)
+                    if (locationId > 0) put("location_id", locationId)
+                    put("created_at", getCurrentDateTime())
+                })
+                db.setTransactionSuccessful()
+                serialId
+            } finally {
+                db.endTransaction()
+            }
         } finally { dbLock.unlock() }
     }
 
@@ -37112,13 +37176,13 @@ private fun postSalesReversalJournal(
     fun getExpiringWarranties(daysAhead: Int, stationScopeId: Int): JSONArray {
         require(daysAhead >= 0)
         require(stationScopeId > 0) { "معرف المحطة غير صالح" }
-        // Warranty exposure begins with a completed sale, not serial receipt/availability.
-        // Use the station business clock (Asia/Aden) consistently instead of SQLite device-local now.
+        // Report all warranty-bearing units (available or sold); damaged/quarantined
+        // units are excluded by status. Use the station business clock, never device-local now.
         val businessDate = getCurrentDate()
         return readableDatabase.rawQuery(
             """SELECT s.*,p.product_name,p.product_name_ar FROM product_serials s
                JOIN products p ON p.id=s.product_id
-               WHERE p.station_id=? AND p.is_deleted=0 AND s.status='SOLD'
+               WHERE p.station_id=? AND p.is_deleted=0 AND s.status IN ('AVAILABLE','SOLD')
                  AND s.warranty_end_at IS NOT NULL
                  AND date(s.warranty_end_at) BETWEEN date(?) AND date(?,'+'||?||' day')
                ORDER BY s.warranty_end_at,s.serial_id""",
