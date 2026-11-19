@@ -4997,7 +4997,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val data = JSONObject(jsonData).apply { put("station_id", stationId) }
                 val id = db.addFuelSale(data, stationId, activity.currentUserId)
                 DebugLogger.info("Sale", "Added sale id=$id")
-                runCatching { db.publishEvent(JSONObject().put("event_type", "fuel_sale_completed").put("payload", JSONObject().put("sale_id", id).put("shift_id", data.optLong("shift_id", 0L)).put("tank_id", data.optLong("tank_id", 0L)).put("fuel_type_id", data.optLong("fuel_type_id", 0L)).put("liters", data.optDouble("quantity", 0.0)).put("total", data.optDouble("total_amount", 0.0))), stationId) }
+                runCatching { db.publishEvent(JSONObject().put("event_type", "fuel_sale_completed").put("consumer", "stock-levels").put("idempotency_key", "fuel-sale:$id").put("payload", JSONObject().put("sale_id", id).put("shift_id", data.optLong("shift_id", 0L)).put("tank_id", data.optLong("tank_id", 0L)).put("pump_id", data.optLong("pump_id", 0L)).put("fuel_type_id", data.optLong("fuel_type_id", 0L)).put("liters", data.optDouble("quantity", 0.0)).put("total", data.optDouble("total_amount", 0.0))), stationId) }
                 successResponse(id, "تم إضافة البيع بنجاح")
             } catch (e: Exception) {
                 DebugLogger.logException("Sale", e)
@@ -5022,7 +5022,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 }
                 val result = db.completeSale(data, stationId, activity.currentUserId)
                 if (result.optBoolean("success", false)) {
-                    runCatching { db.publishEvent(JSONObject().put("event_type", "pos_sale_completed").put("payload", JSONObject().put("transaction_id", result.optLong("sale_id", 0L)).put("shift_id", data.optLong("shift_id", 0L)).put("lines", data.optJSONArray("products") ?: JSONArray())), stationId) }
+                    runCatching { val saleId = result.optLong("sale_id", 0L); if (saleId > 0L) db.publishEvent(JSONObject().put("event_type", "pos_sale_completed").put("consumer", "stock-levels").put("idempotency_key", "pos-sale:$saleId").put("payload", JSONObject().put("sale_id", saleId).put("transaction_id", saleId).put("shift_id", data.optLong("shift_id", 0L)).put("lines", data.optJSONArray("products") ?: JSONArray())), stationId) }
                 }
                 if (result.optBoolean("success", false) && isCreditSale) {
                     val saleId = result.optLong("sale_id", 0L)

@@ -37250,11 +37250,13 @@ private fun postSalesReversalJournal(
         return db.update("events_outbox",values,"event_id=? AND station_id=? AND consumer=? AND status='PROCESSING'",arrayOf(eventId.toString(),stationScopeId.toString(),consumer))==1
     }
 
+    /**
+     * Compatibility fetch API: events must be leased before a consumer can acknowledge them.
+     * Returning bare PENDING rows allowed concurrent consumers to process the same event and
+     * made acknowledgeEvent reject the fetched row because it was not PROCESSING.
+     */
     fun fetchPendingEvents(data: JSONObject, stationScopeId: Int): JSONArray {
-        require(stationScopeId>0) { "معرف المحطة غير صالح" }
-        val consumer=data.optString("consumer","stock-levels").trim(); val limit=data.optInt("limit",100).coerceIn(1,500)
-        return readableDatabase.rawQuery("""SELECT * FROM events_outbox WHERE station_id=? AND consumer=? AND status='PENDING'
-            AND datetime(available_at)<=datetime('now') ORDER BY event_id LIMIT ?""",arrayOf(stationScopeId.toString(),consumer,limit.toString())).use { cursorToJsonArray(it) }
+        return claimPendingEvents(data, stationScopeId)
     }
 
     fun getForecourtSnapshot(stationScopeId: Int): JSONObject {
