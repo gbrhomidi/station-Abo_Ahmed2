@@ -201,6 +201,7 @@ class InventoryScreensRobolectricTest {
         })
         val payload = JSONObject().put("shift_id", shiftId).put("tank_id", tankId)
             .put("actual_liters", 250.0).put("tolerance_threshold", 0.5)
+            .put("cause", "FUEL_SALE").put("notes", "اختبار سجل التدقيق")
         helper.submitShiftReconciliation(payload, 1, actorId)
         helper.submitShiftReconciliation(payload.put("actual_liters", 240.0), 1, actorId)
         val history = helper.getShiftReconciliationAudit(JSONObject().put("shift_id", shiftId).put("tank_id", tankId), 1)
