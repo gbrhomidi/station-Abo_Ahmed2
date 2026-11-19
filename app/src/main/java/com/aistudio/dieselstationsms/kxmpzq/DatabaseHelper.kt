@@ -30511,6 +30511,11 @@ private fun postSalesReversalJournal(
                     put("cause", cause); put("notes", data.optString("notes"))
                     putNull("approved_by"); putNull("approved_at")
                 }
+                // The schema intentionally enforces one current reconciliation per shift/tank.
+                // Replace that current row atomically; do not claim append-only history because
+                // this table has UNIQUE(shift_id, tank_id).
+                db.delete("shift_reconciliations", "shift_id=? AND tank_id=?",
+                    arrayOf(shiftId.toString(), tankId.toString()))
                 val id = db.insertOrThrow("shift_reconciliations", null, cv)
                 db.setTransactionSuccessful()
                 JSONObject().put("recon_id", id).put("status", "DRAFT")
