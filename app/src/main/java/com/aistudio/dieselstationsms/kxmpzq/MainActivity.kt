@@ -5333,6 +5333,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun getShiftReconciliationAudit(jsonData: String = "{}"): String {
+            return try {
+                val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(helper.getShiftReconciliationAudit(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(helper, activity.currentUserId)))
+            } catch (e: Exception) { DebugLogger.logException("ShiftReconciliationAudit", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
         fun submitShiftReconciliation(jsonData: String): String {
             return try {
             val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")

@@ -57,7 +57,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 69
+        const val VERSION = 70
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -2122,6 +2122,88 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
         """.trimIndent())
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_phase1_recon_shift_tank ON shift_reconciliations(shift_id, tank_id)")
+        ensureShiftReconciliationAuditSchema(db)
+    }
+
+    /** Append-only history for the one-row-per-shift/tank current projection. */
+    private fun ensureShiftReconciliationAuditSchema(db: SQLiteDatabase) {
+        check(db.inTransaction()) { "Shift reconciliation audit schema requires a migration transaction" }
+        ensureColumn(db, "shift_reconciliations", "created_by", "INTEGER REFERENCES users(id)")
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS shift_reconciliation_audit (
+                audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                current_recon_id INTEGER NOT NULL,
+                event_type TEXT NOT NULL CHECK(event_type IN ('LEGACY_BASELINE','INSERT','UPDATE','DELETE')),
+                shift_id INTEGER NOT NULL, tank_id INTEGER NOT NULL,
+                opening_liters REAL NOT NULL, deliveries_liters REAL NOT NULL,
+                sales_liters REAL NOT NULL, adjustments_liters REAL NOT NULL,
+                expected_liters REAL NOT NULL, actual_liters REAL NOT NULL,
+                variance_liters REAL NOT NULL, variance_pct REAL NOT NULL,
+                cause TEXT, notes TEXT, approved_by INTEGER, approved_at TEXT,
+                actor_id INTEGER, event_at TEXT NOT NULL
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_shift_recon_audit_pair ON shift_reconciliation_audit(shift_id,tank_id,audit_id DESC)")
+        db.execSQL("""
+            INSERT INTO shift_reconciliation_audit (
+                current_recon_id,event_type,shift_id,tank_id,opening_liters,deliveries_liters,
+                sales_liters,adjustments_liters,expected_liters,actual_liters,variance_liters,
+                variance_pct,cause,notes,approved_by,approved_at,actor_id,event_at
+            )
+            SELECT sr.recon_id,'LEGACY_BASELINE',sr.shift_id,sr.tank_id,sr.opening_liters,
+                   sr.deliveries_liters,sr.sales_liters,sr.adjustments_liters,sr.expected_liters,
+                   sr.actual_liters,sr.variance_liters,sr.variance_pct,sr.cause,sr.notes,
+                   sr.approved_by,sr.approved_at,sr.created_by,COALESCE(sr.approved_at,strftime('%Y-%m-%d %H:%M:%S','now'))
+              FROM shift_reconciliations sr
+             WHERE NOT EXISTS (SELECT 1 FROM shift_reconciliation_audit a
+                               WHERE a.current_recon_id=sr.recon_id AND a.event_type='LEGACY_BASELINE')
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TRIGGER IF NOT EXISTS trg_shift_recon_audit_insert AFTER INSERT ON shift_reconciliations BEGIN
+                INSERT INTO shift_reconciliation_audit (
+                    current_recon_id,event_type,shift_id,tank_id,opening_liters,deliveries_liters,
+                    sales_liters,adjustments_liters,expected_liters,actual_liters,variance_liters,
+                    variance_pct,cause,notes,approved_by,approved_at,actor_id,event_at
+                ) VALUES (NEW.recon_id,'INSERT',NEW.shift_id,NEW.tank_id,NEW.opening_liters,NEW.deliveries_liters,
+                    NEW.sales_liters,NEW.adjustments_liters,NEW.expected_liters,NEW.actual_liters,
+                    NEW.variance_liters,NEW.variance_pct,NEW.cause,NEW.notes,NEW.approved_by,
+                    NEW.approved_at,NEW.created_by,strftime('%Y-%m-%d %H:%M:%S','now'));
+            END
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TRIGGER IF NOT EXISTS trg_shift_recon_audit_update AFTER UPDATE ON shift_reconciliations BEGIN
+                INSERT INTO shift_reconciliation_audit (
+                    current_recon_id,event_type,shift_id,tank_id,opening_liters,deliveries_liters,
+                    sales_liters,adjustments_liters,expected_liters,actual_liters,variance_liters,
+                    variance_pct,cause,notes,approved_by,approved_at,actor_id,event_at
+                ) VALUES (OLD.recon_id,'UPDATE',OLD.shift_id,OLD.tank_id,OLD.opening_liters,OLD.deliveries_liters,
+                    OLD.sales_liters,OLD.adjustments_liters,OLD.expected_liters,OLD.actual_liters,
+                    OLD.variance_liters,OLD.variance_pct,OLD.cause,OLD.notes,OLD.approved_by,
+                    OLD.approved_at,OLD.created_by,strftime('%Y-%m-%d %H:%M:%S','now'));
+            END
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TRIGGER IF NOT EXISTS trg_shift_recon_audit_delete AFTER DELETE ON shift_reconciliations BEGIN
+                INSERT INTO shift_reconciliation_audit (
+                    current_recon_id,event_type,shift_id,tank_id,opening_liters,deliveries_liters,
+                    sales_liters,adjustments_liters,expected_liters,actual_liters,variance_liters,
+                    variance_pct,cause,notes,approved_by,approved_at,actor_id,event_at
+                ) VALUES (OLD.recon_id,'DELETE',OLD.shift_id,OLD.tank_id,OLD.opening_liters,OLD.deliveries_liters,
+                    OLD.sales_liters,OLD.adjustments_liters,OLD.expected_liters,OLD.actual_liters,
+                    OLD.variance_liters,OLD.variance_pct,OLD.cause,OLD.notes,OLD.approved_by,
+                    OLD.approved_at,OLD.created_by,strftime('%Y-%m-%d %H:%M:%S','now'));
+            END
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TRIGGER IF NOT EXISTS trg_shift_recon_audit_no_update BEFORE UPDATE ON shift_reconciliation_audit BEGIN
+                SELECT RAISE(ABORT,'shift reconciliation audit is immutable');
+            END
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TRIGGER IF NOT EXISTS trg_shift_recon_audit_no_delete BEFORE DELETE ON shift_reconciliation_audit BEGIN
+                SELECT RAISE(ABORT,'shift reconciliation audit is immutable');
+            END
+        """.trimIndent())
     }
 
     private fun ensureFuelSalesSchema(db: SQLiteDatabase) {
@@ -30445,6 +30527,22 @@ private fun postSalesReversalJournal(
         } finally { dbLock.unlock() }
     }
 
+    fun getShiftReconciliationAudit(params: JSONObject, stationScopeId: Int): JSONArray {
+        require(stationScopeId > 0) { "نطاق المحطة غير صالح" }
+        dbLock.lock()
+        return try {
+            val where = StringBuilder("t.station_id=?")
+            val args = mutableListOf(stationScopeId.toString())
+            if (params.has("shift_id")) { where.append(" AND a.shift_id=?"); args += params.optLong("shift_id").toString() }
+            if (params.has("tank_id")) { where.append(" AND a.tank_id=?"); args += params.optLong("tank_id").toString() }
+            readableDatabase.rawQuery(
+                """SELECT a.*,t.tank_code,COALESCE(t.tank_name_ar,t.tank_name) tank_name
+                   FROM shift_reconciliation_audit a JOIN tanks t ON t.id=a.tank_id
+                   WHERE $where ORDER BY a.audit_id DESC""", args.toTypedArray()
+            ).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
+
     fun submitShiftReconciliation(data: JSONObject, stationScopeId: Int, actorId: Long): JSONObject {
         val shiftId = data.optLong("shift_id", 0L)
         val tankId = data.optLong("tank_id", 0L)
@@ -30509,6 +30607,7 @@ private fun postSalesReversalJournal(
                     put("expected_liters", expected); put("actual_liters", actual)
                     put("variance_liters", variance); put("variance_pct", pct)
                     put("cause", cause); put("notes", data.optString("notes"))
+                    put("created_by", actorId)
                     putNull("approved_by"); putNull("approved_at")
                 }
                 // The schema intentionally enforces one current reconciliation per shift/tank.

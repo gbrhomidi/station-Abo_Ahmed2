@@ -189,6 +189,32 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun shiftReconciliationAuditIsAppendOnlyAndCapturesReplacementHistory() {
+        val db = helper.writableDatabase
+        val tankId = createLowFuelTank(1, "RECON-AUDIT")
+        val shiftId = db.insertOrThrow("shifts", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("shift_code", "RECON-AUDIT-" + UUID.randomUUID().toString().take(8))
+            put("station_id", 1); put("shift_date", "2026-11-19")
+            put("shift_type", "morning"); put("start_time", "2026-11-19 06:00:00")
+            put("status", "open")
+        })
+        val payload = JSONObject().put("shift_id", shiftId).put("tank_id", tankId)
+            .put("actual_liters", 250.0).put("tolerance_threshold", 0.5)
+        helper.submitShiftReconciliation(payload, 1, actorId)
+        helper.submitShiftReconciliation(payload.put("actual_liters", 240.0), 1, actorId)
+        val history = helper.getShiftReconciliationAudit(JSONObject().put("shift_id", shiftId).put("tank_id", tankId), 1)
+        assertEquals(3, history.length())
+        assertEquals("INSERT", history.getJSONObject(0).getString("event_type"))
+        assertEquals("DELETE", history.getJSONObject(1).getString("event_type"))
+        assertEquals("INSERT", history.getJSONObject(2).getString("event_type"))
+        assertTrue(runCatching { db.delete("shift_reconciliation_audit", "shift_id=?", arrayOf(shiftId.toString())) }.isFailure)
+        assertTrue(runCatching { db.execSQL("UPDATE shift_reconciliation_audit SET notes='tampered' WHERE shift_id=?", arrayOf(shiftId)) }.isFailure)
+        val currentCount = db.rawQuery("SELECT COUNT(*) FROM shift_reconciliations WHERE shift_id=? AND tank_id=?", arrayOf(shiftId.toString(), tankId.toString())).use { c -> c.moveToFirst(); c.getInt(0) }
+        assertEquals(1, currentCount)
+    }
+
+    @Test
     fun stockLevelsReturnRealRowsAndStatisticsFromSqlite() {
         val productId = createProduct(5.0, 2.0)
         val page = helper.getStockLevelsPage(JSONObject().put("stock_type", "products").put("limit", 100), 1)
