@@ -158,6 +158,36 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun shiftReconciliationSubmissionIsDraftAtomicAndPreservesPriorEvidence() {
+        val db = helper.writableDatabase
+        val tankId = db.insertOrThrow("tanks", null, ContentValues().apply {
+            put("station_id", 1); put("tank_code", "RECON-TEST-1939")
+            put("tank_name", "اختبار التسوية"); put("capacity_liters", 10000.0)
+            put("current_quantity", 1000.0); put("is_deleted", 0)
+        })
+        val shiftId = db.insertOrThrow("shifts", null, ContentValues().apply {
+            put("station_id", 1); put("status", "open")
+            put("start_time", "2026-11-19 06:00:00")
+        })
+        val payload = JSONObject().put("shift_id", shiftId).put("tank_id", tankId)
+            .put("actual_liters", 1000.0).put("tolerance_threshold", 0.5)
+        val first = helper.submitShiftReconciliation(payload, 1, actorId)
+        assertEquals("DRAFT", first.getString("status"))
+        val second = helper.submitShiftReconciliation(payload, 1, actorId)
+        assertTrue(second.getLong("recon_id") > first.getLong("recon_id"))
+        val count = db.rawQuery(
+            "SELECT COUNT(*) FROM shift_reconciliations WHERE shift_id=? AND tank_id=?",
+            arrayOf(shiftId.toString(), tankId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) }
+        assertEquals(2, count)
+        val approved = db.rawQuery(
+            "SELECT COUNT(*) FROM shift_reconciliations WHERE shift_id=? AND tank_id=? AND approved_by IS NOT NULL",
+            arrayOf(shiftId.toString(), tankId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) }
+        assertEquals(0, approved)
+    }
+
+    @Test
     fun stockLevelsReturnRealRowsAndStatisticsFromSqlite() {
         val productId = createProduct(5.0, 2.0)
         val page = helper.getStockLevelsPage(JSONObject().put("stock_type", "products").put("limit", 100), 1)

@@ -30446,25 +30446,77 @@ private fun postSalesReversalJournal(
     }
 
     fun submitShiftReconciliation(data: JSONObject, stationScopeId: Int, actorId: Long): JSONObject {
-        val shiftId = data.optLong("shift_id", 0L); val tankId = data.optLong("tank_id", 0L); val actual = data.optDouble("actual_liters", -1.0)
-        require(shiftId > 0 && tankId > 0 && actual >= 0.0) { "بيانات التسوية غير مكتملة" }
+        val shiftId = data.optLong("shift_id", 0L)
+        val tankId = data.optLong("tank_id", 0L)
+        val actual = data.optDouble("actual_liters", -1.0)
+        require(stationScopeId > 0 && shiftId > 0 && tankId > 0 && actual.isFinite() && actual >= 0.0) {
+            "بيانات التسوية غير مكتملة"
+        }
+        val adjustments = data.optDouble("adjustments_liters", 0.0)
+        val tolerance = data.optDouble("tolerance_threshold", 0.5)
+        require(adjustments.isFinite() && tolerance.isFinite() && tolerance >= 0.0) { "قيم التسوية غير صالحة" }
         dbLock.lock()
         return try {
             val db = writableDatabase
-            var opening = 0.0; var deliveries = 0.0; var sales = 0.0; var shiftStatus = "open"
-            db.rawQuery("SELECT COALESCE((SELECT current_liters FROM tank_readings WHERE tank_id=? ORDER BY reading_at ASC,reading_id ASC LIMIT 1),t.current_quantity,0),s.status FROM tanks t JOIN shifts s ON s.id=? WHERE t.id=? AND t.station_id=?", arrayOf(tankId.toString(),shiftId.toString(),tankId.toString(),stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "الخزان أو الوردية خارج نطاق المحطة" }; opening=c.getDouble(0); shiftStatus=c.getString(1) }
-            require(shiftStatus != "reconciled") { "الوردية مغلقة التسوية ولا يمكن تعديلها" }
-            db.rawQuery("SELECT COALESCE(SUM(fs.quantity),0) FROM fuel_sales fs JOIN pumps p ON p.id=fs.pump_id WHERE p.tank_id=? AND fs.shift_id=? AND fs.is_deleted=0 AND fs.status NOT IN ('cancelled','reversed')", arrayOf(tankId.toString(),shiftId.toString())).use { c -> if(c.moveToFirst()) sales=c.getDouble(0) }
-            db.rawQuery("SELECT COALESCE(SUM(COALESCE(actual_quantity,delivered_quantity)),0) FROM tank_refills WHERE tank_id=? AND is_deleted=0 AND arrival_date IS NOT NULL AND arrival_date >= (SELECT start_time FROM shifts WHERE id=?) AND arrival_date <= COALESCE((SELECT end_time FROM shifts WHERE id=?),CURRENT_TIMESTAMP)", arrayOf(tankId.toString(),shiftId.toString(),shiftId.toString())).use { c -> if(c.moveToFirst()) deliveries=c.getDouble(0) }
-            val expected = opening + deliveries - sales + data.optDouble("adjustments_liters", 0.0)
-            val variance = actual - expected; val pct = if (expected == 0.0) if (variance == 0.0) 0.0 else 100.0 else variance / expected * 100.0
-            val cause = data.optString("cause", "").takeIf { it.isNotBlank() }; val tolerance = data.optDouble("tolerance_threshold", 0.5)
-            if (kotlin.math.abs(pct) > tolerance) { require(!cause.isNullOrBlank()) { "سبب الفارق مطلوب عند تجاوز التسامح" }; require(data.optString("notes").isNotBlank()) { "ملاحظات الفارق مطلوبة" } }
-            if (cause != null) db.rawQuery("SELECT 1 FROM inventory_reason_codes WHERE code=? AND applies_to IN ('FUEL','BOTH')", arrayOf(cause)).use { c -> require(c.moveToFirst()) { "سبب الفارق غير معتمد" } }
-            val cv = ContentValues().apply { put("shift_id",shiftId);put("tank_id",tankId);put("opening_liters",opening);put("deliveries_liters",deliveries);put("sales_liters",sales);put("adjustments_liters",data.optDouble("adjustments_liters",0.0));put("expected_liters",expected);put("actual_liters",actual);put("variance_liters",variance);put("variance_pct",pct);put("cause",cause);put("notes",data.optString("notes"));put("approved_by",if(actorId>0) actorId else null);put("approved_at",if(actorId>0) getCurrentDateTime() else null) }
-            db.delete("shift_reconciliations", "shift_id=? AND tank_id=?", arrayOf(shiftId.toString(),tankId.toString()))
-            val id = db.insertOrThrow("shift_reconciliations", null, cv)
-            JSONObject().put("recon_id",id).put("expected_liters",expected).put("actual_liters",actual).put("variance_liters",variance).put("variance_pct",pct)
+            db.beginTransaction()
+            try {
+                var opening = 0.0
+                var deliveries = 0.0
+                var sales = 0.0
+                var shiftStatus = "open"
+                db.rawQuery(
+                    """SELECT COALESCE((SELECT current_liters FROM tank_readings
+                       WHERE tank_id=? ORDER BY reading_at ASC,reading_id ASC LIMIT 1),t.current_quantity,0),
+                       s.status FROM tanks t JOIN shifts s ON s.id=?
+                       WHERE t.id=? AND t.station_id=?""",
+                    arrayOf(tankId.toString(), shiftId.toString(), tankId.toString(), stationScopeId.toString())
+                ).use { c ->
+                    require(c.moveToFirst()) { "الخزان أو الوردية خارج نطاق المحطة" }
+                    opening = c.getDouble(0); shiftStatus = c.getString(1)
+                }
+                require(shiftStatus != "reconciled" && shiftStatus != "closed") { "الوردية مغلقة ولا يمكن تعديل تسويتها" }
+                db.rawQuery(
+                    """SELECT COALESCE(SUM(fs.quantity),0) FROM fuel_sales fs
+                       JOIN pumps p ON p.id=fs.pump_id WHERE p.tank_id=? AND fs.shift_id=?
+                       AND fs.is_deleted=0 AND fs.status NOT IN ('cancelled','reversed')""",
+                    arrayOf(tankId.toString(), shiftId.toString())
+                ).use { c -> if (c.moveToFirst()) sales = c.getDouble(0) }
+                db.rawQuery(
+                    """SELECT COALESCE(SUM(COALESCE(actual_quantity,delivered_quantity)),0)
+                       FROM tank_refills WHERE tank_id=? AND is_deleted=0 AND arrival_date IS NOT NULL
+                       AND arrival_date >= (SELECT start_time FROM shifts WHERE id=?)
+                       AND arrival_date <= COALESCE((SELECT end_time FROM shifts WHERE id=?),?)""",
+                    arrayOf(tankId.toString(), shiftId.toString(), shiftId.toString(), getCurrentDateTime())
+                ).use { c -> if (c.moveToFirst()) deliveries = c.getDouble(0) }
+                val expected = opening + deliveries - sales + adjustments
+                val variance = actual - expected
+                val pct = if (expected == 0.0) if (variance == 0.0) 0.0 else 100.0 else variance / expected * 100.0
+                val cause = data.optString("cause", "").takeIf { it.isNotBlank() }
+                if (kotlin.math.abs(pct) > tolerance) {
+                    require(!cause.isNullOrBlank()) { "سبب الفارق مطلوب عند تجاوز التسامح" }
+                    require(data.optString("notes").isNotBlank()) { "ملاحظات الفارق مطلوبة" }
+                }
+                if (cause != null) db.rawQuery(
+                    "SELECT 1 FROM inventory_reason_codes WHERE code=? AND applies_to IN ('FUEL','BOTH')",
+                    arrayOf(cause)
+                ).use { c -> require(c.moveToFirst()) { "سبب الفارق غير معتمد" } }
+                // A submission is a draft. Approval is a separate privileged operation.
+                // Preserve previous submissions as audit evidence; never delete history here.
+                val cv = ContentValues().apply {
+                    put("shift_id", shiftId); put("tank_id", tankId)
+                    put("opening_liters", opening); put("deliveries_liters", deliveries)
+                    put("sales_liters", sales); put("adjustments_liters", adjustments)
+                    put("expected_liters", expected); put("actual_liters", actual)
+                    put("variance_liters", variance); put("variance_pct", pct)
+                    put("cause", cause); put("notes", data.optString("notes"))
+                    putNull("approved_by"); putNull("approved_at")
+                }
+                val id = db.insertOrThrow("shift_reconciliations", null, cv)
+                db.setTransactionSuccessful()
+                JSONObject().put("recon_id", id).put("status", "DRAFT")
+                    .put("expected_liters", expected).put("actual_liters", actual)
+                    .put("variance_liters", variance).put("variance_pct", pct)
+            } finally { db.endTransaction() }
         } finally { dbLock.unlock() }
     }
 
