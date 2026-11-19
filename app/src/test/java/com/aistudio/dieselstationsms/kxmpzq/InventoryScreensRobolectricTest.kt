@@ -111,6 +111,53 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun dryStockSearchAndCategoryFiltersAreAppliedBeforeReturningProducts() {
+        val db = helper.writableDatabase
+        val productId = createProduct(8.0, 2.0)
+        val uniqueName = "DB19-FILTER-" + UUID.randomUUID().toString().take(8)
+        assertEquals(1, db.update("products", ContentValues().apply {
+            put("product_name", uniqueName)
+            put("product_name_ar", uniqueName)
+        }, "id=? AND station_id=1", arrayOf(productId.toString())))
+        val categoryId = db.rawQuery(
+            "SELECT category_id FROM products WHERE id=?", arrayOf(productId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+        val searched = helper.getDryStockPage(
+            JSONObject().put("search", uniqueName), 1
+        ).getJSONArray("products")
+        assertEquals(1, (0 until searched.length()).count {
+            searched.getJSONObject(it).optLong("product_id") == productId
+        })
+        val categorized = helper.getDryStockPage(
+            JSONObject().put("category_id", categoryId), 1
+        ).getJSONArray("products")
+        assertTrue((0 until categorized.length()).any {
+            categorized.getJSONObject(it).optLong("product_id") == productId
+        })
+        val otherStation = helper.getDryStockPage(JSONObject().put("search", uniqueName), 2)
+            .getJSONArray("products")
+        assertEquals(0, otherStation.length())
+    }
+
+    @Test
+    fun wetStockReasonCatalogContainsV3MovementReasonsAndScopes() {
+        val db = helper.writableDatabase
+        val expected = mapOf(
+            "RECEIVE" to "BOTH", "TRANSFER" to "BOTH", "DAMAGE" to "PRODUCT",
+            "EXPIRY" to "PRODUCT", "RETURN" to "BOTH", "FUEL_SALE" to "FUEL"
+        )
+        expected.forEach { (code, appliesTo) ->
+            db.rawQuery(
+                "SELECT applies_to FROM inventory_reason_codes WHERE code=?",
+                arrayOf(code)
+            ).use { c ->
+                assertTrue("Missing V3.0 reason code: $code", c.moveToFirst())
+                assertEquals(appliesTo, c.getString(0))
+            }
+        }
+    }
+
+    @Test
     fun stockLevelsReturnRealRowsAndStatisticsFromSqlite() {
         val productId = createProduct(5.0, 2.0)
         val page = helper.getStockLevelsPage(JSONObject().put("stock_type", "products").put("limit", 100), 1)

@@ -2070,7 +2070,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             arrayOf("THEFT", "سرقة", "Theft", "FUEL", 1),
             arrayOf("PUMP_DIFF", "فرق مضخة", "Pump difference", "FUEL", 1),
             arrayOf("DIP_VARIANCE", "فرق غمس", "Dip variance", "FUEL", 1),
-            arrayOf("MANUAL_ADJUSTMENT", "تسوية يدوية", "Manual adjustment", "BOTH", 1)
+            arrayOf("MANUAL_ADJUSTMENT", "تسوية يدوية", "Manual adjustment", "BOTH", 1),
+            // Complete V3.0 movement reason vocabulary; receiving/transfer/sale
+            // are non-adjustment reasons and do not require a variance explanation.
+            arrayOf("RECEIVE", "استلام", "Receipt", "BOTH", 0),
+            arrayOf("TRANSFER", "تحويل", "Transfer", "BOTH", 0),
+            arrayOf("DAMAGE", "تلف", "Damage", "PRODUCT", 1),
+            arrayOf("EXPIRY", "انتهاء صلاحية", "Expiry", "PRODUCT", 1),
+            arrayOf("RETURN", "مرتجع", "Return", "BOTH", 1),
+            arrayOf("FUEL_SALE", "بيع وقود", "Fuel sale", "FUEL", 0)
         )
         reasons.forEach { reason ->
             db.execSQL("INSERT OR IGNORE INTO inventory_reason_codes(code,label_ar,label_en,applies_to,requires_note) VALUES(?,?,?,?,?)", reason)
