@@ -283,6 +283,50 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun abcXyzUsesInclusiveCvBoundariesAtPoint25AndPoint50() {
+        val db = helper.writableDatabase
+        val month = java.time.YearMonth.parse(helper.currentDateForBridge().take(7))
+        val periods = (5 downTo 0).map { month.minusMonths(it.toLong()) }
+        val productX = createProduct(20.0, 1.0)
+        val productY = createProduct(20.0, 1.0)
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+        val root3 = kotlin.math.sqrt(3.0)
+        val fixtures = listOf(
+            productX to listOf(10.0 - 2.5 * root3, 10.0 + 2.5 * root3, 10.0, 10.0, 10.0, 10.0),
+            productY to listOf(10.0 - 5.0 * root3, 10.0 + 5.0 * root3, 10.0, 10.0, 10.0, 10.0)
+        )
+        fixtures.forEach { (productId, quantities) ->
+            quantities.forEachIndexed { index, quantity ->
+                val movementId = helper.addStockMovement(
+                    JSONObject().put("product_id", productId)
+                        .put("warehouse_id", warehouseId)
+                        .put("movement_type", "out")
+                        .put("quantity", quantity)
+                        .put("unit_cost", 1.0)
+                        .put("notes", "DB-06 CV boundary fixture"),
+                    1, actorId
+                )
+                assertTrue(movementId > 0L)
+                assertEquals(1, db.update(
+                    "inventory_movements",
+                    ContentValues().apply { put("created_at", periods[index].atDay(15).toString()) },
+                    "id=? AND product_id=? AND station_id=? AND movement_type='out' AND status='completed' AND is_deleted=0",
+                    arrayOf(movementId.toString(), productId.toString(), "1")
+                ))
+            }
+        }
+        val rows = helper.getABCXYZAnalysis(1)
+        val byId = (0 until rows.length()).associate {
+            val row = rows.getJSONObject(it)
+            row.getLong("product_id") to row
+        }
+        assertEquals(0.25, byId.getValue(productX).getDouble("xyz_cv"), 0.00001)
+        assertEquals("X", byId.getValue(productX).getString("xyz"))
+        assertEquals(0.50, byId.getValue(productY).getDouble("xyz_cv"), 0.00001)
+        assertEquals("Y", byId.getValue(productY).getString("xyz"))
+    }
+
+    @Test
     fun dryStockKpisUseMovementAgeExpiryWarrantyAndFilteredAbcClassification() {
         val db = helper.writableDatabase
         val today = java.time.LocalDate.parse(helper.currentDateForBridge())
@@ -324,6 +368,9 @@ class InventoryScreensRobolectricTest {
         assertEquals(1, kpis.getInt("warranty_expiring_soon_count"))
         assertEquals(3, kpis.getInt("abc_a_count") + kpis.getInt("abc_b_count") + kpis.getInt("abc_c_count"))
         assertTrue(page.has("abc_xyz"))
+        assertTrue(kpis.getDouble("aging_over_90_value") >= 80.0)
+        assertTrue(kpis.getDouble("aging_unknown_value") >= 30.0)
+        assertTrue(kpis.has("aging_reconciliation_difference"))
         assertTrue(noMovementProduct > 0L)
     }
 
@@ -347,6 +394,50 @@ class InventoryScreensRobolectricTest {
         assertEquals(1, rows.length())
         assertEquals(productId, rows.getJSONObject(0).getLong("product_id"))
         assertEquals(70.0, page.getJSONObject("kpis").getDouble("inventory_value"), 0.0001)
+    }
+
+    @Test
+    fun dryStockPageAppliesLocationAndExpiryFiltersTogether() {
+        val db = helper.writableDatabase
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+        val locationId = db.insertOrThrow("stock_locations", null, ContentValues().apply {
+            put("warehouse_id", warehouseId)
+            put("name", "DB19 filter location")
+            put("type", "warehouse")
+            put("is_active", 1)
+        })
+        val otherLocationId = db.insertOrThrow("stock_locations", null, ContentValues().apply {
+            put("warehouse_id", warehouseId)
+            put("name", "DB19 other location")
+            put("type", "warehouse")
+            put("is_active", 1)
+        })
+        val today = java.time.LocalDate.parse(helper.currentDateForBridge())
+        val soonProduct = createProduct(5.0, 1.0)
+        val otherLocationProduct = createProduct(6.0, 1.0)
+        val activeExpiryProduct = createProduct(7.0, 1.0)
+        fun addBatch(productId: Long, location: Long, expiry: String) {
+            db.insertOrThrow("product_batches", null, ContentValues().apply {
+                put("product_id", productId)
+                put("lot_number", "DB19-" + UUID.randomUUID().toString().take(8))
+                put("expiry_date", expiry)
+                put("quantity", 1.0)
+                put("location_id", location)
+                put("received_at", today.toString())
+            })
+        }
+        addBatch(soonProduct, locationId, today.plusDays(10).toString())
+        addBatch(otherLocationProduct, otherLocationId, today.plusDays(10).toString())
+        addBatch(activeExpiryProduct, locationId, today.plusDays(60).toString())
+
+        val page = helper.getDryStockPage(
+            JSONObject().put("location_id", locationId).put("expiry_status", "soon"),
+            1
+        )
+        val ids = (0 until page.getJSONArray("products").length()).map {
+            page.getJSONArray("products").getJSONObject(it).getLong("product_id")
+        }
+        assertEquals(listOf(soonProduct), ids)
     }
 
     @Test

@@ -1441,6 +1441,11 @@
    <!-- ===== قسم الحركات ===== -->
    <div class="section" id="dryStockSection">
     <div class="glass-card"><div class="chart-header"><h3 class="chart-title">🧴 مخزون المنتجات — Dry Stock</h3><button class="apply-btn" onclick="loadDryStock()">🔄 تحديث</button></div>
+     <div class="filters-panel" aria-label="فلاتر المخزون الجاف">
+      <div class="filter-group"><label class="filter-label" for="dryStockSearch">بحث عن صنف</label><input class="filter-input" id="dryStockSearch" type="search" placeholder="الاسم أو الكود أو الباركود"></div>
+      <div class="filter-group"><label class="filter-label" for="dryStockLocation">رقم موقع التخزين</label><input class="filter-input" id="dryStockLocation" type="number" min="1" step="1" inputmode="numeric" placeholder="كل المواقع"></div>
+      <button class="apply-btn" onclick="loadDryStock()">تطبيق فلاتر المخزون الجاف</button>
+     </div>
      <div class="intelligence-kpis"><div class="intelligence-mini"><div class="mini-label">قيمة المخزون</div><div class="mini-value" id="dryInventoryValue">0 ريال</div></div><div class="intelligence-mini"><div class="mini-label">تحت الحد الأدنى</div><div class="mini-value" id="dryLowStock">0 صنف</div></div><div class="intelligence-mini"><div class="mini-label">المخزون الراكد</div><div class="mini-value" id="dryDeadStock">0 ريال</div></div></div>
      <div class="table-container"><table class="data-table intelligence-table"><thead><tr><th>الكود</th><th>المنتج</th><th>الكمية</th><th>FEFO</th><th>سيريالات متاحة</th><th>التتبع</th><th>إجراء</th></tr></thead><tbody id="dryProductBoard"><tr><td colspan="7">لا توجد بيانات فعلية</td></tr></tbody></table></div>
     </div>
@@ -2017,7 +2022,16 @@ async function loadForecourt() {
 
 async function loadDryStock() {
     try {
-        const result = await apiCall('getDryStockPage', {}), data = result.data || {}, k = data.kpis || {};
+        const categoryValue = document.getElementById('categoryFilter')?.value || 'all';
+        const expiryValue = document.getElementById('expiryFilter')?.value || 'all';
+        const locationValue = document.getElementById('dryStockLocation')?.value?.trim() || '';
+        const filters = {
+            search: document.getElementById('dryStockSearch')?.value?.trim() || '',
+            category_id: categoryValue === 'all' ? 0 : Number(categoryValue),
+            location_id: locationValue ? Number(locationValue) : 0,
+            expiry_status: expiryValue === 'all' ? '' : expiryValue
+        };
+        const result = await apiCall('getDryStockPage', filters), data = result.data || {}, k = data.kpis || {};
         document.getElementById('dryInventoryValue').textContent = Number(k.inventory_value || 0).toLocaleString('en') + ' ريال';
         document.getElementById('dryLowStock').textContent = Number(k.low_stock_count || 0).toLocaleString('en') + ' صنف';
         document.getElementById('dryDeadStock').textContent = Number(k.dead_stock_value || 0).toLocaleString('en') + ' ريال';
@@ -2589,6 +2603,7 @@ async function applyFilters() {
         });
         if (!result.success) throw new Error(result.message || 'فشل تطبيق الفلاتر');
         applyPageData(result.data || {});
+        await loadDryStock();
         showToast('تم تطبيق الفلاتر على بيانات SQLite الفعلية', 'success');
     } catch (e) {
         showToast(e.message || 'خطأ في تطبيق الفلاتر', 'error');

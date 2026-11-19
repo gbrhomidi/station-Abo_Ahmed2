@@ -37146,14 +37146,36 @@ private fun postSalesReversalJournal(
                 if (abcCounts.containsKey(key)) abcCounts[key] = (abcCounts[key] ?: 0) + 1
             }
         }
+        val aging = getInventoryAging(stationScopeId)
+        val agingValues = mutableMapOf<String, Double>()
+        val agingBuckets = aging.optJSONArray("buckets") ?: JSONArray()
+        for (i in 0 until agingBuckets.length()) {
+            val bucket = agingBuckets.optJSONObject(i) ?: continue
+            val key = when (bucket.optString("bucket")) {
+                "0-30" -> "aging_0_30_value"
+                "31-60" -> "aging_31_60_value"
+                "61-90" -> "aging_61_90_value"
+                ">90" -> "aging_over_90_value"
+                "Unknown/No movement" -> "aging_unknown_value"
+                else -> continue
+            }
+            agingValues[key] = bucket.optDouble("value", 0.0)
+        }
         kpis.put("abc_a_count", abcCounts["A"] ?: 0)
             .put("abc_b_count", abcCounts["B"] ?: 0)
             .put("abc_c_count", abcCounts["C"] ?: 0)
+            .put("aging_0_30_value", agingValues["aging_0_30_value"] ?: 0.0)
+            .put("aging_31_60_value", agingValues["aging_31_60_value"] ?: 0.0)
+            .put("aging_61_90_value", agingValues["aging_61_90_value"] ?: 0.0)
+            .put("aging_over_90_value", agingValues["aging_over_90_value"] ?: 0.0)
+            .put("aging_unknown_value", agingValues["aging_unknown_value"] ?: 0.0)
+            .put("aging_total_value", aging.optDouble("total_value", 0.0))
+            .put("aging_reconciliation_difference", aging.optDouble("reconciliation_difference", 0.0))
             .put("business_date", dateText)
         return JSONObject()
             .put("products", products)
             .put("kpis", kpis)
-            .put("aging", getInventoryAging(stationScopeId))
+            .put("aging", aging)
             .put("abc_xyz", abcRows)
     }
 
