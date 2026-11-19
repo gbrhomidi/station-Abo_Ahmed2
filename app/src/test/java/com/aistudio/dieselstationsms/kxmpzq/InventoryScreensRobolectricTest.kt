@@ -111,6 +111,55 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun dryStockLocationScopesBatchQuantityAndNearestExpiry() {
+        val db = helper.writableDatabase
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+        val selectedLocation = db.insertOrThrow("stock_locations", null, ContentValues().apply {
+            put("warehouse_id", warehouseId); put("name", "DB19 selected"); put("type", "warehouse"); put("is_active", 1)
+        })
+        val otherLocation = db.insertOrThrow("stock_locations", null, ContentValues().apply {
+            put("warehouse_id", warehouseId); put("name", "DB19 other"); put("type", "warehouse"); put("is_active", 1)
+        })
+        val productId = createProduct(0.0, 1.0)
+        val today = java.time.LocalDate.parse(helper.currentDateForBridge())
+        fun batch(location: Long, qty: Double, expiry: String) {
+            db.insertOrThrow("product_batches", null, ContentValues().apply {
+                put("product_id", productId); put("lot_number", "LOC-" + UUID.randomUUID().toString())
+                put("expiry_date", expiry); put("quantity", qty); put("location_id", location)
+                put("received_at", today.toString())
+            })
+        }
+        batch(selectedLocation, 3.0, today.plusDays(12).toString())
+        batch(otherLocation, 9.0, today.plusDays(2).toString())
+        val rows = helper.getDryStockPage(JSONObject().put("location_id", selectedLocation), 1)
+            .getJSONArray("products")
+        val row = (0 until rows.length()).map { rows.getJSONObject(it) }
+            .single { it.getLong("product_id") == productId }
+        assertEquals(3.0, row.getDouble("batch_quantity"), 0.0001)
+        assertEquals(today.plusDays(12).toString(), row.getString("nearest_expiry"))
+    }
+
+    @Test
+    fun warrantyExposureIncludesSoldOnlyAndUsesStationBusinessDate() {
+        val productId = createProduct(2.0, 1.0)
+        val db = helper.writableDatabase
+        val today = java.time.LocalDate.parse(helper.currentDateForBridge())
+        fun serial(status: String, expiry: String) {
+            db.insertOrThrow("product_serials", null, ContentValues().apply {
+                put("product_id", productId); put("serial_no", "WARRANTY-" + UUID.randomUUID())
+                put("status", status); put("warranty_end_at", expiry)
+            })
+        }
+        serial("AVAILABLE", today.plusDays(5).toString())
+        serial("SOLD", today.plusDays(5).toString())
+        serial("SOLD", today.minusDays(1).toString())
+        val rows = helper.getExpiringWarranties(30, 1)
+        assertEquals(1, (0 until rows.length()).count {
+            rows.getJSONObject(it).optLong("product_id") == productId
+        })
+    }
+
+    @Test
     fun dryStockSearchAndCategoryFiltersAreAppliedBeforeReturningProducts() {
         val db = helper.writableDatabase
         val productId = createProduct(8.0, 2.0)

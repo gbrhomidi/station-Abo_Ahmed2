@@ -37036,15 +37036,17 @@ private fun postSalesReversalJournal(
     fun getExpiringWarranties(daysAhead: Int, stationScopeId: Int): JSONArray {
         require(daysAhead >= 0)
         require(stationScopeId > 0) { "معرف المحطة غير صالح" }
-        // Sold units remain covered until warranty expiry; returned/damaged/quarantined units are excluded.
+        // Warranty exposure begins with a completed sale, not serial receipt/availability.
+        // Use the station business clock (Asia/Aden) consistently instead of SQLite device-local now.
+        val businessDate = getCurrentDate()
         return readableDatabase.rawQuery(
             """SELECT s.*,p.product_name,p.product_name_ar FROM product_serials s
                JOIN products p ON p.id=s.product_id
-               WHERE p.station_id=? AND p.is_deleted=0 AND s.status IN ('AVAILABLE','SOLD')
+               WHERE p.station_id=? AND p.is_deleted=0 AND s.status='SOLD'
                  AND s.warranty_end_at IS NOT NULL
-                 AND date(s.warranty_end_at) BETWEEN date('now') AND date('now','+'||?||' day')
+                 AND date(s.warranty_end_at) BETWEEN date(?) AND date(?,'+'||?||' day')
                ORDER BY s.warranty_end_at,s.serial_id""",
-            arrayOf(stationScopeId.toString(), daysAhead.toString())
+            arrayOf(stationScopeId.toString(), businessDate, businessDate, daysAhead.toString())
         ).use { cursorToJsonArray(it) }
     }
 
@@ -37235,7 +37237,11 @@ private fun postSalesReversalJournal(
             args += locationId.toString()
             args += stationScopeId.toString()
         }
-        val nearestExpiry = "COALESCE((SELECT MIN(b.expiry_date) FROM product_batches b WHERE b.product_id=p.id AND b.quantity>0 AND b.expiry_date IS NOT NULL),p.expiry_date)"
+        // Every location-dependent aggregate must use the same validated location scope.
+        // Otherwise the row is selected by one location but displays quantity/expiry from all locations.
+        val batchLocationScope = if (locationId > 0L) " AND b.location_id=$locationId" else ""
+        val serialLocationScope = if (locationId > 0L) " AND s.location_id=$locationId" else ""
+        val nearestExpiry = "COALESCE((SELECT MIN(b.expiry_date) FROM product_batches b WHERE b.product_id=p.id AND b.quantity>0 AND b.expiry_date IS NOT NULL$batchLocationScope),p.expiry_date)"
         when (expiryStatus) {
             "expired" -> { where += "$nearestExpiry IS NOT NULL AND date($nearestExpiry)<date(?)"; args += dateText }
             "soon" -> {
@@ -37249,9 +37255,9 @@ private fun postSalesReversalJournal(
         val whereSql = where.joinToString(" AND ")
         val products = db.rawQuery(
             """SELECT p.id product_id,p.product_code,p.product_name,p.product_name_ar,p.quantity,p.minimum_stock,p.reorder_point,p.safety_stock,p.track_serial,p.track_batch,p.track_expiry,p.track_warranty,
-                      COALESCE((SELECT SUM(quantity) FROM product_batches b WHERE b.product_id=p.id),0) batch_quantity,
+                      COALESCE((SELECT SUM(b.quantity) FROM product_batches b WHERE b.product_id=p.id AND b.quantity>0$batchLocationScope),0) batch_quantity,
                       $nearestExpiry nearest_expiry,
-                      COALESCE((SELECT COUNT(*) FROM product_serials s WHERE s.product_id=p.id AND s.status='AVAILABLE'),0) available_serials
+                      COALESCE((SELECT COUNT(*) FROM product_serials s WHERE s.product_id=p.id AND s.status='AVAILABLE'$serialLocationScope),0) available_serials
                FROM products p WHERE $whereSql ORDER BY p.product_name,p.id""",
             args.toTypedArray()
         ).use { cursorToJsonArray(it) }
