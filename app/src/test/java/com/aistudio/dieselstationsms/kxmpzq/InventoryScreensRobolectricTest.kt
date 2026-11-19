@@ -263,6 +263,54 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun approvedShiftReconciliationCannotBeUpdatedDeletedOrReplaced() {
+        val db = helper.writableDatabase
+        val tankId = createLowFuelTank(1, "RECON-APPROVED-LOCK")
+        val shiftId = db.insertOrThrow("shifts", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("shift_code", "RECON-APPROVED-" + UUID.randomUUID().toString().take(8))
+            put("station_id", 1)
+            put("shift_date", "2026-11-20")
+            put("shift_type", "morning")
+            put("start_time", "2026-11-20 06:00:00")
+            put("status", "open")
+        })
+        val payload = JSONObject().put("shift_id", shiftId).put("tank_id", tankId)
+            .put("actual_liters", 250.0).put("tolerance_threshold", 0.5)
+        val draft = helper.submitShiftReconciliation(payload, 1, actorId)
+        val reconId = draft.getLong("recon_id")
+        db.execSQL(
+            "UPDATE shift_reconciliations SET approved_by=?, approved_at=? WHERE recon_id=?",
+            arrayOf(actorId, "2026-11-20 07:00:00", reconId)
+        )
+        val auditBefore = db.rawQuery(
+            "SELECT COUNT(*) FROM shift_reconciliation_audit WHERE shift_id=? AND tank_id=?",
+            arrayOf(shiftId.toString(), tankId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) }
+        assertTrue(runCatching {
+            db.update("shift_reconciliations", ContentValues().apply { put("notes", "tampered") },
+                "recon_id=?", arrayOf(reconId.toString()))
+        }.isFailure)
+        assertTrue(runCatching {
+            db.delete("shift_reconciliations", "recon_id=?", arrayOf(reconId.toString()))
+        }.isFailure)
+        assertTrue(runCatching {
+            helper.submitShiftReconciliation(payload.put("actual_liters", 240.0), 1, actorId)
+        }.isFailure)
+        val current = db.rawQuery(
+            "SELECT approved_by, actual_liters FROM shift_reconciliations WHERE recon_id=?",
+            arrayOf(reconId.toString())
+        ).use { c -> assertTrue(c.moveToFirst()); c.getLong(0) to c.getDouble(1) }
+        assertEquals(actorId, current.first)
+        assertEquals(250.0, current.second, 0.0001)
+        val auditAfter = db.rawQuery(
+            "SELECT COUNT(*) FROM shift_reconciliation_audit WHERE shift_id=? AND tank_id=?",
+            arrayOf(shiftId.toString(), tankId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) }
+        assertEquals(auditBefore, auditAfter)
+    }
+
+    @Test
     fun shiftReconciliationAuditIsAppendOnlyAndCapturesReplacementHistory() {
         val db = helper.writableDatabase
         val tankId = createLowFuelTank(1, "RECON-AUDIT")

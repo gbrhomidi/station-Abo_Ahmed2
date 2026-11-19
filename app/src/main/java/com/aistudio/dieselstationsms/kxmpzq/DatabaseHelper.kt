@@ -2209,6 +2209,27 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     OLD.approved_at,OLD.created_by,strftime('%Y-%m-%d %H:%M:%S','now'));
             END
         """.trimIndent())
+
+        // Approval is an accounting finalization boundary. Once approved, the current
+        // projection cannot be edited or deleted through any repository or raw-SQL path.
+        // Draft replacement remains available and is still captured by the append-only audit.
+        db.execSQL("""
+            CREATE TRIGGER IF NOT EXISTS trg_shift_recon_approved_no_update
+            BEFORE UPDATE ON shift_reconciliations
+            WHEN OLD.approved_by IS NOT NULL OR OLD.approved_at IS NOT NULL
+            BEGIN
+                SELECT RAISE(ABORT,'approved shift reconciliation is immutable');
+            END
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TRIGGER IF NOT EXISTS trg_shift_recon_approved_no_delete
+            BEFORE DELETE ON shift_reconciliations
+            WHEN OLD.approved_by IS NOT NULL OR OLD.approved_at IS NOT NULL
+            BEGIN
+                SELECT RAISE(ABORT,'approved shift reconciliation cannot be deleted');
+            END
+        """.trimIndent())
+
         db.execSQL("""
             CREATE TRIGGER IF NOT EXISTS trg_shift_recon_audit_no_update BEFORE UPDATE ON shift_reconciliation_audit BEGIN
                 SELECT RAISE(ABORT,'shift reconciliation audit is immutable');
