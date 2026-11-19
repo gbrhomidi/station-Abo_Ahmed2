@@ -1155,6 +1155,57 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun healthScorePersistsAllFourV3ComponentsAndUsesExactWeights() {
+        val db = helper.writableDatabase
+        val productId = createProduct(0.0, 5.0)
+        db.insertOrThrow("inventory_movements", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("movement_code", "HS-"+UUID.randomUUID().toString().take(8))
+            put("product_id", productId); put("station_id", 1); put("movement_type", "out")
+            put("quantity_before", 1.0); put("quantity_change", 1.0); put("quantity_after", 0.0)
+            put("performed_by", actorId); put("status", "completed"); put("is_deleted", 0)
+            put("created_at", "2000-01-01 00:00:00")
+        })
+        val score = helper.calculateInventoryHealthScore(1)
+        assertTrue(score in 0.0..100.0)
+        val snapshot = db.rawQuery(
+            "SELECT health_score,low_stock_ratio,dead_stock_ratio,variance_avg_pct,expiring_soon_ratio FROM inventory_health_snapshots WHERE station_id=1 ORDER BY snapshot_id DESC LIMIT 1",
+            null
+        ).use { c -> check(c.moveToFirst()); (0..4).map { c.getDouble(it) } }
+        assertEquals(score, snapshot[0], 0.0001)
+        assertTrue(snapshot[1] >= 0.0 && snapshot[1] <= 1.0)
+        assertTrue(snapshot[2] >= 0.0 && snapshot[2] <= 1.0)
+        assertTrue(snapshot[4] >= 0.0 && snapshot[4] <= 1.0)
+    }
+
+    @Test
+    fun demandForecastPersistsDailyProductForecastWithXyzMethod() {
+        val db = helper.writableDatabase
+        val productId = createProduct(12.0, 2.0)
+        db.update("products", ContentValues().apply { put("xyz_class", "Z") }, "id=?", arrayOf(productId.toString()))
+        val today = java.time.LocalDate.parse(helper.currentDateForBridge())
+        repeat(8) { index ->
+            val date = today.minusDays((index * 7 + 1).toLong())
+            db.insertOrThrow("inventory_movements", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString()); put("movement_code", "FC-"+UUID.randomUUID().toString().take(8))
+                put("product_id", productId); put("station_id", 1); put("movement_type", "out")
+                put("quantity_before", 20.0); put("quantity_change", 2.0); put("quantity_after", 18.0)
+                put("performed_by", actorId); put("status", "completed"); put("is_deleted", 0)
+                put("created_at", date.toString()+" 12:00:00")
+            })
+        }
+        val forecast = helper.getDemandForecast(1)
+        val item = (0 until forecast.length()).map { forecast.getJSONObject(it) }
+            .firstOrNull { it.getLong("item_id") == productId }
+        assertTrue(item != null)
+        assertEquals("LOCAL_56D_WEEKDAY_XYZ", item!!.getString("method"))
+        assertTrue(item.getDouble("forecast_7d") > 0.0)
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_forecasts WHERE station_id=1 AND item_type='PRODUCT' AND item_id=?",
+            arrayOf(productId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+    }
+
+    @Test
     fun outboxUsesStationScopedIdempotencyClaimAndAcknowledgement() {
         val event=JSONObject().put("event_type","pos_sale_completed").put("consumer","stock-levels").put("idempotency_key","acceptance-sale-1").put("payload",JSONObject().put("sale_id",1001))
         val id=helper.publishEvent(event,1); assertEquals(id,helper.publishEvent(event,1))

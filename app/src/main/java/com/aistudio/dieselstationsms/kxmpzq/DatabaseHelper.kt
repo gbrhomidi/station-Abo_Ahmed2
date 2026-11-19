@@ -37257,13 +37257,169 @@ private fun postSalesReversalJournal(
             AND datetime(available_at)<=datetime('now') ORDER BY event_id LIMIT ?""",arrayOf(stationScopeId.toString(),consumer,limit.toString())).use { cursorToJsonArray(it) }
     }
 
-    fun getForecourtSnapshot(stationScopeId: Int): JSONObject { val db=readableDatabase;val shift=getCurrentShift(stationScopeId)?:JSONObject();val sales=JSONObject();db.rawQuery("SELECT COALESCE(SUM(quantity),0),COALESCE(SUM(total_amount),0),COUNT(*) FROM fuel_sales WHERE shift_id=? AND is_deleted=0",arrayOf(shift.optString("shift_id","0"))).use{c->if(c.moveToFirst()){sales.put("fuel_liters",c.getDouble(0));sales.put("fuel_amount",c.getDouble(1));sales.put("fuel_invoices",c.getInt(2))}};db.rawQuery("SELECT COALESCE(SUM(net_amount),0),COUNT(*) FROM sales_transactions WHERE station_id=? AND date(created_at)=date('now') AND status='completed'",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst()){sales.put("store_amount",c.getDouble(0));sales.put("store_invoices",c.getInt(1))}};val alerts=db.rawQuery("SELECT * FROM inventory_anomalies WHERE station_id=? AND status='OPEN' ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,anomaly_id DESC",arrayOf(stationScopeId.toString())).use{cursorToJsonArray(it)};val health=calculateInventoryHealthScore(stationScopeId);return JSONObject().put("shift",shift).put("sales",sales).put("alerts",alerts).put("health_score",health) }
+    fun getForecourtSnapshot(stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        val db = readableDatabase
+        val businessDate = getCurrentDate()
+        val shift = getCurrentShift(stationScopeId) ?: JSONObject()
+        val sales = JSONObject()
+        db.rawQuery(
+            """SELECT COALESCE(SUM(quantity),0),COALESCE(SUM(total_amount),0),COUNT(*)
+               FROM fuel_sales WHERE station_id=? AND shift_id=? AND is_deleted=0 AND status='completed'""",
+            arrayOf(stationScopeId.toString(), shift.optString("shift_id", "0"))
+        ).use { c -> if (c.moveToFirst()) {
+            sales.put("fuel_liters", c.getDouble(0)); sales.put("fuel_amount", c.getDouble(1))
+            sales.put("fuel_invoices", c.getInt(2))
+        } }
+        db.rawQuery(
+            """SELECT COALESCE(SUM(net_amount),0),COUNT(*) FROM sales_transactions
+               WHERE station_id=? AND date(created_at)=date(?) AND status='completed'""",
+            arrayOf(stationScopeId.toString(), businessDate)
+        ).use { c -> if (c.moveToFirst()) {
+            sales.put("store_amount", c.getDouble(0)); sales.put("store_invoices", c.getInt(1))
+        } }
+        val alerts = db.rawQuery(
+            """SELECT * FROM inventory_anomalies WHERE station_id=? AND status='OPEN'
+               ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,anomaly_id DESC""",
+            arrayOf(stationScopeId.toString())
+        ).use { cursorToJsonArray(it) }
+        val health = calculateInventoryHealthScore(stationScopeId)
+        return JSONObject().put("business_date", businessDate).put("shift", shift)
+            .put("sales", sales).put("alerts", alerts).put("health_score", health)
+    }
 
-    fun calculateInventoryHealthScore(stationScopeId: Int): Double { val db=readableDatabase;val total=db.rawQuery("SELECT COUNT(*) FROM products WHERE station_id=? AND is_deleted=0",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0};val low=db.rawQuery("SELECT COUNT(*) FROM products WHERE station_id=? AND is_deleted=0 AND quantity<COALESCE(reorder_point,minimum_stock)",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0};val exp=db.rawQuery("SELECT COUNT(*) FROM product_batches b JOIN products p ON p.id=b.product_id WHERE p.station_id=? AND b.quantity>0 AND b.expiry_date IS NOT NULL AND date(b.expiry_date)<=date('now','+30 day')",arrayOf(stationScopeId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.0};return (100.0-(if(total>0)low/total*30 else 0.0)-(if(total>0)exp/total*10 else 0.0)).coerceIn(0.0,100.0) }
+    fun calculateInventoryHealthScore(stationScopeId: Int): Double {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        val db = writableDatabase
+        val asOfDate = getCurrentDate()
+        val deadStockCutoff = java.time.LocalDate.parse(asOfDate).minusDays(90).toString()
+        val productCount = db.rawQuery(
+            "SELECT COUNT(*) FROM products WHERE station_id=? AND is_deleted=0",
+            arrayOf(stationScopeId.toString())
+        ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+        if (productCount <= 0.0) return 100.0
+
+        val lowStockCount = db.rawQuery(
+            """SELECT COUNT(*) FROM products
+               WHERE station_id=? AND is_deleted=0
+                 AND COALESCE(quantity,0)<COALESCE(NULLIF(reorder_point,0),minimum_stock,0)""",
+            arrayOf(stationScopeId.toString())
+        ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+        val deadStockCount = db.rawQuery(
+            """SELECT COUNT(*) FROM products p
+               WHERE p.station_id=? AND p.is_deleted=0
+                 AND NOT EXISTS (
+                   SELECT 1 FROM inventory_movements m
+                   WHERE m.station_id=p.station_id AND m.product_id=p.id
+                     AND m.is_deleted=0 AND m.status='completed'
+                     AND m.movement_type='out' AND date(m.created_at)>=date(?)
+                 )""",
+            arrayOf(stationScopeId.toString(), deadStockCutoff)
+        ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+        val expiringCount = db.rawQuery(
+            """SELECT COUNT(DISTINCT p.id) FROM products p
+               JOIN product_batches b ON b.product_id=p.id
+               WHERE p.station_id=? AND p.is_deleted=0 AND b.quantity>0
+                 AND b.expiry_date IS NOT NULL
+                 AND date(b.expiry_date)>=date(?) AND date(b.expiry_date)<=date(?, '+30 day')""",
+            arrayOf(stationScopeId.toString(), asOfDate, asOfDate)
+        ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+        val varianceAverage = db.rawQuery(
+            """SELECT COALESCE(AVG(ABS(metric_value)*100.0/NULLIF(ABS(threshold_value),0)),0)
+               FROM inventory_anomalies
+               WHERE station_id=? AND status IN ('OPEN','ACKNOWLEDGED')
+                 AND anomaly_type IN ('PUMP_VARIANCE','DIP_VARIANCE','INVENTORY_VARIANCE')
+                 AND metric_value IS NOT NULL AND threshold_value IS NOT NULL
+                 AND threshold_value<>0""",
+            arrayOf(stationScopeId.toString())
+        ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+
+        val lowRatio = (lowStockCount / productCount).coerceIn(0.0, 1.0)
+        val deadRatio = (deadStockCount / productCount).coerceIn(0.0, 1.0)
+        val expiringRatio = (expiringCount / productCount).coerceIn(0.0, 1.0)
+        val variancePct = varianceAverage.coerceAtLeast(0.0)
+        val score = (100.0 - lowRatio * 30.0 - deadRatio * 20.0 -
+            variancePct * 0.40 - expiringRatio * 10.0).coerceIn(0.0, 100.0)
+
+        db.insertOrThrow("inventory_health_snapshots", null, ContentValues().apply {
+            put("station_id", stationScopeId)
+            put("health_score", score)
+            put("low_stock_ratio", lowRatio)
+            put("dead_stock_ratio", deadRatio)
+            put("variance_avg_pct", variancePct)
+            put("expiring_soon_ratio", expiringRatio)
+            put("calculated_at", "$asOfDate 00:00:00")
+        })
+        return score
+    }
 
     fun calculateVcf(fuelTypeId: Long, temperatureC: Double, stationScopeId: Int): JSONObject { val alpha=readableDatabase.rawQuery("SELECT coefficient_exp FROM fuel_temperature_coefficients WHERE fuel_type_id=?",arrayOf(fuelTypeId.toString())).use{c->if(c.moveToFirst())c.getDouble(0)else 0.00095};val delta=temperatureC-15.0;val vcf=kotlin.math.exp(-alpha*delta-0.8*alpha*alpha*delta*delta);return JSONObject().put("fuel_type_id",fuelTypeId).put("temperature_c",temperatureC).put("coefficient_exp",alpha).put("vcf",vcf).put("station_id",stationScopeId) }
 
-    fun getDemandForecast(stationScopeId: Int): JSONArray { val out=JSONArray();val db=readableDatabase;db.rawQuery("SELECT product_id,COALESCE(SUM(CASE WHEN movement_type='out' THEN quantity ELSE 0 END),0)/30.0 FROM inventory_movements WHERE station_id=? AND date(created_at)>=date('now','-30 day') GROUP BY product_id",arrayOf(stationScopeId.toString())).use{c->while(c.moveToNext()){val avg=c.getDouble(1);out.put(JSONObject().put("item_type","PRODUCT").put("item_id",c.getLong(0)).put("daily_demand",avg).put("forecast_7d",avg*7).put("method","LOCAL_MOVING_AVERAGE"))}};return out }
+    fun getDemandForecast(stationScopeId: Int): JSONArray {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        val db = writableDatabase
+        val asOfDate = getCurrentDate()
+        val cutoff = java.time.LocalDate.parse(asOfDate).minusDays(56).toString()
+        val out = JSONArray()
+        val rows = mutableListOf<Triple<Long, MutableMap<String, Double>, String>>()
+        db.rawQuery(
+            """SELECT m.product_id, date(m.created_at) AS movement_day,
+                      SUM(CASE WHEN m.movement_type='out' THEN ABS(m.quantity_change) ELSE 0 END) AS demand,
+                      COALESCE(p.xyz_class,'Y') AS xyz
+               FROM inventory_movements m
+               JOIN products p ON p.id=m.product_id AND p.station_id=m.station_id
+               WHERE m.station_id=? AND m.is_deleted=0 AND m.status='completed'
+                 AND m.movement_type='out' AND date(m.created_at)>=date(?)
+                 AND date(m.created_at)<=date(?)
+               GROUP BY m.product_id,date(m.created_at),p.xyz_class
+               ORDER BY m.product_id,date(m.created_at)""",
+            arrayOf(stationScopeId.toString(), cutoff, asOfDate)
+        ).use { c ->
+            val grouped = linkedMapOf<Long, Pair<MutableMap<String, Double>, String>>()
+            while (c.moveToNext()) {
+                val id = c.getLong(0)
+                val entry = grouped.getOrPut(id) { Pair(mutableMapOf(), c.getString(3)) }
+                entry.first[c.getString(1)] = c.getDouble(2)
+            }
+            grouped.forEach { (id, pair) -> rows += Triple(id, pair.first, pair.second) }
+        }
+        val today = java.time.LocalDate.parse(asOfDate)
+        rows.forEach { (productId, dailySeries, xyzClass) ->
+            val total = dailySeries.values.sum()
+            val observedDays = 56.0
+            val baseDaily = total / observedDays
+            val weekdayValues = dailySeries.entries.filter {
+                java.time.LocalDate.parse(it.key).dayOfWeek == today.dayOfWeek
+            }.map { it.value }
+            val weekdayMean = if (weekdayValues.isNotEmpty()) weekdayValues.average() else baseDaily
+            val weekdayFactor = if (baseDaily > 0.0) (weekdayMean / baseDaily).coerceIn(0.5, 1.8) else 1.0
+            val xyzFactor = when (xyzClass.uppercase()) { "X" -> 1.0; "Y" -> 0.9; "Z" -> 0.7; else -> 1.0 }
+            val dailyDemand = (baseDaily * 0.6 + weekdayMean * 0.4) * xyzFactor
+            val nextWeek = (1..7).sumOf { day ->
+                val targetDay = today.plusDays(day.toLong())
+                val factor = if (targetDay.dayOfWeek == today.dayOfWeek) weekdayFactor else 1.0
+                dailyDemand * factor
+            }
+            val stock = db.rawQuery(
+                "SELECT COALESCE(quantity,0) FROM products WHERE id=? AND station_id=? AND is_deleted=0",
+                arrayOf(productId.toString(), stationScopeId.toString())
+            ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+            val cover = if (dailyDemand > 0.0) stock / dailyDemand else null
+            val reorder = (dailyDemand * 7.0 - stock).coerceAtLeast(0.0)
+            db.insertWithOnConflict("inventory_forecasts", null, ContentValues().apply {
+                put("station_id", stationScopeId); put("item_type", "PRODUCT"); put("item_id", productId)
+                put("forecast_date", asOfDate); put("demand_quantity", nextWeek)
+                if (cover != null) put("days_of_cover", cover) else putNull("days_of_cover")
+                put("reorder_quantity", reorder); put("method", "LOCAL_56D_WEEKDAY_XYZ")
+            }, SQLiteDatabase.CONFLICT_REPLACE)
+            out.put(JSONObject().put("item_type", "PRODUCT").put("item_id", productId)
+                .put("daily_demand", dailyDemand).put("forecast_7d", nextWeek)
+                .put("days_of_cover", cover).put("reorder_quantity", reorder)
+                .put("xyz_class", xyzClass).put("method", "LOCAL_56D_WEEKDAY_XYZ")
+                .put("forecast_date", asOfDate))
+        }
+        return out
+    }
 
     fun runInventoryAnomalyDetection(stationScopeId: Int): JSONArray { val out=JSONArray();val db=writableDatabase;db.rawQuery("SELECT id,tank_name,COALESCE((SELECT water_level_mm FROM tank_readings r WHERE r.tank_id=t.id ORDER BY r.reading_at DESC,r.reading_id DESC LIMIT 1),0),current_quantity,capacity_liters FROM tanks t WHERE station_id=? AND is_deleted=0",arrayOf(stationScopeId.toString())).use{c->while(c.moveToNext()){val tankId=c.getLong(0);val waterOpen=db.rawQuery("SELECT 1 FROM inventory_anomalies WHERE station_id=? AND item_id=? AND anomaly_type='WATER_LEVEL' AND status='OPEN' LIMIT 1",arrayOf(stationScopeId.toString(),tankId.toString())).use{q->q.moveToFirst()};if(c.getDouble(2)>50&&!waterOpen){val id=db.insertOrThrow("inventory_anomalies",null,ContentValues().apply{put("station_id",stationScopeId);put("item_type","FUEL");put("item_id",tankId);put("anomaly_type","WATER_LEVEL");put("severity","critical");put("metric_value",c.getDouble(2));put("threshold_value",50);put("details","مستوى الماء يتجاوز الحد")});out.put(JSONObject().put("anomaly_id",id).put("type","WATER_LEVEL"))};val lowOpen=db.rawQuery("SELECT 1 FROM inventory_anomalies WHERE station_id=? AND item_id=? AND anomaly_type='LOW_FUEL' AND status='OPEN' LIMIT 1",arrayOf(stationScopeId.toString(),tankId.toString())).use{q->q.moveToFirst()};if(c.getDouble(4)>0&&c.getDouble(3)/c.getDouble(4)<.15&&!lowOpen){val id=db.insertOrThrow("inventory_anomalies",null,ContentValues().apply{put("station_id",stationScopeId);put("item_type","FUEL");put("item_id",tankId);put("anomaly_type","LOW_FUEL");put("severity","critical");put("metric_value",c.getDouble(3));put("threshold_value",c.getDouble(4)*.15)});out.put(JSONObject().put("anomaly_id",id).put("type","LOW_FUEL"))}}};return out }
 
