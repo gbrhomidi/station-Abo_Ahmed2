@@ -5381,7 +5381,21 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); successResponse(helper.insertProductSerial(JSONObject(jsonData), requireCurrentStationId(helper, activity.currentUserId), activity.currentUserId), "تم تسجيل السيريال") } catch (e: Exception) { errorResponse(e.message) }
         }
         @JavascriptInterface
-        fun markSerialSold(jsonData: String): String = try { val helper=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val d=JSONObject(jsonData); successResponse(helper.markSerialSold(d.optLong("serial_id"),d.optLong("sale_id")),"تم تحديث السيريال") } catch(e:Exception){errorResponse(e.message)}
+        fun markSerialSold(jsonData: String): String = try {
+            val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val data = JSONObject(jsonData)
+            val stationId = requireCurrentStationId(helper, activity.currentUserId)
+            val updated = helper.markSerialSold(
+                data.optLong("serial_id"),
+                data.optLong("sale_id"),
+                stationId
+            )
+            if (updated) successResponse(true, "تم ربط السيريال بعملية البيع")
+            else errorResponse("تعذر بيع السيريال: يجب أن يطابق المنتج والمحطة وبند البيع المسجل")
+        } catch (e: Exception) {
+            errorResponse(e.message)
+        }
         @JavascriptInterface
         fun getExpiringBatches(jsonData: String = "{}"): String { val helper=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); return try { val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(helper.getExpiringBatches(JSONObject(jsonData).optInt("days_ahead",30),requireCurrentStationId(helper,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)} }
         @JavascriptInterface

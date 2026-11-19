@@ -37018,14 +37018,54 @@ private fun postSalesReversalJournal(
         } finally { dbLock.unlock() }
     }
 
-    fun markSerialSold(serialId: Long, saleId: Long): Boolean {
-        require(serialId > 0 && saleId > 0)
+    /**
+     * A serial can only leave AVAILABLE when the referenced sale belongs to the
+     * same station/product and its persisted sale line explicitly consumes this serial.
+     * The check and state transition share one SQLite transaction to prevent TOCTOU races.
+     */
+    fun markSerialSold(serialId: Long, saleId: Long, stationScopeId: Int): Boolean {
+        require(serialId > 0 && saleId > 0) { "معرف السيريال أو البيع غير صالح" }
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
         dbLock.lock()
         return try {
             val db = writableDatabase
-            val startMissing = db.rawQuery("SELECT warranty_start_at FROM product_serials WHERE serial_id=? AND status='AVAILABLE'", arrayOf(serialId.toString())).use { c -> c.moveToFirst() && c.isNull(0) }
-            db.update("product_serials", ContentValues().apply { put("status", "SOLD"); put("sale_id", saleId); if (startMissing) put("warranty_start_at", getCurrentDateTime()) }, "serial_id=? AND status='AVAILABLE'", arrayOf(serialId.toString())) == 1
-        } finally { dbLock.unlock() }
+            db.beginTransaction()
+            try {
+                val startMissing = db.rawQuery(
+                    """SELECT s.warranty_start_at
+                       FROM product_serials s
+                       JOIN products p ON p.id=s.product_id
+                       JOIN sales_transactions st ON st.id=? AND st.station_id=p.station_id
+                       WHERE s.serial_id=? AND s.status='AVAILABLE'
+                         AND p.station_id=? AND p.is_deleted=0
+                         AND COALESCE(st.status,'completed') NOT IN ('cancelled','refunded')
+                         AND COALESCE(st.payment_status,'') NOT IN ('cancelled','refunded')
+                         AND EXISTS (
+                           SELECT 1 FROM sale_items si
+                           WHERE si.sale_id=st.id AND si.product_id=s.product_id
+                             AND si.serial_id=s.serial_id AND COALESCE(si.is_returned,0)=0
+                         )
+                       LIMIT 1""",
+                    arrayOf(saleId.toString(), serialId.toString(), stationScopeId.toString())
+                ).use { c -> if (!c.moveToFirst()) return false else c.isNull(0) }
+                val updated = db.update(
+                    "product_serials",
+                    ContentValues().apply {
+                        put("status", "SOLD")
+                        put("sale_id", saleId)
+                        if (startMissing) put("warranty_start_at", getCurrentDateTime())
+                    },
+                    "serial_id=? AND status='AVAILABLE' AND product_id IN (SELECT id FROM products WHERE station_id=? AND is_deleted=0)",
+                    arrayOf(serialId.toString(), stationScopeId.toString())
+                ) == 1
+                if (updated) db.setTransactionSuccessful()
+                updated
+            } finally {
+                db.endTransaction()
+            }
+        } finally {
+            dbLock.unlock()
+        }
     }
 
     fun getExpiringBatches(daysAhead: Int, stationScopeId: Int): JSONArray {
