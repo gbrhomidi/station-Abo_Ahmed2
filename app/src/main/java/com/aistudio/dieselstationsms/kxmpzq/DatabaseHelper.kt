@@ -30580,9 +30580,9 @@ private fun postSalesReversalJournal(
                 db.rawQuery(
                     """SELECT COALESCE((SELECT current_liters FROM tank_readings
                        WHERE tank_id=? ORDER BY reading_at ASC,reading_id ASC LIMIT 1),t.current_quantity,0),
-                       s.status FROM tanks t JOIN shifts s ON s.id=?
+                       s.status FROM tanks t JOIN shifts s ON s.id=? AND s.station_id=?
                        WHERE t.id=? AND t.station_id=?""",
-                    arrayOf(tankId.toString(), shiftId.toString(), tankId.toString(), stationScopeId.toString())
+                    arrayOf(tankId.toString(), shiftId.toString(), stationScopeId.toString(), tankId.toString(), stationScopeId.toString())
                 ).use { c ->
                     require(c.moveToFirst()) { "الخزان أو الوردية خارج نطاق المحطة" }
                     opening = c.getDouble(0); shiftStatus = c.getString(1)

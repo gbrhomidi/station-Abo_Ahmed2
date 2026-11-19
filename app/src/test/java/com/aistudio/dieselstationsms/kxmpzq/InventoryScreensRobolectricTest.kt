@@ -238,6 +238,31 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun shiftReconciliationRejectsShiftFromAnotherStation() {
+        val db = helper.writableDatabase
+        val tankId = createLowFuelTank(1, "RECON-SCOPE")
+        val foreignShiftId = db.insertOrThrow("shifts", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("shift_code", "RECON-SCOPE-" + UUID.randomUUID().toString().take(8))
+            put("station_id", 2)
+            put("shift_date", "2026-11-19")
+            put("shift_type", "morning")
+            put("start_time", "2026-11-19 06:00:00")
+            put("status", "open")
+        })
+        val payload = JSONObject().put("shift_id", foreignShiftId).put("tank_id", tankId)
+            .put("actual_liters", 250.0)
+        assertTrue(runCatching {
+            helper.submitShiftReconciliation(payload, 1, actorId)
+        }.isFailure)
+        val count = db.rawQuery(
+            "SELECT COUNT(*) FROM shift_reconciliations WHERE shift_id=? AND tank_id=?",
+            arrayOf(foreignShiftId.toString(), tankId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) }
+        assertEquals(0, count)
+    }
+
+    @Test
     fun shiftReconciliationAuditIsAppendOnlyAndCapturesReplacementHistory() {
         val db = helper.writableDatabase
         val tankId = createLowFuelTank(1, "RECON-AUDIT")
