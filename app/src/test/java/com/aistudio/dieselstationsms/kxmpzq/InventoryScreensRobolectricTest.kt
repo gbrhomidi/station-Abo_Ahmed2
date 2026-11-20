@@ -1775,4 +1775,95 @@ class InventoryScreensRobolectricTest {
         assertEquals("PROCESSING",recovered.getJSONObject(0).getString("status"))
     }
 
+
+    @Test
+    fun trackedBatchSaleEnforcesFEFOAndNeverSelectsExpiredStock() {
+        val db = helper.writableDatabase
+        val productId = createProduct(0.0, 0.0)
+        db.update("products", ContentValues().apply { put("track_batch", 1) }, "id=?", arrayOf(productId.toString()))
+        val today = java.time.LocalDate.parse(helper.currentDateForBridge())
+        fun batch(expiry: String, quantity: Double): Long = db.insertOrThrow("product_batches", null, ContentValues().apply {
+            put("product_id", productId); put("lot_number", "FEFO-" + UUID.randomUUID())
+            put("expiry_date", expiry); put("quantity", quantity); put("received_at", today.toString())
+        })
+        batch(today.minusDays(1).toString(), 10.0) // expired stock must be skipped
+        val earliestValid = batch(today.plusDays(3).toString(), 5.0)
+        val laterValid = batch(today.plusDays(12).toString(), 8.0)
+        val resolve = DatabaseHelper::class.java.getDeclaredMethod(
+            "resolveDryStockSelection", SQLiteDatabase::class.java, JSONObject::class.java
+        ).apply { isAccessible = true }
+        val item = JSONObject().put("product_id", productId).put("quantity", 2.0).put("track_batch", 1)
+        resolve.invoke(helper, db, item)
+        assertEquals(earliestValid, item.getLong("batch_id"))
+        val consume = DatabaseHelper::class.java.getDeclaredMethod(
+            "consumeDryStockSelection", SQLiteDatabase::class.java, JSONObject::class.java, Long::class.javaPrimitiveType!!
+        ).apply { isAccessible = true }
+        consume.invoke(helper, db, item, 991L)
+        assertEquals(3.0, db.rawQuery("SELECT quantity FROM product_batches WHERE batch_id=?", arrayOf(earliestValid.toString())).use { it.moveToFirst(); it.getDouble(0) }, 0.0001)
+        assertEquals(8.0, db.rawQuery("SELECT quantity FROM product_batches WHERE batch_id=?", arrayOf(laterValid.toString())).use { it.moveToFirst(); it.getDouble(0) }, 0.0001)
+        val bypass = JSONObject().put("product_id", productId).put("quantity", 1.0)
+            .put("track_batch", 1).put("batch_id", laterValid)
+        assertTrue(runCatching { resolve.invoke(helper, db, bypass) }.isFailure)
+    }
+
+    @Test
+    fun inventoryThresholdCreatesOneStationScopedDraftPurchaseOrderImmediately() {
+        val db = helper.writableDatabase
+        val productId = createProduct(10.0, 0.0)
+        db.update("products", ContentValues().apply {
+            put("reorder_point", 5.0); put("safety_stock", 3.0)
+        }, "id=? AND station_id=1", arrayOf(productId.toString()))
+        helper.adjustProductStock(productId, 4.0, 1, actorId)
+        val poId = db.rawQuery(
+            "SELECT po.po_id FROM purchase_orders po JOIN purchase_order_lines l ON l.po_id=po.po_id WHERE po.station_id=1 AND l.item_type='PRODUCT' AND l.item_id=? AND po.status='draft' AND l.notes LIKE 'AUTO_REORDER:%'",
+            arrayOf(productId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+        val quantity = db.rawQuery("SELECT quantity FROM purchase_order_lines WHERE po_id=?", arrayOf(poId.toString())).use { c -> check(c.moveToFirst()); c.getDouble(0) }
+        assertEquals(4.0, quantity, 0.0001)
+        helper.adjustProductStock(productId, 3.0, 1, actorId)
+        val count = db.rawQuery(
+            "SELECT COUNT(*) FROM purchase_orders po JOIN purchase_order_lines l ON l.po_id=po.po_id WHERE po.station_id=1 AND l.item_type='PRODUCT' AND l.item_id=? AND po.status IN ('draft','submitted','approved','partial') AND l.notes LIKE 'AUTO_REORDER:%'",
+            arrayOf(productId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) }
+        assertEquals("Only one active automatic PO may exist for a station/product", 1, count)
+        assertEquals(0, db.rawQuery(
+            "SELECT COUNT(*) FROM purchase_orders po JOIN purchase_order_lines l ON l.po_id=po.po_id WHERE po.station_id=2 AND l.item_type='PRODUCT' AND l.item_id=?",
+            arrayOf(productId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+    }
+
+    @Test
+    fun wetStockToleranceBoundaryRequiresReasonOnlyAboveOneHundredthLiter() {
+        val db = helper.writableDatabase
+        fun scenario(suffix: String, actual: Double, withReason: Boolean): JSONObject {
+            val tankId = createLowFuelTank(1, suffix)
+            val shiftId = db.insertOrThrow("shifts", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString()); put("shift_code", "TOL-$suffix-" + UUID.randomUUID().toString().take(6))
+                put("station_id", 1); put("shift_date", "2026-11-19"); put("shift_type", "morning")
+                put("start_time", "2026-11-19 06:00:00"); put("status", "open")
+            })
+            prepareReconciliationReadings(tankId, shiftId, 1000.0, actual)
+            val payload = JSONObject().put("shift_id", shiftId).put("tank_id", tankId)
+                .put("tolerance_threshold", 0.01)
+            if (withReason) payload.put("cause", "FUEL_SALE").put("notes", "فرق موثق لاختبار حد التسامح")
+            return helper.submitShiftReconciliation(payload, 1, actorId)
+        }
+        val within = scenario("TOL-WITHIN", 1000.009, false)
+        assertEquals(0.009, within.getDouble("variance_liters"), 0.000001)
+        val tankId = createLowFuelTank(1, "TOL-OVER")
+        val shiftId = db.insertOrThrow("shifts", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("shift_code", "TOL-OVER-" + UUID.randomUUID().toString().take(6))
+            put("station_id", 1); put("shift_date", "2026-11-19"); put("shift_type", "morning")
+            put("start_time", "2026-11-19 06:00:00"); put("status", "open")
+        })
+        prepareReconciliationReadings(tankId, shiftId, 1000.0, 1000.011)
+        val missingReason = JSONObject().put("shift_id", shiftId).put("tank_id", tankId).put("tolerance_threshold", 0.01)
+        assertTrue(runCatching { helper.submitShiftReconciliation(missingReason, 1, actorId) }.isFailure)
+        val acceptedWithEvidence = JSONObject(missingReason.toString())
+            .put("cause", "FUEL_SALE").put("notes", "فرق يتجاوز حد 0.01 لتر")
+        val over = helper.submitShiftReconciliation(acceptedWithEvidence, 1, actorId)
+        assertEquals(0.011, over.getDouble("variance_liters"), 0.000001)
+    }
+
+
 }
