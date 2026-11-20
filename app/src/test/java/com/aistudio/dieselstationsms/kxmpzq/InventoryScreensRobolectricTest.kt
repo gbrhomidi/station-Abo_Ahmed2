@@ -1509,6 +1509,87 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun anomalyDetectionAddsStationScopedProductLowAndDeadStockRulesAndResolvesThem() {
+        val db = helper.writableDatabase
+        val productId = createProduct(2.0, 5.0)
+        val oldDate = java.time.LocalDate.parse(helper.currentDateForBridge()).minusDays(120).toString()
+        db.update("products", ContentValues().apply { put("created_at", "$oldDate 08:00:00") },
+            "id=? AND station_id=1", arrayOf(productId.toString()))
+        db.update("inventory_movements", ContentValues().apply { put("created_at", "$oldDate 08:00:00") },
+            "product_id=? AND station_id=1", arrayOf(productId.toString()))
+
+        val first = helper.runInventoryAnomalyDetection(1)
+        val firstTypes = (0 until first.length()).map { first.getJSONObject(it).optString("type") }
+        assertTrue(firstTypes.contains("PRODUCT_LOW_STOCK"))
+        assertTrue(firstTypes.contains("PRODUCT_DEAD_STOCK"))
+        val second = helper.runInventoryAnomalyDetection(1)
+        assertEquals(0, (0 until second.length()).count {
+            second.getJSONObject(it).optString("type") in setOf("PRODUCT_LOW_STOCK", "PRODUCT_DEAD_STOCK")
+        })
+        val activeBeforeRestore = db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_anomalies WHERE station_id=1 AND item_id=? AND item_type='PRODUCT' AND status IN ('OPEN','ACKNOWLEDGED')",
+            arrayOf(productId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) }
+        assertEquals(2, activeBeforeRestore)
+
+        db.update("inventory_levels", ContentValues().apply { put("quantity_on_hand", 12.0) },
+            "product_id=?", arrayOf(productId.toString()))
+        db.update("products", ContentValues().apply { put("quantity", 12.0) },
+            "id=? AND station_id=1", arrayOf(productId.toString()))
+        helper.runInventoryAnomalyDetection(1)
+        val activeAfterRestore = db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_anomalies WHERE station_id=1 AND item_id=? AND item_type='PRODUCT' AND status IN ('OPEN','ACKNOWLEDGED')",
+            arrayOf(productId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) }
+        assertEquals(0, activeAfterRestore)
+        val historical = db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_anomalies WHERE station_id=1 AND item_id=? AND item_type='PRODUCT' AND status='RESOLVED'",
+            arrayOf(productId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) }
+        assertEquals(2, historical)
+    }
+
+    @Test
+    fun demandForecastPersistsStationScopedFuelForecastFromCompletedFuelSales() {
+        val db = helper.writableDatabase
+        val tankId = createLowFuelTank(1, "FUEL-FORECAST")
+        val today = java.time.LocalDate.parse(helper.currentDateForBridge())
+        repeat(8) { index ->
+            val saleDay = today.minusDays((index * 7 + 1).toLong())
+            db.insertOrThrow("fuel_sales", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("station_id", 1)
+                put("fuel_type_id", 1)
+                put("shift_id", 1)
+                put("pump_id", 1)
+                put("quantity", 40.0)
+                put("price_per_liter", 1.0)
+                put("total_amount", 40.0)
+                put("sale_date", saleDay.toString())
+                put("business_day", saleDay.toString())
+                put("status", "completed")
+                put("is_deleted", 0)
+                put("created_at", "$saleDay 12:00:00")
+            })
+        }
+        val forecasts = helper.getDemandForecast(1)
+        val fuel = (0 until forecasts.length()).map { forecasts.getJSONObject(it) }
+            .firstOrNull { it.optString("item_type") == "FUEL" && it.optLong("item_id") == 1L }
+        assertTrue(fuel != null)
+        assertEquals("LOCAL_56D_WEEKDAY_FUEL", fuel!!.getString("method"))
+        assertTrue(fuel.getDouble("forecast_7d") > 0.0)
+        assertTrue(fuel.getDouble("days_of_cover") > 0.0)
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_forecasts WHERE station_id=1 AND item_type='FUEL' AND item_id=1",
+            null
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+        assertEquals(0, db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_forecasts WHERE station_id=2 AND item_type='FUEL' AND item_id=1",
+            null
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+    }
+
+    @Test
     fun outboxUsesStationScopedIdempotencyClaimAndAcknowledgement() {
         val event=JSONObject().put("event_type","pos_sale_completed").put("consumer","stock-levels").put("idempotency_key","acceptance-sale-1").put("payload",JSONObject().put("sale_id",1001))
         val id=helper.publishEvent(event,1); assertEquals(id,helper.publishEvent(event,1))
