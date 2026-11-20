@@ -37627,7 +37627,7 @@ private fun postSalesReversalJournal(
                     val invoiceLines = invoiceInput.optJSONArray("lines") ?: invoiceInput.optJSONArray("invoice_lines") ?: JSONArray()
                     require(invoiceLines.length() > 0) { "بنود فاتورة المورد مطلوبة" }
                     val existing = db.rawQuery("SELECT id FROM supplier_invoices WHERE station_id=? AND supplier_id=? AND invoice_number=?", arrayOf(stationScopeId.toString(),po.optLong("supplier_id").toString(),invoiceNumber)).use { c -> if(c.moveToFirst()) c.getLong(0) else 0L }
-                    invoiceId = if (existing > 0) existing else db.insertOrThrow("supplier_invoices",null,ContentValues().apply{put("station_id",stationScopeId);put("po_id",poId);put("supplier_id",po.optLong("supplier_id"));put("source_type","product_purchase");put("source_id",poId);put("invoice_number",invoiceNumber);put("invoice_date",invoiceInput.optString("invoice_date").takeIf{it.isNotBlank()});put("subtotal",invoiceInput.optDouble("subtotal",0.0));put("tax_amount",invoiceInput.optDouble("tax_amount",0.0));put("total_amount",invoiceInput.optDouble("total_amount",0.0));put("remaining_amount",invoiceInput.optDouble("total_amount",0.0));put("created_by",data.optLong("created_by",0L).takeIf{it>0})})
+                    invoiceId = if (existing > 0) existing else db.insertOrThrow("supplier_invoices",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("station_id",stationScopeId);put("po_id",poId);put("supplier_id",po.optLong("supplier_id"));put("source_type","product_purchase");put("source_id",poId);put("invoice_number",invoiceNumber);put("invoice_date",invoiceInput.optString("invoice_date").takeIf{it.isNotBlank()});put("subtotal",invoiceInput.optDouble("subtotal",0.0));put("tax_amount",invoiceInput.optDouble("tax_amount",0.0));put("total_amount",invoiceInput.optDouble("total_amount",0.0));put("remaining_amount",invoiceInput.optDouble("total_amount",0.0));put("created_by",data.optLong("created_by",0L).takeIf{it>0})})
                     if (existing > 0) db.delete("supplier_invoice_lines","invoice_id=?",arrayOf(existing.toString()))
                     for (i in 0 until invoiceLines.length()) {
                         val il=invoiceLines.getJSONObject(i); val lineId=il.optLong("po_line_id",il.optLong("line_id",0L)); require(lineId>0) { "بند أمر الشراء مفقود في الفاتورة" }
@@ -37638,6 +37638,20 @@ private fun postSalesReversalJournal(
                     }
                 } else {
                     invoiceId = db.rawQuery("SELECT id FROM supplier_invoices WHERE station_id=? AND po_id=? ORDER BY id DESC LIMIT 1",arrayOf(stationScopeId.toString(),poId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
+                }
+                if (invoiceId == 0L && invoiceInput == null) {
+                    val expectedQuantity = data.optDouble("invoice_quantity", Double.NaN)
+                    require(!data.has("invoice_quantity") || expectedQuantity.isFinite()) { "كمية الفاتورة غير صالحة" }
+                    val expectedAmount = data.optDouble("invoice_amount", Double.NaN)
+                    require(!data.has("invoice_amount") || expectedAmount.isFinite()) { "مبلغ الفاتورة غير صالح" }
+                    val poQuantity = db.rawQuery("SELECT COALESCE(SUM(quantity),0),COALESCE(SUM(quantity*unit_price),0) FROM purchase_order_lines WHERE po_id=?", arrayOf(poId.toString())).use { c -> c.moveToFirst(); doubleArrayOf(c.getDouble(0), c.getDouble(1)) }
+                    val differences = JSONArray()
+                    if (!data.has("invoice_quantity")) differences.put(JSONObject().put("field", "invoice_quantity_missing"))
+                    else if (kotlin.math.abs(expectedQuantity - poQuantity[0]) > 0.000001) differences.put(JSONObject().put("field", "invoice_quantity_vs_po").put("difference", expectedQuantity - poQuantity[0]))
+                    if (!data.has("invoice_amount")) differences.put(JSONObject().put("field", "invoice_amount_missing"))
+                    else if (kotlin.math.abs(expectedAmount - poQuantity[1]) > 0.01) differences.put(JSONObject().put("field", "invoice_amount_vs_po").put("difference", expectedAmount - poQuantity[1]))
+                    db.setTransactionSuccessful()
+                    return JSONObject().put("po", po).put("invoice", JSONObject.NULL).put("match", JSONObject().put("invoice_provided", data.has("invoice_quantity") || data.has("invoice_amount")).put("invoice", JSONObject.NULL).put("po_quantity", poQuantity[0]).put("po_amount", poQuantity[1])).put("differences", differences).put("matched", differences.length() == 0).put("requires_accountant_approval", differences.length() > 0)
                 }
                 require(invoiceId > 0) { "فاتورة المورد غير محفوظة؛ احفظها قبل المطابقة" }
                 val differences=JSONArray(); var poQty=0.0; var delivered=0.0; var moved=0.0; var poSubtotal=0.0; var invoiceQty=0.0; var invoiceSubtotal=0.0; var invoiceTax=0.0; var invoiceTotal=0.0
