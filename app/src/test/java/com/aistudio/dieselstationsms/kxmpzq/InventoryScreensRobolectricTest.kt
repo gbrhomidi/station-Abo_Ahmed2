@@ -481,10 +481,16 @@ class InventoryScreensRobolectricTest {
         // The current projection is updated in place; the append-only audit records
         // the replacement as UPDATE, retaining the same reconciliation identity.
         assertEquals(2, history.length())
+        // UPDATE audit rows preserve the pre-update image; the live projection holds 240.
         assertEquals("UPDATE", history.getJSONObject(0).getString("event_type"))
-        assertEquals(240.0, history.getJSONObject(0).getDouble("actual_liters"), 0.0001)
+        assertEquals(250.0, history.getJSONObject(0).getDouble("actual_liters"), 0.0001)
         assertEquals("INSERT", history.getJSONObject(1).getString("event_type"))
         assertEquals(250.0, history.getJSONObject(1).getDouble("actual_liters"), 0.0001)
+        val currentActual = db.rawQuery(
+            "SELECT actual_liters FROM shift_reconciliations WHERE shift_id=? AND tank_id=?",
+            arrayOf(shiftId.toString(), tankId.toString())
+        ).use { c -> assertTrue(c.moveToFirst()); c.getDouble(0) }
+        assertEquals(240.0, currentActual, 0.0001)
         assertTrue(runCatching { db.delete("shift_reconciliation_audit", "shift_id=?", arrayOf(shiftId.toString())) }.isFailure)
         assertTrue(runCatching { db.execSQL("UPDATE shift_reconciliation_audit SET notes='tampered' WHERE shift_id=?", arrayOf(shiftId)) }.isFailure)
         val currentCount = db.rawQuery("SELECT COUNT(*) FROM shift_reconciliations WHERE shift_id=? AND tank_id=?", arrayOf(shiftId.toString(), tankId.toString())).use { c -> c.moveToFirst(); c.getInt(0) }
