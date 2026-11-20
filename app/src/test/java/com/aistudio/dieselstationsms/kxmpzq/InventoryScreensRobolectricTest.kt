@@ -1536,6 +1536,9 @@ class InventoryScreensRobolectricTest {
             "product_id=?", arrayOf(productId.toString()))
         db.update("products", ContentValues().apply { put("quantity", 12.0) },
             "id=? AND station_id=1", arrayOf(productId.toString()))
+        db.update("inventory_movements", ContentValues().apply {
+            put("created_at", helper.currentDateForBridge() + " 12:00:00")
+        }, "product_id=? AND station_id=1", arrayOf(productId.toString()))
         helper.runInventoryAnomalyDetection(1)
         val activeAfterRestore = db.rawQuery(
             "SELECT COUNT(*) FROM inventory_anomalies WHERE station_id=1 AND item_id=? AND item_type='PRODUCT' AND status IN ('OPEN','ACKNOWLEDGED')",
@@ -1560,8 +1563,6 @@ class InventoryScreensRobolectricTest {
                 put("uuid", UUID.randomUUID().toString())
                 put("station_id", 1)
                 put("fuel_type_id", 1)
-                put("shift_id", 1)
-                put("pump_id", 1)
                 put("quantity", 40.0)
                 put("price_per_liter", 1.0)
                 put("total_amount", 40.0)
