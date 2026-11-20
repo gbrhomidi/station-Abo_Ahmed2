@@ -478,10 +478,13 @@ class InventoryScreensRobolectricTest {
         prepareReconciliationReadings(tankId, shiftId, 250.0, 240.0)
         helper.submitShiftReconciliation(payload.put("actual_liters", 240.0), 1, actorId)
         val history = helper.getShiftReconciliationAudit(JSONObject().put("shift_id", shiftId).put("tank_id", tankId), 1)
-        assertEquals(3, history.length())
-        assertEquals("INSERT", history.getJSONObject(0).getString("event_type"))
-        assertEquals("DELETE", history.getJSONObject(1).getString("event_type"))
-        assertEquals("INSERT", history.getJSONObject(2).getString("event_type"))
+        // The current projection is updated in place; the append-only audit records
+        // the replacement as UPDATE, retaining the same reconciliation identity.
+        assertEquals(2, history.length())
+        assertEquals("UPDATE", history.getJSONObject(0).getString("event_type"))
+        assertEquals(240.0, history.getJSONObject(0).getDouble("actual_liters"), 0.0001)
+        assertEquals("INSERT", history.getJSONObject(1).getString("event_type"))
+        assertEquals(250.0, history.getJSONObject(1).getDouble("actual_liters"), 0.0001)
         assertTrue(runCatching { db.delete("shift_reconciliation_audit", "shift_id=?", arrayOf(shiftId.toString())) }.isFailure)
         assertTrue(runCatching { db.execSQL("UPDATE shift_reconciliation_audit SET notes='tampered' WHERE shift_id=?", arrayOf(shiftId)) }.isFailure)
         val currentCount = db.rawQuery("SELECT COUNT(*) FROM shift_reconciliations WHERE shift_id=? AND tank_id=?", arrayOf(shiftId.toString(), tankId.toString())).use { c -> c.moveToFirst(); c.getInt(0) }
