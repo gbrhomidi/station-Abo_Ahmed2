@@ -1432,6 +1432,9 @@ class InventoryScreensRobolectricTest {
         })
         val score = helper.calculateInventoryHealthScore(1)
         assertTrue(score in 0.0..100.0)
+        // One active tangible product is both below reorder level and has no
+        // outbound demand in the last 90 days: 30 + 20 weighted-point penalties.
+        assertEquals(50.0, score, 0.0001)
         val snapshot = db.rawQuery(
             "SELECT health_score,low_stock_ratio,dead_stock_ratio,variance_avg_pct,expiring_soon_ratio FROM inventory_health_snapshots WHERE station_id=1 ORDER BY snapshot_id DESC LIMIT 1",
             null
@@ -1555,6 +1558,23 @@ class InventoryScreensRobolectricTest {
             arrayOf(productId.toString())
         ).use { c -> c.moveToFirst(); c.getInt(0) }
         assertEquals(2, historical)
+    }
+
+    @Test
+    fun demandForecastIncludesZeroDemandProductsAndPersistsIdempotently() {
+        val db = helper.writableDatabase
+        val zeroDemandProduct = createProduct(20.0, 2.0)
+        val first = helper.getDemandForecast(1)
+        val zeroItem = (0 until first.length()).map { first.getJSONObject(it) }
+            .firstOrNull { it.optString("item_type") == "PRODUCT" && it.optLong("item_id") == zeroDemandProduct }
+        assertTrue("Active products with no outbound history must still receive an explicit zero forecast", zeroItem != null)
+        assertEquals(0.0, zeroItem!!.getDouble("forecast_7d"), 0.0001)
+        assertTrue(zeroItem.isNull("days_of_cover"))
+        helper.getDemandForecast(1)
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_forecasts WHERE station_id=1 AND item_type='PRODUCT' AND item_id=?",
+            arrayOf(zeroDemandProduct.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
     }
 
     @Test

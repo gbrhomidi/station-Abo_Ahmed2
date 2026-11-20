@@ -37811,8 +37811,24 @@ private fun postSalesReversalJournal(
             arrayOf(stationScopeId.toString())
         ).use { cursorToJsonArray(it) }
         val health = calculateInventoryHealthScore(stationScopeId)
+        val healthComponents = db.rawQuery(
+            """SELECT low_stock_ratio,dead_stock_ratio,variance_avg_pct,expiring_soon_ratio,calculated_at
+               FROM inventory_health_snapshots WHERE station_id=?
+               ORDER BY snapshot_id DESC LIMIT 1""",
+            arrayOf(stationScopeId.toString())
+        ).use { c ->
+            if (c.moveToFirst()) JSONObject()
+                .put("low_stock_ratio", c.getDouble(0))
+                .put("dead_stock_ratio", c.getDouble(1))
+                .put("variance_avg_pct", c.getDouble(2))
+                .put("expiring_soon_ratio", c.getDouble(3))
+                .put("calculated_at", c.getString(4))
+                .put("weights", JSONObject().put("low_stock",30).put("dead_stock",20).put("variance",40).put("expiring_soon",10))
+            else JSONObject().put("available", false)
+        }
         return JSONObject().put("business_date", businessDate).put("shift", shift)
             .put("sales", sales).put("alerts", alerts).put("health_score", health)
+            .put("health_components", healthComponents)
     }
 
     fun calculateInventoryHealthScore(stationScopeId: Int): Double {
@@ -37820,53 +37836,80 @@ private fun postSalesReversalJournal(
         val db = writableDatabase
         val asOfDate = getCurrentDate()
         val deadStockCutoff = java.time.LocalDate.parse(asOfDate).minusDays(90).toString()
+
+        // Denominator is the active, tangible station catalog. Service/inactive/deleted
+        // products must not dilute stock-health ratios.
         val productCount = db.rawQuery(
-            "SELECT COUNT(*) FROM products WHERE station_id=? AND is_deleted=0",
+            """SELECT COUNT(*) FROM products
+               WHERE station_id=? AND is_deleted=0 AND status='active'
+                 AND COALESCE(is_service,0)=0 AND COALESCE(product_type,'')<>'service'""",
             arrayOf(stationScopeId.toString())
         ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
         if (productCount <= 0.0) return 100.0
 
+        val stockCte = """WITH station_stock AS (
+            SELECT p.id AS product_id,
+                   CASE WHEN EXISTS(
+                       SELECT 1 FROM inventory_levels il JOIN warehouses w ON w.id=il.warehouse_id
+                       WHERE il.product_id=p.id AND w.station_id=? AND w.is_active=1
+                   ) THEN (
+                       SELECT COALESCE(SUM(MAX(0,il.quantity_on_hand-COALESCE(il.quantity_committed,0))),0)
+                       FROM inventory_levels il JOIN warehouses w ON w.id=il.warehouse_id
+                       WHERE il.product_id=p.id AND w.station_id=? AND w.is_active=1
+                   ) ELSE MAX(0,COALESCE(p.quantity,0)) END AS available_quantity,
+                   COALESCE(NULLIF(p.reorder_point,0),p.minimum_stock,0) AS reorder_level
+            FROM products p
+            WHERE p.station_id=? AND p.is_deleted=0 AND p.status='active'
+              AND COALESCE(p.is_service,0)=0 AND COALESCE(p.product_type,'')<>'service'
+        ) """
         val lowStockCount = db.rawQuery(
-            """SELECT COUNT(*) FROM products
-               WHERE station_id=? AND is_deleted=0
-                 AND COALESCE(quantity,0)<COALESCE(NULLIF(reorder_point,0),minimum_stock,0)""",
-            arrayOf(stationScopeId.toString())
+            stockCte + "SELECT COUNT(*) FROM station_stock WHERE available_quantity<reorder_level AND reorder_level>0",
+            arrayOf(stationScopeId.toString(), stationScopeId.toString(), stationScopeId.toString())
         ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
         val deadStockCount = db.rawQuery(
-            """SELECT COUNT(*) FROM products p
-               WHERE p.station_id=? AND p.is_deleted=0
-                 AND NOT EXISTS (
-                   SELECT 1 FROM inventory_movements m
-                   WHERE m.station_id=p.station_id AND m.product_id=p.id
-                     AND m.is_deleted=0 AND m.status='completed'
-                     AND m.movement_type='out' AND date(m.created_at)>=date(?)
-                 )""",
-            arrayOf(stationScopeId.toString(), deadStockCutoff)
+            stockCte + """SELECT COUNT(*) FROM station_stock s
+                WHERE s.available_quantity>0 AND NOT EXISTS(
+                    SELECT 1 FROM inventory_movements m
+                    WHERE m.station_id=? AND m.product_id=s.product_id AND m.is_deleted=0
+                      AND m.status='completed' AND m.movement_type='out'
+                      AND date(m.created_at)>=date(?)
+                )""",
+            arrayOf(stationScopeId.toString(), stationScopeId.toString(), stationScopeId.toString(),
+                stationScopeId.toString(), deadStockCutoff)
         ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
         val expiringCount = db.rawQuery(
             """SELECT COUNT(DISTINCT p.id) FROM products p
                JOIN product_batches b ON b.product_id=p.id
-               WHERE p.station_id=? AND p.is_deleted=0 AND b.quantity>0
+               WHERE p.station_id=? AND p.is_deleted=0 AND p.status='active'
+                 AND COALESCE(p.is_service,0)=0 AND b.quantity>0
                  AND b.expiry_date IS NOT NULL
                  AND date(b.expiry_date)>=date(?) AND date(b.expiry_date)<=date(?, '+30 day')""",
             arrayOf(stationScopeId.toString(), asOfDate, asOfDate)
         ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
         val varianceAverage = db.rawQuery(
-            """SELECT COALESCE(AVG(ABS(metric_value)*100.0/NULLIF(ABS(threshold_value),0)),0)
+            """SELECT COALESCE(AVG(
+                    MAX(0.0,(ABS(metric_value)-ABS(threshold_value))*100.0/ABS(threshold_value))
+                ),0)
                FROM inventory_anomalies
                WHERE station_id=? AND status IN ('OPEN','ACKNOWLEDGED')
-                 AND anomaly_type IN ('PUMP_VARIANCE','DIP_VARIANCE','INVENTORY_VARIANCE')
+                 AND anomaly_type IN ('PUMP_VARIANCE','DIP_VARIANCE','INVENTORY_VARIANCE','FUEL_SUDDEN_LOSS')
                  AND metric_value IS NOT NULL AND threshold_value IS NOT NULL
-                 AND threshold_value<>0""",
+                 AND ABS(threshold_value)>0""",
             arrayOf(stationScopeId.toString())
         ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
 
         val lowRatio = (lowStockCount / productCount).coerceIn(0.0, 1.0)
         val deadRatio = (deadStockCount / productCount).coerceIn(0.0, 1.0)
         val expiringRatio = (expiringCount / productCount).coerceIn(0.0, 1.0)
-        val variancePct = varianceAverage.coerceAtLeast(0.0)
-        val score = (100.0 - lowRatio * 30.0 - deadRatio * 20.0 -
-            variancePct * 0.40 - expiringRatio * 10.0).coerceIn(0.0, 100.0)
+        // Variance is measured only from active, evidence-backed anomalies. Cap the
+        // normalized component at 100% so one outlier cannot silently dominate the score.
+        val variancePct = varianceAverage.coerceIn(0.0, 100.0)
+        val lowPenalty = lowRatio * 30.0
+        val deadPenalty = deadRatio * 20.0
+        val variancePenalty = variancePct * 0.40
+        val expiryPenalty = expiringRatio * 10.0
+        val score = (100.0 - lowPenalty - deadPenalty - variancePenalty - expiryPenalty)
+            .coerceIn(0.0, 100.0)
 
         db.insertOrThrow("inventory_health_snapshots", null, ContentValues().apply {
             put("station_id", stationScopeId)
@@ -37908,121 +37951,160 @@ private fun postSalesReversalJournal(
         require(stationScopeId > 0) { "معرف المحطة غير صالح" }
         val db = writableDatabase
         val asOfDate = java.time.LocalDate.parse(getCurrentDate())
-        val cutoff = asOfDate.minusDays(55)
+        // Use 56 completed business-calendar days. The current business day is
+        // intentionally excluded so a partial trading day cannot bias demand.
+        val historyEnd = asOfDate.minusDays(1)
+        val historyStart = historyEnd.minusDays(55)
         val out = JSONArray()
 
-        // Product forecast: 56 complete calendar days, including zero-demand days,
-        // with weekday seasonality and the measured XYZ class from six-month demand.
-        val productRows = mutableMapOf<Long, MutableMap<java.time.LocalDate, Double>>()
+        val productIds = mutableListOf<Long>()
         db.rawQuery(
-            """SELECT m.product_id,date(m.created_at),
-                      SUM(ABS(m.quantity_change))
+            "SELECT id FROM products WHERE station_id=? AND is_deleted=0 AND status='active' AND COALESCE(is_service,0)=0 AND COALESCE(product_type,'')<>'service' ORDER BY id",
+            arrayOf(stationScopeId.toString())
+        ).use { c -> while (c.moveToNext()) productIds += c.getLong(0) }
+
+        val productDaily = mutableMapOf<Long, MutableMap<java.time.LocalDate, Double>>()
+        db.rawQuery(
+            """SELECT m.product_id,date(m.created_at),SUM(ABS(m.quantity_change))
                FROM inventory_movements m
                JOIN products p ON p.id=m.product_id AND p.station_id=m.station_id
                WHERE m.station_id=? AND m.is_deleted=0 AND m.status='completed'
                  AND m.movement_type='out'
                  AND date(m.created_at)>=date(?) AND date(m.created_at)<=date(?)
                GROUP BY m.product_id,date(m.created_at)""",
-            arrayOf(stationScopeId.toString(), cutoff.toString(), asOfDate.toString())
+            arrayOf(stationScopeId.toString(), historyStart.toString(), historyEnd.toString())
         ).use { c ->
             while (c.moveToNext()) {
                 val day = runCatching { java.time.LocalDate.parse(c.getString(1)) }.getOrNull() ?: continue
-                productRows.getOrPut(c.getLong(0)) { mutableMapOf() }[day] = c.getDouble(2)
+                productDaily.getOrPut(c.getLong(0)) { mutableMapOf() }[day] = c.getDouble(2).coerceAtLeast(0.0)
             }
-        }
-        val xyzByProduct = mutableMapOf<Long, String>()
-        db.rawQuery(
-            "SELECT id,COALESCE(NULLIF(UPPER(xyz_class),''),'Y') FROM products WHERE station_id=? AND is_deleted=0 AND status='active'",
-            arrayOf(stationScopeId.toString())
-        ).use { c -> while (c.moveToNext()) xyzByProduct[c.getLong(0)] = c.getString(1) }
-        productRows.forEach { (productId, observations) ->
-            val series = (0L..55L).map { offset -> observations[cutoff.plusDays(offset)] ?: 0.0 }
-            val baseDaily = series.average()
-            val weekdayMeans = (1..7).associateWith { weekday ->
-                val samples = (0L..55L).filter { cutoff.plusDays(it).dayOfWeek.value == weekday }
-                    .map { observations[cutoff.plusDays(it)] ?: 0.0 }
-                if (samples.isNotEmpty()) samples.average() else baseDaily
-            }
-            val xyz = xyzByProduct[productId] ?: "Y"
-            val xyzFactor = when (xyz) { "X" -> 1.0; "Y" -> 0.9; "Z" -> 0.7; else -> 1.0 }
-            val forecast7 = (1L..7L).sumOf { day ->
-                weekdayMeans[asOfDate.plusDays(day).dayOfWeek.value] ?: baseDaily
-            } * xyzFactor
-            val dailyDemand = baseDaily * xyzFactor
-            val stock = db.rawQuery(
-                """SELECT CASE WHEN EXISTS(
-                       SELECT 1 FROM inventory_levels il JOIN warehouses w ON w.id=il.warehouse_id
-                       WHERE il.product_id=p.id AND w.station_id=? AND w.is_active=1
-                   ) THEN (SELECT COALESCE(SUM(il.quantity_on_hand),0)
-                           FROM inventory_levels il JOIN warehouses w ON w.id=il.warehouse_id
-                           WHERE il.product_id=p.id AND w.station_id=? AND w.is_active=1)
-                   ELSE COALESCE(p.quantity,0) END
-                   FROM products p WHERE p.id=? AND p.station_id=? AND p.is_deleted=0""",
-                arrayOf(stationScopeId.toString(), stationScopeId.toString(), productId.toString(), stationScopeId.toString())
-            ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
-            val cover = if (dailyDemand > 0.0) stock / dailyDemand else null
-            val reorder = (forecast7 - stock).coerceAtLeast(0.0)
-            db.insertWithOnConflict("inventory_forecasts", null, ContentValues().apply {
-                put("station_id", stationScopeId); put("item_type", "PRODUCT"); put("item_id", productId)
-                put("forecast_date", asOfDate.toString()); put("demand_quantity", forecast7)
-                if (cover != null) put("days_of_cover", cover) else putNull("days_of_cover")
-                put("reorder_quantity", reorder); put("method", "LOCAL_56D_WEEKDAY_XYZ")
-            }, SQLiteDatabase.CONFLICT_REPLACE)
-            out.put(JSONObject().put("item_type", "PRODUCT").put("item_id", productId)
-                .put("daily_demand", dailyDemand).put("forecast_7d", forecast7)
-                .put("days_of_cover", cover).put("reorder_quantity", reorder)
-                .put("xyz_class", xyz).put("method", "LOCAL_56D_WEEKDAY_XYZ")
-                .put("forecast_date", asOfDate.toString()))
         }
 
-        // Fuel forecast is based only on completed, non-deleted station fuel sales.
-        // Days without sales remain zero observations; no synthetic sales are inferred.
-        val fuelRows = mutableMapOf<Long, MutableMap<java.time.LocalDate, Double>>()
-        db.rawQuery(
-            """SELECT fuel_type_id,
-                      date(COALESCE(NULLIF(business_day,''),NULLIF(sale_date,''),created_at)) AS sale_day,
-                      SUM(COALESCE(quantity,0))
-               FROM fuel_sales
-               WHERE station_id=? AND is_deleted=0 AND status='completed'
-                 AND fuel_type_id IS NOT NULL AND quantity>0
-                 AND date(COALESCE(NULLIF(business_day,''),NULLIF(sale_date,''),created_at))
-                     BETWEEN date(?) AND date(?)
-               GROUP BY fuel_type_id,sale_day""",
-            arrayOf(stationScopeId.toString(), cutoff.toString(), asOfDate.toString())
-        ).use { c ->
-            while (c.moveToNext()) {
-                val day = runCatching { java.time.LocalDate.parse(c.getString(1)) }.getOrNull() ?: continue
-                fuelRows.getOrPut(c.getLong(0)) { mutableMapOf() }[day] = c.getDouble(2)
-            }
+        // ABC/XYZ is computed from six complete calendar-month buckets and actual
+        // completed outbound movements; never trust a stale products.xyz_class value.
+        val classification = getABCXYZAnalysis(stationScopeId)
+        val xyzByProduct = mutableMapOf<Long, Pair<String, Double>>()
+        for (i in 0 until classification.length()) {
+            val row = classification.getJSONObject(i)
+            xyzByProduct[row.getLong("product_id")] = row.optString("xyz", "Z") to row.optDouble("xyz_cv", 0.0)
         }
-        fuelRows.forEach { (fuelTypeId, observations) ->
-            val series = (0L..55L).map { offset -> observations[cutoff.plusDays(offset)] ?: 0.0 }
-            val baseDaily = series.average()
-            val weekdayMeans = (1..7).associateWith { weekday ->
-                val samples = (0L..55L).filter { cutoff.plusDays(it).dayOfWeek.value == weekday }
-                    .map { observations[cutoff.plusDays(it)] ?: 0.0 }
-                if (samples.isNotEmpty()) samples.average() else baseDaily
+
+        fun weekdayForecast(observations: Map<java.time.LocalDate, Double>, target: java.time.LocalDate, xyz: String): Double {
+            val weekday = target.dayOfWeek.value
+            val allSamples = (0L..55L).map { offset ->
+                val day = historyStart.plusDays(offset)
+                if (day.dayOfWeek.value == weekday) observations[day] ?: 0.0 else Double.NaN
+            }.filter { it.isFinite() }
+            val recentSamples = (28L..55L).map { offset ->
+                val day = historyStart.plusDays(offset)
+                if (day.dayOfWeek.value == weekday) observations[day] ?: 0.0 else Double.NaN
+            }.filter { it.isFinite() }
+            val longMean = if (allSamples.isNotEmpty()) allSamples.average() else 0.0
+            val recentMean = if (recentSamples.isNotEmpty()) recentSamples.average() else longMean
+            val alpha = when (xyz) { "X" -> 0.20; "Y" -> 0.40; else -> 0.60 }
+            return (longMean * (1.0 - alpha) + recentMean * alpha).coerceAtLeast(0.0)
+        }
+
+        db.beginTransaction()
+        try {
+            productIds.forEach { productId ->
+                val observations = productDaily[productId] ?: emptyMap()
+                val dailyMean = (0L..55L).sumOf { observations[historyStart.plusDays(it)] ?: 0.0 } / 56.0
+                val (xyz, xyzCv) = xyzByProduct[productId] ?: ("Z" to 0.0)
+                val forecast7 = (1L..7L).sumOf { day ->
+                    weekdayForecast(observations, asOfDate.plusDays(day), xyz)
+                }
+                val stock = db.rawQuery(
+                    """SELECT CASE WHEN EXISTS(
+                           SELECT 1 FROM inventory_levels il JOIN warehouses w ON w.id=il.warehouse_id
+                           WHERE il.product_id=p.id AND w.station_id=? AND w.is_active=1
+                       ) THEN (SELECT COALESCE(SUM(MAX(0,il.quantity_on_hand-COALESCE(il.quantity_committed,0))),0)
+                               FROM inventory_levels il JOIN warehouses w ON w.id=il.warehouse_id
+                               WHERE il.product_id=p.id AND w.station_id=? AND w.is_active=1)
+                       ELSE MAX(0,COALESCE(p.quantity,0)) END
+                       FROM products p WHERE p.id=? AND p.station_id=? AND p.is_deleted=0""",
+                    arrayOf(stationScopeId.toString(), stationScopeId.toString(), productId.toString(), stationScopeId.toString())
+                ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+                val planning = db.rawQuery(
+                    "SELECT COALESCE(safety_stock,0),COALESCE(lead_time_days,0) FROM products WHERE id=? AND station_id=?",
+                    arrayOf(productId.toString(), stationScopeId.toString())
+                ).use { c -> if (c.moveToFirst()) c.getDouble(0).coerceAtLeast(0.0) to c.getInt(1).coerceAtLeast(0) else 0.0 to 0 }
+                val horizon = maxOf(7, planning.second)
+                val reorder = (dailyMean * horizon + planning.first - stock).coerceAtLeast(0.0)
+                val cover = if (dailyMean > 0.0) stock / dailyMean else null
+                db.insertWithOnConflict("inventory_forecasts", null, ContentValues().apply {
+                    put("station_id", stationScopeId); put("item_type", "PRODUCT"); put("item_id", productId)
+                    put("forecast_date", asOfDate.toString()); put("demand_quantity", forecast7)
+                    if (cover != null) put("days_of_cover", cover) else putNull("days_of_cover")
+                    put("reorder_quantity", reorder); put("method", "LOCAL_56D_WEEKDAY_XYZ")
+                }, SQLiteDatabase.CONFLICT_REPLACE)
+                out.put(JSONObject().put("item_type", "PRODUCT").put("item_id", productId)
+                    .put("daily_demand", dailyMean).put("forecast_7d", forecast7)
+                    .put("days_of_cover", cover).put("reorder_quantity", reorder)
+                    .put("safety_stock", planning.first).put("lead_time_days", planning.second)
+                    .put("abc_class", classification.optJSONObject((0 until classification.length()).firstOrNull {
+                        classification.getJSONObject(it).optLong("product_id") == productId
+                    } ?: -1)?.optString("abc", "C") ?: "C")
+                    .put("xyz_class", xyz).put("xyz_cv", xyzCv)
+                    .put("method", "LOCAL_56D_WEEKDAY_XYZ").put("forecast_date", asOfDate.toString()))
             }
-            val forecast7 = (1L..7L).sumOf { day ->
-                weekdayMeans[asOfDate.plusDays(day).dayOfWeek.value] ?: baseDaily
+
+            // Fuel demand uses only completed sales and station-scoped tank stock.
+            val fuelIds = mutableListOf<Long>()
+            db.rawQuery(
+                """SELECT fuel_type_id FROM tanks
+                   WHERE station_id=? AND is_deleted=0 AND status NOT IN ('retired','maintenance')
+                   UNION SELECT fuel_type_id FROM fuel_sales
+                   WHERE station_id=? AND is_deleted=0 AND status='completed' AND fuel_type_id IS NOT NULL
+                   ORDER BY fuel_type_id""",
+                arrayOf(stationScopeId.toString(), stationScopeId.toString())
+            ).use { c -> while (c.moveToNext()) fuelIds += c.getLong(0) }
+            val fuelDaily = mutableMapOf<Long, MutableMap<java.time.LocalDate, Double>>()
+            db.rawQuery(
+                """SELECT fuel_type_id,
+                          date(COALESCE(NULLIF(business_day,''),NULLIF(sale_date,''),created_at)),
+                          SUM(COALESCE(quantity,0))
+                   FROM fuel_sales
+                   WHERE station_id=? AND is_deleted=0 AND status='completed'
+                     AND fuel_type_id IS NOT NULL AND quantity>0
+                     AND date(COALESCE(NULLIF(business_day,''),NULLIF(sale_date,''),created_at))
+                         BETWEEN date(?) AND date(?)
+                   GROUP BY fuel_type_id,date(COALESCE(NULLIF(business_day,''),NULLIF(sale_date,''),created_at))""",
+                arrayOf(stationScopeId.toString(), historyStart.toString(), historyEnd.toString())
+            ).use { c ->
+                while (c.moveToNext()) {
+                    val day = runCatching { java.time.LocalDate.parse(c.getString(1)) }.getOrNull() ?: continue
+                    fuelDaily.getOrPut(c.getLong(0)) { mutableMapOf() }[day] = c.getDouble(2).coerceAtLeast(0.0)
+                }
             }
-            val stock = db.rawQuery(
-                """SELECT COALESCE(SUM(current_quantity),0) FROM tanks
-                   WHERE station_id=? AND fuel_type_id=? AND is_deleted=0 AND status!='retired'""",
-                arrayOf(stationScopeId.toString(), fuelTypeId.toString())
-            ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
-            val cover = if (baseDaily > 0.0) stock / baseDaily else null
-            val reorder = (forecast7 - stock).coerceAtLeast(0.0)
-            db.insertWithOnConflict("inventory_forecasts", null, ContentValues().apply {
-                put("station_id", stationScopeId); put("item_type", "FUEL"); put("item_id", fuelTypeId)
-                put("forecast_date", asOfDate.toString()); put("demand_quantity", forecast7)
-                if (cover != null) put("days_of_cover", cover) else putNull("days_of_cover")
-                put("reorder_quantity", reorder); put("method", "LOCAL_56D_WEEKDAY_FUEL")
-            }, SQLiteDatabase.CONFLICT_REPLACE)
-            out.put(JSONObject().put("item_type", "FUEL").put("item_id", fuelTypeId)
-                .put("daily_demand", baseDaily).put("forecast_7d", forecast7)
-                .put("days_of_cover", cover).put("reorder_quantity", reorder)
-                .put("method", "LOCAL_56D_WEEKDAY_FUEL").put("forecast_date", asOfDate.toString()))
+            fuelIds.forEach { fuelTypeId ->
+                val observations = fuelDaily[fuelTypeId] ?: emptyMap()
+                val dailyMean = (0L..55L).sumOf { observations[historyStart.plusDays(it)] ?: 0.0 } / 56.0
+                val forecast7 = (1L..7L).sumOf { day ->
+                    weekdayForecast(observations, asOfDate.plusDays(day), "Y")
+                }
+                val stock = db.rawQuery(
+                    """SELECT COALESCE(SUM(MAX(0,current_quantity-COALESCE(dead_volume,0))),0)
+                       FROM tanks WHERE station_id=? AND fuel_type_id=? AND is_deleted=0
+                         AND status NOT IN ('retired','maintenance')""",
+                    arrayOf(stationScopeId.toString(), fuelTypeId.toString())
+                ).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 }
+                val cover = if (dailyMean > 0.0) stock / dailyMean else null
+                val reorder = (forecast7 - stock).coerceAtLeast(0.0)
+                db.insertWithOnConflict("inventory_forecasts", null, ContentValues().apply {
+                    put("station_id", stationScopeId); put("item_type", "FUEL"); put("item_id", fuelTypeId)
+                    put("forecast_date", asOfDate.toString()); put("demand_quantity", forecast7)
+                    if (cover != null) put("days_of_cover", cover) else putNull("days_of_cover")
+                    put("reorder_quantity", reorder); put("method", "LOCAL_56D_WEEKDAY_FUEL")
+                }, SQLiteDatabase.CONFLICT_REPLACE)
+                out.put(JSONObject().put("item_type", "FUEL").put("item_id", fuelTypeId)
+                    .put("daily_demand", dailyMean).put("forecast_7d", forecast7)
+                    .put("days_of_cover", cover).put("reorder_quantity", reorder)
+                    .put("method", "LOCAL_56D_WEEKDAY_FUEL").put("forecast_date", asOfDate.toString()))
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
         }
         return out
     }
