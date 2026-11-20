@@ -92,10 +92,10 @@ class ProcurementFuelFourWayRobolectricTest {
         val match = helper.matchInvoiceFourWay(JSONObject().put("po_id", poId).put("invoice", invoice), 1)
         assertTrue(!match.getBoolean("matched")); assertTrue(match.getBoolean("requires_accountant_approval"))
         val invoiceId = match.getJSONObject("invoice").getLong("invoice_id")
-        assertEquals("VARIANCE", scalarText("SELECT status FROM supplier_invoices WHERE invoice_id=?", arrayOf(invoiceId.toString())))
+        assertEquals("VARIANCE", scalarText("SELECT match_status FROM supplier_invoices WHERE id=?", arrayOf(invoiceId.toString())))
         val approved = helper.approveSupplierInvoiceMatch(JSONObject().put("invoice_id", invoiceId), 1, actorId)
         assertEquals("APPROVED", approved.getString("status"))
-        assertEquals("APPROVED", scalarText("SELECT status FROM supplier_invoices WHERE invoice_id=?", arrayOf(invoiceId.toString())))
+        assertEquals("APPROVED", scalarText("SELECT match_status FROM supplier_invoices WHERE id=?", arrayOf(invoiceId.toString())))
     }
 
     private fun scalar(sql: String, args: Array<String> = emptyArray()): Long = db.rawQuery(sql, args).use { check(it.moveToFirst()); it.getLong(0) }

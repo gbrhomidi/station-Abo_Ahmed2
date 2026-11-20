@@ -1998,28 +1998,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     /** V72: persisted supplier invoices and station-scoped fuel receipt ledger. */
     private fun ensurePhase4ProcurementSchema(db: SQLiteDatabase) {
-        db.execSQL("""CREATE TABLE IF NOT EXISTS supplier_invoices (
-            invoice_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            station_id INTEGER NOT NULL REFERENCES stations(id),
-            po_id INTEGER NOT NULL REFERENCES purchase_orders(po_id),
-            supplier_id INTEGER NOT NULL REFERENCES parties(id),
-            invoice_number TEXT NOT NULL,
-            invoice_date TEXT,
-            currency TEXT NOT NULL DEFAULT 'SAR',
-            subtotal REAL NOT NULL DEFAULT 0 CHECK(subtotal >= 0),
-            tax_amount REAL NOT NULL DEFAULT 0 CHECK(tax_amount >= 0),
-            total_amount REAL NOT NULL DEFAULT 0 CHECK(total_amount >= 0),
-            status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','MATCHED','VARIANCE','APPROVED','REJECTED')),
-            accountant_approved_by INTEGER REFERENCES users(id),
-            accountant_approved_at TEXT,
-            created_by INTEGER,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(station_id, supplier_id, invoice_number)
-        )""".trimIndent())
+        // SupplierPayablesRepository owns supplier_invoices. Extend its existing
+        // payable schema instead of redefining the table, preserving payment history.
+        ensureColumn(db, "supplier_invoices", "po_id", "INTEGER REFERENCES purchase_orders(po_id)")
+        ensureColumn(db, "supplier_invoices", "subtotal", "REAL NOT NULL DEFAULT 0")
+        ensureColumn(db, "supplier_invoices", "tax_amount", "REAL NOT NULL DEFAULT 0")
+        ensureColumn(db, "supplier_invoices", "match_status", "TEXT NOT NULL DEFAULT 'PENDING'")
+        ensureColumn(db, "supplier_invoices", "accountant_approved_by", "INTEGER REFERENCES users(id)")
+        ensureColumn(db, "supplier_invoices", "accountant_approved_at", "TEXT")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_supplier_invoices_station_po_match ON supplier_invoices(station_id,po_id,match_status)")
         db.execSQL("""CREATE TABLE IF NOT EXISTS supplier_invoice_lines (
             invoice_line_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            invoice_id INTEGER NOT NULL REFERENCES supplier_invoices(invoice_id) ON DELETE CASCADE,
+            invoice_id INTEGER NOT NULL REFERENCES supplier_invoices(id) ON DELETE CASCADE,
             po_line_id INTEGER NOT NULL REFERENCES purchase_order_lines(line_id),
             item_type TEXT NOT NULL CHECK(item_type IN ('PRODUCT','FUEL')),
             item_id INTEGER NOT NULL,
@@ -37635,8 +37625,8 @@ private fun postSalesReversalJournal(
                     val invoiceNumber = invoiceInput.optString("invoice_number").trim(); require(invoiceNumber.isNotBlank()) { "رقم فاتورة المورد مطلوب" }
                     val invoiceLines = invoiceInput.optJSONArray("lines") ?: invoiceInput.optJSONArray("invoice_lines") ?: JSONArray()
                     require(invoiceLines.length() > 0) { "بنود فاتورة المورد مطلوبة" }
-                    val existing = db.rawQuery("SELECT invoice_id FROM supplier_invoices WHERE station_id=? AND supplier_id=? AND invoice_number=?", arrayOf(stationScopeId.toString(),po.optLong("supplier_id").toString(),invoiceNumber)).use { c -> if(c.moveToFirst()) c.getLong(0) else 0L }
-                    invoiceId = if (existing > 0) existing else db.insertOrThrow("supplier_invoices",null,ContentValues().apply{put("station_id",stationScopeId);put("po_id",poId);put("supplier_id",po.optLong("supplier_id"));put("invoice_number",invoiceNumber);put("invoice_date",invoiceInput.optString("invoice_date").takeIf{it.isNotBlank()});put("currency",invoiceInput.optString("currency","SAR"));put("subtotal",invoiceInput.optDouble("subtotal",0.0));put("tax_amount",invoiceInput.optDouble("tax_amount",0.0));put("total_amount",invoiceInput.optDouble("total_amount",0.0));put("created_by",data.optLong("created_by",0L).takeIf{it>0})})
+                    val existing = db.rawQuery("SELECT id FROM supplier_invoices WHERE station_id=? AND supplier_id=? AND invoice_number=?", arrayOf(stationScopeId.toString(),po.optLong("supplier_id").toString(),invoiceNumber)).use { c -> if(c.moveToFirst()) c.getLong(0) else 0L }
+                    invoiceId = if (existing > 0) existing else db.insertOrThrow("supplier_invoices",null,ContentValues().apply{put("station_id",stationScopeId);put("po_id",poId);put("supplier_id",po.optLong("supplier_id"));put("source_type","product_purchase");put("source_id",poId);put("invoice_number",invoiceNumber);put("invoice_date",invoiceInput.optString("invoice_date").takeIf{it.isNotBlank()});put("subtotal",invoiceInput.optDouble("subtotal",0.0));put("tax_amount",invoiceInput.optDouble("tax_amount",0.0));put("total_amount",invoiceInput.optDouble("total_amount",0.0));put("remaining_amount",invoiceInput.optDouble("total_amount",0.0));put("created_by",data.optLong("created_by",0L).takeIf{it>0})})
                     if (existing > 0) db.delete("supplier_invoice_lines","invoice_id=?",arrayOf(existing.toString()))
                     for (i in 0 until invoiceLines.length()) {
                         val il=invoiceLines.getJSONObject(i); val lineId=il.optLong("po_line_id",il.optLong("line_id",0L)); require(lineId>0) { "بند أمر الشراء مفقود في الفاتورة" }
@@ -37646,7 +37636,7 @@ private fun postSalesReversalJournal(
                         db.insertOrThrow("supplier_invoice_lines",null,ContentValues().apply{put("invoice_id",invoiceId);put("po_line_id",lineId);put("item_type",item.first);put("item_id",item.second);put("quantity",q);put("unit_price",price);put("tax_rate",taxRate);put("tax_amount",tax);put("line_total",total)})
                     }
                 } else {
-                    invoiceId = db.rawQuery("SELECT invoice_id FROM supplier_invoices WHERE station_id=? AND po_id=? ORDER BY invoice_id DESC LIMIT 1",arrayOf(stationScopeId.toString(),poId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
+                    invoiceId = db.rawQuery("SELECT id FROM supplier_invoices WHERE station_id=? AND po_id=? ORDER BY id DESC LIMIT 1",arrayOf(stationScopeId.toString(),poId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
                 }
                 require(invoiceId > 0) { "فاتورة المورد غير محفوظة؛ احفظها قبل المطابقة" }
                 val differences=JSONArray(); var poQty=0.0; var delivered=0.0; var moved=0.0; var poSubtotal=0.0; var invoiceQty=0.0; var invoiceSubtotal=0.0; var invoiceTax=0.0; var invoiceTotal=0.0
@@ -37655,12 +37645,12 @@ private fun postSalesReversalJournal(
                     if(c.isNull(5)){differences.put(JSONObject().put("field","invoice_line_missing").put("po_line_id",lineId).put("requires_review",true))} else {val iq=c.getDouble(5);val ip=c.getDouble(6);val tax=c.getDouble(7);val total=c.getDouble(8);invoiceQty+=iq;invoiceSubtotal+=iq*ip;invoiceTax+=tax;invoiceTotal+=total;if(kotlin.math.abs(iq-r)>0.000001)differences.put(JSONObject().put("field","invoice_quantity_vs_delivery").put("po_line_id",lineId).put("difference",iq-r));if(kotlin.math.abs(ip-p)>0.000001)differences.put(JSONObject().put("field","invoice_unit_price_vs_po").put("po_line_id",lineId).put("difference",ip-p))}
                     if(kotlin.math.abs(r-m)>0.000001)differences.put(JSONObject().put("field","delivery_vs_movement").put("po_line_id",lineId).put("difference",r-m))
                 }}
-                val inv= db.rawQuery("SELECT subtotal,tax_amount,total_amount,invoice_number FROM supplier_invoices WHERE invoice_id=? AND station_id=?",arrayOf(invoiceId.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()); doubleArrayOf(c.getDouble(0),c.getDouble(1),c.getDouble(2)) to c.getString(3)}
+                val inv= db.rawQuery("SELECT subtotal,tax_amount,total_amount,invoice_number FROM supplier_invoices WHERE id=? AND station_id=?",arrayOf(invoiceId.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()); doubleArrayOf(c.getDouble(0),c.getDouble(1),c.getDouble(2)) to c.getString(3)}
                 if(kotlin.math.abs(inv.first[0]-invoiceSubtotal)>0.01)differences.put(JSONObject().put("field","invoice_subtotal_lines").put("difference",inv.first[0]-invoiceSubtotal))
                 if(kotlin.math.abs(inv.first[1]-invoiceTax)>0.01)differences.put(JSONObject().put("field","invoice_tax_lines").put("difference",inv.first[1]-invoiceTax))
                 if(kotlin.math.abs(inv.first[2]-invoiceTotal)>0.01)differences.put(JSONObject().put("field","invoice_total_lines").put("difference",inv.first[2]-invoiceTotal))
                 if(kotlin.math.abs(invoiceSubtotal-poSubtotal)>0.01)differences.put(JSONObject().put("field","invoice_subtotal_vs_po").put("difference",invoiceSubtotal-poSubtotal))
-                val status=if(differences.length()==0)"MATCHED" else "VARIANCE"; db.execSQL("UPDATE supplier_invoices SET status=?,updated_at=? WHERE invoice_id=? AND station_id=?",arrayOf(status,getCurrentDateTime(),invoiceId,stationScopeId)); db.setTransactionSuccessful()
+                val status=if(differences.length()==0)"MATCHED" else "VARIANCE"; db.execSQL("UPDATE supplier_invoices SET match_status=?,updated_at=? WHERE id=? AND station_id=?",arrayOf(status,getCurrentDateTime(),invoiceId,stationScopeId)); db.setTransactionSuccessful()
                 JSONObject().put("po",po).put("invoice",JSONObject().put("invoice_id",invoiceId).put("invoice_number",inv.second).put("quantity",invoiceQty).put("subtotal",inv.first[0]).put("tax_amount",inv.first[1]).put("total_amount",inv.first[2]).put("status",status)).put("match",JSONObject().put("po_quantity",poQty).put("delivery_quantity",delivered).put("movement_quantity",moved).put("invoice_quantity",invoiceQty).put("po_subtotal",poSubtotal).put("invoice_subtotal",invoiceSubtotal).put("invoice_tax",invoiceTax).put("invoice_total",invoiceTotal)).put("differences",differences).put("matched",status=="MATCHED").put("requires_accountant_approval",status!="MATCHED")
             } finally { db.endTransaction() }
         } finally { dbLock.unlock() }
@@ -37671,8 +37661,8 @@ private fun postSalesReversalJournal(
         val invoiceId = data.optLong("invoice_id", 0L); require(invoiceId > 0) { "معرف الفاتورة مطلوب" }
         val db = writableDatabase
         val updated = db.update("supplier_invoices", ContentValues().apply {
-            put("status", "APPROVED"); put("accountant_approved_by", accountantId); put("accountant_approved_at", getCurrentDateTime()); put("updated_at", getCurrentDateTime())
-        }, "invoice_id=? AND station_id=? AND status='VARIANCE'", arrayOf(invoiceId.toString(), stationScopeId.toString()))
+            put("match_status", "APPROVED"); put("accountant_approved_by", accountantId); put("accountant_approved_at", getCurrentDateTime()); put("updated_at", getCurrentDateTime())
+        }, "id=? AND station_id=? AND match_status='VARIANCE'", arrayOf(invoiceId.toString(), stationScopeId.toString()))
         require(updated == 1) { "لا يمكن اعتماد فاتورة غير موجودة أو بلا فروقات معلقة" }
         return JSONObject().put("success", true).put("invoice_id", invoiceId).put("status", "APPROVED").put("approved_by", accountantId)
     }
