@@ -57,7 +57,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 71
+        const val VERSION = 72
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -270,6 +270,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensurePhase2DryStockSchema(db)
             ensurePhase3Phase4Schema(db)
             ensurePhase3ReceiptSchema(db)
+            ensurePhase4ProcurementSchema(db)
             DebtDueDateRepository.ensureSchema(db)
             SupplierPayablesRepository.ensureSchema(db)
             CustomerReceivablesRepository.ensureSchema(db)
@@ -346,6 +347,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     }
                     67 -> { /* V67 -> V68: re-apply additive inventory schema repair for installed V67 databases. */ }
                     68 -> { /* V68 -> V69: add durable station-scoped outbox metadata. */ }
+                    71 -> ensurePhase4ProcurementSchema(db)
                 }
             }
             // V64 repairs Fleet schema for every legacy database, including installations already at V63.
@@ -372,6 +374,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensurePhase2DryStockSchema(db)
             ensurePhase3Phase4Schema(db)
             ensurePhase3ReceiptSchema(db)
+            ensurePhase4ProcurementSchema(db)
             DebtDueDateRepository.ensureSchema(db)
             SupplierPayablesRepository.ensureSchema(db)
             CustomerReceivablesRepository.ensureSchema(db)
@@ -1991,6 +1994,65 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             created_at TEXT NOT NULL,
             UNIQUE(station_id, receipt_key)
         )""".trimIndent())
+    }
+
+    /** V72: persisted supplier invoices and station-scoped fuel receipt ledger. */
+    private fun ensurePhase4ProcurementSchema(db: SQLiteDatabase) {
+        db.execSQL("""CREATE TABLE IF NOT EXISTS supplier_invoices (
+            invoice_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            station_id INTEGER NOT NULL REFERENCES stations(id),
+            po_id INTEGER NOT NULL REFERENCES purchase_orders(po_id),
+            supplier_id INTEGER NOT NULL REFERENCES parties(id),
+            invoice_number TEXT NOT NULL,
+            invoice_date TEXT,
+            currency TEXT NOT NULL DEFAULT 'SAR',
+            subtotal REAL NOT NULL DEFAULT 0 CHECK(subtotal >= 0),
+            tax_amount REAL NOT NULL DEFAULT 0 CHECK(tax_amount >= 0),
+            total_amount REAL NOT NULL DEFAULT 0 CHECK(total_amount >= 0),
+            status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','MATCHED','VARIANCE','APPROVED','REJECTED')),
+            accountant_approved_by INTEGER REFERENCES users(id),
+            accountant_approved_at TEXT,
+            created_by INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(station_id, supplier_id, invoice_number)
+        )""".trimIndent())
+        db.execSQL("""CREATE TABLE IF NOT EXISTS supplier_invoice_lines (
+            invoice_line_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_id INTEGER NOT NULL REFERENCES supplier_invoices(invoice_id) ON DELETE CASCADE,
+            po_line_id INTEGER NOT NULL REFERENCES purchase_order_lines(line_id),
+            item_type TEXT NOT NULL CHECK(item_type IN ('PRODUCT','FUEL')),
+            item_id INTEGER NOT NULL,
+            quantity REAL NOT NULL CHECK(quantity >= 0),
+            unit_price REAL NOT NULL CHECK(unit_price >= 0),
+            tax_rate REAL NOT NULL DEFAULT 0 CHECK(tax_rate >= 0),
+            tax_amount REAL NOT NULL DEFAULT 0 CHECK(tax_amount >= 0),
+            line_total REAL NOT NULL DEFAULT 0 CHECK(line_total >= 0),
+            UNIQUE(invoice_id, po_line_id)
+        )""".trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_supplier_invoices_station_po ON supplier_invoices(station_id,po_id,status)")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS fuel_stock_movements (
+            movement_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            station_id INTEGER NOT NULL REFERENCES stations(id),
+            po_id INTEGER NOT NULL REFERENCES purchase_orders(po_id),
+            po_line_id INTEGER NOT NULL REFERENCES purchase_order_lines(line_id),
+            tank_id INTEGER NOT NULL REFERENCES tanks(id),
+            fuel_type_id INTEGER NOT NULL REFERENCES fuel_types(id),
+            quantity REAL NOT NULL CHECK(quantity > 0),
+            unit_price REAL NOT NULL DEFAULT 0 CHECK(unit_price >= 0),
+            reference_type TEXT NOT NULL DEFAULT 'purchase_order',
+            reference_id INTEGER,
+            receipt_id INTEGER REFERENCES purchase_order_receipts(receipt_id),
+            created_by INTEGER NOT NULL REFERENCES users(id),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(station_id, po_line_id, receipt_id)
+        )""".trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_stock_movements_station_tank ON fuel_stock_movements(station_id,tank_id,created_at)")
+        ensureColumn(db, "tank_refills", "po_id", "INTEGER REFERENCES purchase_orders(po_id)")
+        ensureColumn(db, "tank_refills", "po_line_id", "INTEGER REFERENCES purchase_order_lines(line_id)")
+        ensureColumn(db, "tank_refills", "receipt_id", "INTEGER REFERENCES purchase_order_receipts(receipt_id)")
+        ensureColumn(db, "tank_refills", "receipt_key", "TEXT")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS uq_tank_refills_station_receipt_key ON tank_refills(station_id,receipt_key) WHERE receipt_key IS NOT NULL AND receipt_key <> ''")
     }
 
     /** Phase 2 dry-stock schema. All additions are nullable/defaulted for legacy data. */
@@ -37503,223 +37565,116 @@ private fun postSalesReversalJournal(
         val poId = data.optLong("po_id", 0L)
         val lines = data.optJSONArray("received_lines") ?: JSONArray()
         val key = data.optString("receipt_key", data.optString("idempotency_key")).trim()
-        require(poId > 0L && lines.length() > 0 && key.length in 8..120) {
-            "أمر الشراء والبنود ومفتاح الاستلام الفريد مطلوبة"
-        }
+        require(poId > 0L && lines.length() > 0 && key.length in 8..120) { "أمر الشراء والبنود ومفتاح الاستلام الفريد مطلوبة" }
         dbLock.lock()
         return try {
             val db = writableDatabase
             db.beginTransaction()
             try {
-                val prior = db.rawQuery(
-                    "SELECT receipt_id,po_id FROM purchase_order_receipts WHERE station_id=? AND receipt_key=?",
-                    arrayOf(stationScopeId.toString(), key)
-                ).use { c -> if (c.moveToFirst()) Pair(c.getLong(0), c.getLong(1)) else null }
+                val prior = db.rawQuery("SELECT receipt_id,po_id FROM purchase_order_receipts WHERE station_id=? AND receipt_key=?", arrayOf(stationScopeId.toString(), key)).use { c -> if (c.moveToFirst()) Pair(c.getLong(0), c.getLong(1)) else null }
                 if (prior != null) {
                     require(prior.second == poId) { "مفتاح الاستلام مرتبط بأمر شراء آخر" }
                     db.setTransactionSuccessful()
-                    return JSONObject().put("success", true).put("replayed", true)
-                        .put("receipt_id", prior.first).put("po_id", poId)
+                    return JSONObject().put("success", true).put("replayed", true).put("receipt_id", prior.first).put("po_id", poId)
                 }
-                val po = db.rawQuery(
-                    """SELECT po_number,supplier_id FROM purchase_orders
-                       WHERE po_id=? AND station_id=? AND status IN ('draft','submitted','approved','partial')""",
-                    arrayOf(poId.toString(), stationScopeId.toString())
-                ).use { c ->
+                val po = db.rawQuery("SELECT po_number,supplier_id FROM purchase_orders WHERE po_id=? AND station_id=? AND status IN ('draft','submitted','approved','partial')", arrayOf(poId.toString(), stationScopeId.toString())).use { c ->
                     require(c.moveToFirst()) { "أمر الشراء غير موجود أو خارج نطاق المحطة أو مغلق" }
                     Pair(c.getString(0), if (c.isNull(1)) null else c.getLong(1))
                 }
                 val supplierId = requireNotNull(po.second) { "لا يمكن استلام أمر شراء دون مورد محدد" }
-                require(db.rawQuery(
-                    """SELECT 1 FROM parties
-                       WHERE id=? AND is_active=1 AND is_deleted=0
-                         AND (station_id IS NULL OR station_id=?) LIMIT 1""",
-                    arrayOf(supplierId.toString(), stationScopeId.toString())
-                ).use { it.moveToFirst() }) { "مورد أمر الشراء غير نشط أو خارج نطاق المحطة" }
-                val receiptId = db.insertOrThrow("purchase_order_receipts", null, ContentValues().apply {
-                    put("station_id", stationScopeId); put("po_id", poId); put("receipt_key", key)
-                    put("actor_id", actorId); put("created_at", getCurrentDateTime())
-                })
-                val seen = mutableSetOf<Long>()
-                val resultLines = JSONArray()
+                require(db.rawQuery("SELECT 1 FROM parties WHERE id=? AND is_active=1 AND is_deleted=0 AND (station_id IS NULL OR station_id=?) LIMIT 1", arrayOf(supplierId.toString(), stationScopeId.toString())).use { it.moveToFirst() }) { "مورد أمر الشراء غير نشط أو خارج نطاق المحطة" }
+                val receiptId = db.insertOrThrow("purchase_order_receipts", null, ContentValues().apply { put("station_id", stationScopeId); put("po_id", poId); put("receipt_key", key); put("actor_id", actorId); put("created_at", getCurrentDateTime()) })
+                val seen = mutableSetOf<Long>(); val resultLines = JSONArray()
                 for (i in 0 until lines.length()) {
-                    val input = lines.getJSONObject(i)
-                    val lineId = input.optLong("line_id", 0L)
-                    val qty = input.optDouble("received_quantity", Double.NaN)
-                    require(lineId > 0L && seen.add(lineId) && qty.isFinite() && qty > 0.0) {
-                        "بند الاستلام مكرر أو كمية الاستلام غير صالحة"
+                    val input = lines.getJSONObject(i); val lineId = input.optLong("line_id", 0L); val qty = input.optDouble("received_quantity", Double.NaN)
+                    require(lineId > 0L && seen.add(lineId) && qty.isFinite() && qty > 0.0) { "بند الاستلام مكرر أو كمية الاستلام غير صالحة" }
+                    val row = db.rawQuery("SELECT l.item_type,l.item_id,l.quantity,COALESCE(l.received_quantity,0),l.unit_price FROM purchase_order_lines l JOIN purchase_orders p ON p.po_id=l.po_id WHERE l.line_id=? AND l.po_id=? AND p.station_id=?", arrayOf(lineId.toString(), poId.toString(), stationScopeId.toString())).use { c ->
+                        require(c.moveToFirst()) { "بند الشراء غير موجود ضمن المحطة" }; arrayOf(c.getString(0), c.getLong(1), c.getDouble(2), c.getDouble(3), c.getDouble(4))
                     }
-                    val row = db.rawQuery(
-                        """SELECT l.item_type,l.item_id,l.quantity,COALESCE(l.received_quantity,0),l.unit_price
-                           FROM purchase_order_lines l JOIN purchase_orders p ON p.po_id=l.po_id
-                           WHERE l.line_id=? AND l.po_id=? AND p.station_id=?""",
-                        arrayOf(lineId.toString(), poId.toString(), stationScopeId.toString())
-                    ).use { c ->
-                        require(c.moveToFirst()) { "بند الشراء غير موجود ضمن المحطة" }
-                        arrayOf(c.getString(0), c.getLong(1), c.getDouble(2), c.getDouble(3), c.getDouble(4))
+                    val itemType = row[0] as String; val itemId = row[1] as Long; val ordered = row[2] as Double; val already = row[3] as Double; val cost = row[4] as Double
+                    require(cost.isFinite() && cost >= 0.0 && already + qty <= ordered + 0.000001) { "الكمية المستلمة تتجاوز المتبقي أو سعر الشراء غير صالح" }
+                    if (itemType == "FUEL") {
+                        val tankId = input.optLong("tank_id", 0L)
+                        require(tankId > 0L) { "tank_id مطلوب لاستلام الوقود" }
+                        val tank = db.rawQuery("SELECT fuel_type_id,current_quantity,capacity_liters FROM tanks WHERE id=? AND station_id=? AND is_deleted=0 AND status IN ('active','empty')", arrayOf(tankId.toString(), stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "الخزان غير موجود أو خارج نطاق المحطة" }; Triple(c.getLong(0), c.getDouble(1), c.getDouble(2)) }
+                        require(tank.first == itemId) { "نوع وقود الخزان لا يطابق بند أمر الشراء" }
+                        require(tank.second + qty <= tank.third + 0.000001) { "الكمية تتجاوز سعة الخزان" }
+                        val refillId = db.insertOrThrow("tank_refills", null, ContentValues().apply { put("uuid", UUID.randomUUID().toString()); put("refill_code", "POF-${stationScopeId}-${System.currentTimeMillis()}-$lineId"); put("tank_id", tankId); put("supplier_id", supplierId); put("station_id", stationScopeId); put("fuel_type_id", itemId); put("ordered_quantity", ordered); put("delivered_quantity", qty); put("actual_quantity", qty); put("tank_level_before", tank.second); put("tank_level_after", tank.second + qty); put("unit_price", cost); put("total_amount", qty * cost); put("net_amount", qty * cost); put("arrival_date", getCurrentDateTime()); put("received_by", actorId); put("status", "completed"); put("po_id", poId); put("po_line_id", lineId); put("receipt_id", receiptId); put("receipt_key", key) })
+                        db.insertOrThrow("fuel_stock_movements", null, ContentValues().apply { put("station_id", stationScopeId); put("po_id", poId); put("po_line_id", lineId); put("tank_id", tankId); put("fuel_type_id", itemId); put("quantity", qty); put("unit_price", cost); put("reference_id", refillId); put("receipt_id", receiptId); put("created_by", actorId) })
+                        db.execSQL("UPDATE tanks SET current_quantity=current_quantity+?,updated_at=? WHERE id=? AND station_id=?", arrayOf(qty, getCurrentDateTime(), tankId, stationScopeId))
+                        db.execSQL("UPDATE purchase_order_lines SET received_quantity=COALESCE(received_quantity,0)+?,movement_quantity=COALESCE(movement_quantity,0)+? WHERE line_id=? AND po_id=?", arrayOf(qty, qty, lineId, poId))
+                        db.insertWithOnConflict("events_outbox", null, ContentValues().apply { put("event_type", "purchase_order_received"); put("consumer", "stock-levels"); put("station_id", stationScopeId); put("idempotency_key", "po-receipt:${stationScopeId}:${key}:${lineId}"); put("payload", JSONObject().put("station_id",stationScopeId).put("po_id",poId).put("receipt_id",receiptId).put("line_id",lineId).put("item_type","FUEL").put("tank_id",tankId).put("quantity",qty).put("refill_id",refillId).toString()) }, SQLiteDatabase.CONFLICT_IGNORE)
+                        resultLines.put(JSONObject().put("line_id", lineId).put("quantity", qty).put("tank_id", tankId).put("refill_id", refillId))
+                    } else {
+                        require(db.rawQuery("SELECT 1 FROM products WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'", arrayOf(itemId.toString(), stationScopeId.toString())).use { it.moveToFirst() }) { "الصنف غير موجود أو غير نشط ضمن المحطة" }
+                        val warehouseId = ensureOperationalWarehouse(stationScopeId); var locationId = db.rawQuery("SELECT location_id FROM stock_locations WHERE warehouse_id=? AND is_active=1 AND type<>'quarantine' ORDER BY location_id LIMIT 1", arrayOf(warehouseId.toString())).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+                        if (locationId == 0L) locationId = db.insertOrThrow("stock_locations", null, ContentValues().apply { put("warehouse_id", warehouseId); put("name", "موقع الاستلام الرئيسي"); put("type", "warehouse"); put("is_active", 1) })
+                        val stock = db.rawQuery("SELECT id,COALESCE(quantity_on_hand,0),COALESCE(average_cost,0) FROM inventory_levels WHERE product_id=? AND warehouse_id=?", arrayOf(itemId.toString(), warehouseId.toString())).use { c -> if (c.moveToFirst()) Triple(c.getLong(0), c.getDouble(1), c.getDouble(2)) else Triple(0L,0.0,0.0) }; val before=stock.second; val after=before+qty; val avg=(before*stock.third+qty*cost)/after
+                        if (stock.first==0L) db.insertOrThrow("inventory_levels",null,ContentValues().apply{put("product_id",itemId);put("warehouse_id",warehouseId);put("quantity_on_hand",after);put("average_cost",avg)}) else db.update("inventory_levels",ContentValues().apply{put("quantity_on_hand",after);put("average_cost",avg)},"id=?",arrayOf(stock.first.toString()))
+                        val batchId=db.insertOrThrow("product_batches",null,ContentValues().apply{put("product_id",itemId);put("lot_number",input.optString("lot_number").trim().takeIf{it.isNotEmpty()});put("expiry_date",input.optString("expiry_date").trim().takeIf{it.isNotEmpty()});put("quantity",qty);put("location_id",locationId);put("received_at",getCurrentDateTime());put("received_by",actorId)})
+                        db.insertOrThrow("inventory_movements",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("movement_code","POR-${stationScopeId}-${System.currentTimeMillis()}-$lineId");put("product_id",itemId);put("station_id",stationScopeId);put("warehouse_id",warehouseId);put("movement_type","in");put("movement_subtype","in");put("quantity_before",before);put("quantity_change",qty);put("quantity_after",after);put("unit_cost",cost);put("total_cost",qty*cost);put("reference_type","purchase_order");put("reference_id",poId);put("reference_code",po.first);put("to_location",locationId.toString());put("reason","استلام أمر شراء");put("reason_code","RECEIVE");put("performed_by",actorId);put("status","completed")})
+                        db.execSQL("UPDATE purchase_order_lines SET received_quantity=COALESCE(received_quantity,0)+?,movement_quantity=COALESCE(movement_quantity,0)+?,batch_id=COALESCE(?,batch_id) WHERE line_id=? AND po_id=?", arrayOf(qty,qty,batchId,lineId,poId)); db.execSQL("UPDATE products SET quantity=COALESCE(quantity,0)+?,updated_at=? WHERE id=? AND station_id=?",arrayOf(qty,getCurrentDateTime(),itemId,stationScopeId)); db.insertWithOnConflict("events_outbox", null, ContentValues().apply { put("event_type", "purchase_order_received"); put("consumer", "stock-levels"); put("station_id", stationScopeId); put("idempotency_key", "po-receipt:${stationScopeId}:${key}:${lineId}"); put("payload", JSONObject().put("station_id",stationScopeId).put("po_id",poId).put("receipt_id",receiptId).put("line_id",lineId).put("item_type","PRODUCT").put("product_id",itemId).put("quantity",qty).put("batch_id",batchId).toString()) }, SQLiteDatabase.CONFLICT_IGNORE); resultLines.put(JSONObject().put("line_id",lineId).put("quantity",qty).put("batch_id",batchId))
                     }
-                    require(row[0] == "PRODUCT") {
-                        "استلام الوقود يتطلب مسار توريد الخزان المعتمد؛ لم يتم تعديل رصيد الخزان"
-                    }
-                    val productId = row[1] as Long
-                    val ordered = row[2] as Double
-                    val already = row[3] as Double
-                    val cost = row[4] as Double
-                    require(cost.isFinite() && cost >= 0.0 && already + qty <= ordered + 0.000001) {
-                        "الكمية المستلمة تتجاوز المتبقي أو سعر الشراء غير صالح"
-                    }
-                    require(db.rawQuery(
-                        "SELECT 1 FROM products WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'",
-                        arrayOf(productId.toString(), stationScopeId.toString())
-                    ).use { it.moveToFirst() }) { "الصنف غير موجود أو غير نشط ضمن المحطة" }
-
-                    val warehouseId = ensureOperationalWarehouse(stationScopeId)
-                    var locationId = db.rawQuery(
-                        """SELECT location_id FROM stock_locations WHERE warehouse_id=? AND is_active=1
-                           AND type<>'quarantine' ORDER BY location_id LIMIT 1""",
-                        arrayOf(warehouseId.toString())
-                    ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
-                    if (locationId == 0L) locationId = db.insertOrThrow("stock_locations", null, ContentValues().apply {
-                        put("warehouse_id", warehouseId); put("name", "موقع الاستلام الرئيسي")
-                        put("type", "warehouse"); put("is_active", 1)
-                    })
-                    val stock = db.rawQuery(
-                        "SELECT id,COALESCE(quantity_on_hand,0),COALESCE(average_cost,0) FROM inventory_levels WHERE product_id=? AND warehouse_id=?",
-                        arrayOf(productId.toString(), warehouseId.toString())
-                    ).use { c -> if (c.moveToFirst()) Triple(c.getLong(0),c.getDouble(1),c.getDouble(2)) else Triple(0L,0.0,0.0) }
-                    val before = stock.second
-                    val after = before + qty
-                    val avg = if (after > 0) (before * stock.third + qty * cost) / after else cost
-                    if (stock.first == 0L) db.insertOrThrow("inventory_levels", null, ContentValues().apply {
-                        put("product_id", productId); put("warehouse_id", warehouseId)
-                        put("quantity_on_hand", after); put("average_cost", avg)
-                    }) else db.update("inventory_levels", ContentValues().apply {
-                        put("quantity_on_hand", after); put("average_cost", avg)
-                    }, "id=?", arrayOf(stock.first.toString()))
-
-                    val batchId = db.insertOrThrow("product_batches", null, ContentValues().apply {
-                        put("product_id", productId)
-                        put("lot_number", input.optString("lot_number").trim().takeIf { it.isNotEmpty() })
-                        put("expiry_date", input.optString("expiry_date").trim().takeIf { it.isNotEmpty() })
-                        put("quantity", qty); put("location_id", locationId)
-                        put("received_at", getCurrentDateTime()); put("received_by", actorId)
-                    })
-                    val movementId = db.insertOrThrow("inventory_movements", null, ContentValues().apply {
-                        put("uuid", UUID.randomUUID().toString())
-                        put("movement_code", "POR-${stationScopeId}-${System.currentTimeMillis()}-${lineId}")
-                        put("product_id", productId); put("station_id", stationScopeId)
-                        put("warehouse_id", warehouseId); put("movement_type", "in"); put("movement_subtype", "in")
-                        put("quantity_before", before); put("quantity_change", qty); put("quantity_after", after)
-                        put("unit_cost", cost); put("total_cost", qty * cost); put("reference_type", "purchase_order")
-                        if (po.second != null) put("reference_id", po.second!!)
-                        put("reference_code", po.first); put("to_location", locationId.toString())
-                        put("reason", "استلام أمر شراء"); put("reason_code", "RECEIVE")
-                        put("performed_by", actorId); put("status", "completed")
-                    })
-                    db.execSQL(
-                        """UPDATE purchase_order_lines SET received_quantity=COALESCE(received_quantity,0)+?,
-                           movement_quantity=COALESCE(movement_quantity,0)+?,batch_id=COALESCE(?,batch_id)
-                           WHERE line_id=? AND po_id=?""",
-                        arrayOf(qty, qty, batchId, lineId, poId)
-                    )
-                    db.execSQL("UPDATE products SET quantity=COALESCE(quantity,0)+?,updated_at=? WHERE id=? AND station_id=?",
-                        arrayOf(qty, getCurrentDateTime(), productId, stationScopeId))
-                    val payload = JSONObject().put("station_id",stationScopeId).put("po_id",poId)
-                        .put("receipt_id",receiptId).put("line_id",lineId).put("product_id",productId)
-                        .put("quantity",qty).put("batch_id",batchId).put("movement_id",movementId)
-                    db.insertWithOnConflict("events_outbox", null, ContentValues().apply {
-                        put("event_type","purchase_order_received"); put("consumer","stock-levels")
-                        put("payload",payload.toString()); put("station_id",stationScopeId)
-                        put("idempotency_key","po-receipt:${stationScopeId}:${key}:${lineId}")
-                    }, SQLiteDatabase.CONFLICT_IGNORE)
-                    resultLines.put(JSONObject().put("line_id",lineId).put("quantity",qty)
-                        .put("batch_id",batchId).put("movement_id",movementId))
                 }
-                db.execSQL(
-                    """UPDATE purchase_orders SET status=CASE WHEN NOT EXISTS(
-                       SELECT 1 FROM purchase_order_lines WHERE po_id=? AND received_quantity<quantity)
-                       THEN 'received' ELSE 'partial' END,updated_at=? WHERE po_id=? AND station_id=?""",
-                    arrayOf(poId,getCurrentDateTime(),poId,stationScopeId)
-                )
-                db.setTransactionSuccessful()
-                JSONObject().put("success",true).put("replayed",false).put("receipt_id",receiptId)
-                    .put("po_id",poId).put("lines",resultLines)
+                db.execSQL("UPDATE purchase_orders SET status=CASE WHEN NOT EXISTS(SELECT 1 FROM purchase_order_lines WHERE po_id=? AND received_quantity<quantity) THEN 'received' ELSE 'partial' END,updated_at=? WHERE po_id=? AND station_id=?", arrayOf(poId,getCurrentDateTime(),poId,stationScopeId)); db.setTransactionSuccessful(); JSONObject().put("success",true).put("replayed",false).put("receipt_id",receiptId).put("po_id",poId).put("lines",resultLines)
             } finally { db.endTransaction() }
         } finally { dbLock.unlock() }
     }
 
     fun matchInvoiceFourWay(data: JSONObject, stationScopeId: Int): JSONObject {
         require(stationScopeId > 0) { "معرف المحطة غير صالح" }
-        val poId = data.optLong("po_id", 0L)
-        require(poId > 0L) { "معرف أمر الشراء مطلوب" }
-        val invoiceProvided = data.has("invoice_quantity") && !data.isNull("invoice_quantity")
-        val invoice = if (invoiceProvided) data.optDouble("invoice_quantity", Double.NaN) else Double.NaN
-        require(!invoiceProvided || (invoice.isFinite() && invoice >= 0.0)) {
-            "كمية الفاتورة غير صالحة"
-        }
+        val poId = data.optLong("po_id", 0L); require(poId > 0L) { "معرف أمر الشراء مطلوب" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase; db.beginTransaction()
+            try {
+                val po = db.rawQuery("SELECT po_number,supplier_id,status,total_amount FROM purchase_orders WHERE po_id=? AND station_id=?", arrayOf(poId.toString(), stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "أمر الشراء غير موجود أو خارج نطاق المحطة" }; JSONObject().put("po_id",poId).put("po_number",c.getString(0)).put("supplier_id",c.getLong(1)).put("status",c.getString(2)).put("amount",c.getDouble(3)) }
+                val invoiceInput = data.optJSONObject("invoice") ?: if (data.has("invoice_number")) data else null
+                var invoiceId = 0L
+                if (invoiceInput != null) {
+                    val invoiceNumber = invoiceInput.optString("invoice_number").trim(); require(invoiceNumber.isNotBlank()) { "رقم فاتورة المورد مطلوب" }
+                    val invoiceLines = invoiceInput.optJSONArray("lines") ?: invoiceInput.optJSONArray("invoice_lines") ?: JSONArray()
+                    require(invoiceLines.length() > 0) { "بنود فاتورة المورد مطلوبة" }
+                    val existing = db.rawQuery("SELECT invoice_id FROM supplier_invoices WHERE station_id=? AND supplier_id=? AND invoice_number=?", arrayOf(stationScopeId.toString(),po.optLong("supplier_id").toString(),invoiceNumber)).use { c -> if(c.moveToFirst()) c.getLong(0) else 0L }
+                    invoiceId = if (existing > 0) existing else db.insertOrThrow("supplier_invoices",null,ContentValues().apply{put("station_id",stationScopeId);put("po_id",poId);put("supplier_id",po.optLong("supplier_id"));put("invoice_number",invoiceNumber);put("invoice_date",invoiceInput.optString("invoice_date").takeIf{it.isNotBlank()});put("currency",invoiceInput.optString("currency","SAR"));put("subtotal",invoiceInput.optDouble("subtotal",0.0));put("tax_amount",invoiceInput.optDouble("tax_amount",0.0));put("total_amount",invoiceInput.optDouble("total_amount",0.0));put("created_by",data.optLong("created_by",0L).takeIf{it>0})})
+                    if (existing > 0) db.delete("supplier_invoice_lines","invoice_id=?",arrayOf(existing.toString()))
+                    for (i in 0 until invoiceLines.length()) {
+                        val il=invoiceLines.getJSONObject(i); val lineId=il.optLong("po_line_id",il.optLong("line_id",0L)); require(lineId>0) { "بند أمر الشراء مفقود في الفاتورة" }
+                        val item=db.rawQuery("SELECT item_type,item_id FROM purchase_order_lines WHERE line_id=? AND po_id=?",arrayOf(lineId.toString(),poId.toString())).use{c->require(c.moveToFirst()){ "بند الفاتورة لا ينتمي لأمر الشراء" };Pair(c.getString(0),c.getLong(1))}
+                        val q=il.optDouble("quantity",Double.NaN); val price=il.optDouble("unit_price",Double.NaN); val taxRate=il.optDouble("tax_rate",0.0); val tax=il.optDouble("tax_amount",q*price*taxRate/100.0); val total=il.optDouble("line_total",q*price+tax)
+                        require(q.isFinite()&&q>=0&&price.isFinite()&&price>=0&&tax.isFinite()&&tax>=0&&total.isFinite()&&total>=0){"بيانات بند الفاتورة غير صالحة"}
+                        db.insertOrThrow("supplier_invoice_lines",null,ContentValues().apply{put("invoice_id",invoiceId);put("po_line_id",lineId);put("item_type",item.first);put("item_id",item.second);put("quantity",q);put("unit_price",price);put("tax_rate",taxRate);put("tax_amount",tax);put("line_total",total)})
+                    }
+                } else {
+                    invoiceId = db.rawQuery("SELECT invoice_id FROM supplier_invoices WHERE station_id=? AND po_id=? ORDER BY invoice_id DESC LIMIT 1",arrayOf(stationScopeId.toString(),poId.toString())).use{c->if(c.moveToFirst())c.getLong(0)else 0L}
+                }
+                require(invoiceId > 0) { "فاتورة المورد غير محفوظة؛ احفظها قبل المطابقة" }
+                val differences=JSONArray(); var poQty=0.0; var delivered=0.0; var moved=0.0; var poSubtotal=0.0; var invoiceQty=0.0; var invoiceSubtotal=0.0; var invoiceTax=0.0; var invoiceTotal=0.0
+                db.rawQuery("SELECT l.line_id,l.quantity,l.received_quantity,l.movement_quantity,l.unit_price,il.quantity,il.unit_price,il.tax_amount,il.line_total FROM purchase_order_lines l LEFT JOIN supplier_invoice_lines il ON il.po_line_id=l.line_id AND il.invoice_id=? WHERE l.po_id=?",arrayOf(invoiceId.toString(),poId.toString())).use{c->while(c.moveToNext()){
+                    val lineId=c.getLong(0); val q=c.getDouble(1); val r=c.getDouble(2); val m=c.getDouble(3); val p=c.getDouble(4); poQty+=q; delivered+=r; moved+=m; poSubtotal+=q*p
+                    if(c.isNull(5)){differences.put(JSONObject().put("field","invoice_line_missing").put("po_line_id",lineId).put("requires_review",true))} else {val iq=c.getDouble(5);val ip=c.getDouble(6);val tax=c.getDouble(7);val total=c.getDouble(8);invoiceQty+=iq;invoiceSubtotal+=iq*ip;invoiceTax+=tax;invoiceTotal+=total;if(kotlin.math.abs(iq-r)>0.000001)differences.put(JSONObject().put("field","invoice_quantity_vs_delivery").put("po_line_id",lineId).put("difference",iq-r));if(kotlin.math.abs(ip-p)>0.000001)differences.put(JSONObject().put("field","invoice_unit_price_vs_po").put("po_line_id",lineId).put("difference",ip-p))}
+                    if(kotlin.math.abs(r-m)>0.000001)differences.put(JSONObject().put("field","delivery_vs_movement").put("po_line_id",lineId).put("difference",r-m))
+                }}
+                val inv= db.rawQuery("SELECT subtotal,tax_amount,total_amount,invoice_number FROM supplier_invoices WHERE invoice_id=? AND station_id=?",arrayOf(invoiceId.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()); doubleArrayOf(c.getDouble(0),c.getDouble(1),c.getDouble(2)) to c.getString(3)}
+                if(kotlin.math.abs(inv.first[0]-invoiceSubtotal)>0.01)differences.put(JSONObject().put("field","invoice_subtotal_lines").put("difference",inv.first[0]-invoiceSubtotal))
+                if(kotlin.math.abs(inv.first[1]-invoiceTax)>0.01)differences.put(JSONObject().put("field","invoice_tax_lines").put("difference",inv.first[1]-invoiceTax))
+                if(kotlin.math.abs(inv.first[2]-invoiceTotal)>0.01)differences.put(JSONObject().put("field","invoice_total_lines").put("difference",inv.first[2]-invoiceTotal))
+                if(kotlin.math.abs(invoiceSubtotal-poSubtotal)>0.01)differences.put(JSONObject().put("field","invoice_subtotal_vs_po").put("difference",invoiceSubtotal-poSubtotal))
+                val status=if(differences.length()==0)"MATCHED" else "VARIANCE"; db.execSQL("UPDATE supplier_invoices SET status=?,updated_at=? WHERE invoice_id=? AND station_id=?",arrayOf(status,getCurrentDateTime(),invoiceId,stationScopeId)); db.setTransactionSuccessful()
+                JSONObject().put("po",po).put("invoice",JSONObject().put("invoice_id",invoiceId).put("invoice_number",inv.second).put("quantity",invoiceQty).put("subtotal",inv.first[0]).put("tax_amount",inv.first[1]).put("total_amount",inv.first[2]).put("status",status)).put("match",JSONObject().put("po_quantity",poQty).put("delivery_quantity",delivered).put("movement_quantity",moved).put("invoice_quantity",invoiceQty).put("po_subtotal",poSubtotal).put("invoice_subtotal",invoiceSubtotal).put("invoice_tax",invoiceTax).put("invoice_total",invoiceTotal)).put("differences",differences).put("matched",status=="MATCHED").put("requires_accountant_approval",status!="MATCHED")
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
 
-        val db = readableDatabase
-        val po = JSONObject()
-        val differences = JSONArray()
-        db.rawQuery(
-            """SELECT po_id,po_number,status,total_amount FROM purchase_orders
-               WHERE po_id=? AND station_id=?""",
-            arrayOf(poId.toString(), stationScopeId.toString())
-        ).use { cursor ->
-            require(cursor.moveToFirst()) { "أمر الشراء غير موجود أو خارج نطاق المحطة" }
-            po.put("po_id", cursor.getLong(0))
-                .put("po_number", cursor.getString(1))
-                .put("status", cursor.getString(2))
-                .put("amount", cursor.getDouble(3))
-        }
-        val quantities = db.rawQuery(
-            """SELECT COALESCE(SUM(l.quantity),0),
-                      COALESCE(SUM(l.received_quantity),0),
-                      COALESCE(SUM(l.movement_quantity),0),
-                      COALESCE(SUM(l.quantity*l.unit_price),0)
-               FROM purchase_order_lines l
-               INNER JOIN purchase_orders p ON p.po_id=l.po_id
-               WHERE l.po_id=? AND p.station_id=?""",
-            arrayOf(poId.toString(), stationScopeId.toString())
-        ).use { cursor ->
-            check(cursor.moveToFirst())
-            doubleArrayOf(cursor.getDouble(0), cursor.getDouble(1), cursor.getDouble(2), cursor.getDouble(3))
-        }
-        val ordered = quantities[0]
-        val delivered = quantities[1]
-        val moved = quantities[2]
-        val orderedValue = quantities[3]
-        val invoiceAmountProvided = data.has("invoice_amount") && !data.isNull("invoice_amount")
-        val invoiceAmount = if (invoiceAmountProvided) data.optDouble("invoice_amount", Double.NaN) else Double.NaN
-        require(!invoiceAmountProvided || (invoiceAmount.isFinite() && invoiceAmount >= 0.0)) {
-            "قيمة فاتورة المورد غير صالحة"
-        }
-        if (!invoiceProvided) {
-            differences.put(JSONObject().put("field", "invoice_quantity_missing")
-                .put("difference", JSONObject.NULL).put("requires_review", true))
-        } else if (kotlin.math.abs(ordered - invoice) > 0.000001) {
-            differences.put(JSONObject().put("field", "invoice_quantity_vs_po").put("difference", invoice - ordered))
-        }
-        if (!invoiceAmountProvided) {
-            differences.put(JSONObject().put("field", "invoice_amount_missing")
-                .put("difference", JSONObject.NULL).put("requires_review", true))
-        } else if (kotlin.math.abs(orderedValue - invoiceAmount) > 0.01) {
-            differences.put(JSONObject().put("field", "invoice_amount_vs_po").put("difference", invoiceAmount - orderedValue))
-        }
-        if (kotlin.math.abs(delivered - moved) > 0.000001) {
-            differences.put(JSONObject().put("field", "delivery_vs_movement").put("difference", delivered - moved))
-        }
-        val match = JSONObject()
-            .put("po", ordered).put("delivery", delivered).put("movement", moved)
-            .put("po_value", orderedValue)
-            .put("invoice_quantity", if (invoiceProvided) invoice else JSONObject.NULL)
-            .put("invoice_amount", if (invoiceAmountProvided) invoiceAmount else JSONObject.NULL)
-            .put("invoice_provided", invoiceProvided && invoiceAmountProvided)
-        return JSONObject()
-            .put("po", po)
-            .put("match", match)
-            .put("differences", differences)
-            .put("matched", invoiceProvided && invoiceAmountProvided && differences.length() == 0)
+    fun approveSupplierInvoiceMatch(data: JSONObject, stationScopeId: Int, accountantId: Long): JSONObject {
+        require(stationScopeId > 0 && accountantId > 0) { "المحطة والمحاسب مطلوبان" }
+        val invoiceId = data.optLong("invoice_id", 0L); require(invoiceId > 0) { "معرف الفاتورة مطلوب" }
+        val db = writableDatabase
+        val updated = db.update("supplier_invoices", ContentValues().apply {
+            put("status", "APPROVED"); put("accountant_approved_by", accountantId); put("accountant_approved_at", getCurrentDateTime()); put("updated_at", getCurrentDateTime())
+        }, "invoice_id=? AND station_id=? AND status='VARIANCE'", arrayOf(invoiceId.toString(), stationScopeId.toString()))
+        require(updated == 1) { "لا يمكن اعتماد فاتورة غير موجودة أو بلا فروقات معلقة" }
+        return JSONObject().put("success", true).put("invoice_id", invoiceId).put("status", "APPROVED").put("approved_by", accountantId)
     }
 
     fun publishEvent(data: JSONObject, stationScopeId: Int): Long {
