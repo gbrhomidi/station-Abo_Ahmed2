@@ -103,17 +103,15 @@ class SupplierPayablesRobolectricTest {
 
         val missingInvoice = helper.matchInvoiceFourWay(JSONObject().put("po_id", poId), 1)
         assertFalse(missingInvoice.getBoolean("matched"))
-        assertTrue((0 until missingInvoice.getJSONArray("differences").length()).any {
-            missingInvoice.getJSONArray("differences").getJSONObject(it).getString("field") == "invoice_amount_missing"
-        })
-        assertFalse(missingInvoice.getJSONObject("match").getBoolean("invoice_provided"))
-        assertTrue(missingInvoice.getJSONObject("match").isNull("invoice"))
+        assertFalse(missingInvoice.getBoolean("matched"))
         assertTrue((0 until missingInvoice.getJSONArray("differences").length()).any {
             missingInvoice.getJSONArray("differences").getJSONObject(it).getString("field") == "invoice_quantity_missing"
         })
         assertTrue((0 until missingInvoice.getJSONArray("differences").length()).any {
             missingInvoice.getJSONArray("differences").getJSONObject(it).getString("field") == "invoice_amount_missing"
         })
+        assertFalse(missingInvoice.getJSONObject("match").getBoolean("invoice_provided"))
+        assertTrue(missingInvoice.getJSONObject("match").isNull("invoice"))
 
         val matchingInvoice = helper.matchInvoiceFourWay(
             JSONObject().put("po_id", poId).put("invoice_quantity", 10.0).put("invoice_amount", 100.0), 1
@@ -124,8 +122,9 @@ class SupplierPayablesRobolectricTest {
             JSONObject().put("po_id", poId).put("invoice_quantity", 9.0).put("invoice_amount", 100.0), 1
         )
         assertFalse(mismatchingInvoice.getBoolean("matched"))
-        assertEquals("invoice_vs_po", mismatchingInvoice.getJSONArray("differences")
-            .getJSONObject(0).getString("field"))
+        assertTrue((0 until mismatchingInvoice.getJSONArray("differences").length()).any {
+            mismatchingInvoice.getJSONArray("differences").getJSONObject(it).getString("field") == "invoice_quantity_vs_po"
+        })
 
         assertTrue(runCatching {
             helper.matchInvoiceFourWay(
