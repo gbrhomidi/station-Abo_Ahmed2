@@ -13848,7 +13848,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     database.endTransaction()
                 }
 
-                runCatching { db.publishEvent(JSONObject().put("event_type", "fuel_sale_completed").put("payload", JSONObject().put("sale_id", saleId).put("shift_id", input.optLong("shift_id", 0L)).put("tank_id", input.optLong("tank_id", 0L)).put("fuel_type_id", input.optLong("fuel_type_id", 0L)).put("liters", input.optDouble("quantity", 0.0)).put("unit_price", unitPrice).put("total", input.optDouble("total_amount", 0.0))), stationScopeId) }
+                runCatching { db.publishEvent(JSONObject().put("event_type", "fuel_sale_completed").put("consumer", "stock-levels").put("idempotency_key", "fuel-sale:$saleId").put("payload", JSONObject().put("sale_id", saleId).put("shift_id", input.optLong("shift_id", 0L)).put("tank_id", input.optLong("tank_id", 0L)).put("pump_id", input.optLong("pump_id", 0L)).put("fuel_type_id", input.optLong("fuel_type_id", 0L)).put("liters", input.optDouble("quantity", 0.0)).put("unit_price", unitPrice).put("total", input.optDouble("total_amount", 0.0))), stationScopeId) } .onFailure { DebugLogger.logException("FuelSaleEvent", it) }
 
                 // Post-commit SMS is isolated: a queue error must not report a committed sale as failed.
                 val smsResult = if (creditSale) {

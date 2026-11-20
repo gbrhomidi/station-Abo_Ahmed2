@@ -359,6 +359,11 @@ jobs:
           node ./reports-backend-capability-test.js
           node ./reports-production-verification.js
 
+      - name: Verify canonical POS and fuel stock-event contract
+        run: |
+          set -e
+          node ./sales-stock-event-contract-regression-test.js
+          node ./product-stock-pos-regression-test.js
 
       # ----------------------------------------------------------------------
       # Cloud Run routing service contract and cache regression tests
