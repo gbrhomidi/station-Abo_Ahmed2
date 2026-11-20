@@ -323,7 +323,7 @@ class InventoryScreensRobolectricTest {
             JSONObject().put("shift_id", shiftId).put("tank_id", tankId), 1, actorId
         )
         db.execSQL(
-            "UPDATE shift_reconciliations SET approved_by=?,approved_at=? WHERE id=?",
+            "UPDATE shift_reconciliations SET approved_by=?,approved_at=? WHERE recon_id=?",
             arrayOf(actorId, "2026-11-19 12:00:00", first.getLong("recon_id"))
         )
         val error = runCatching {
@@ -334,7 +334,7 @@ class InventoryScreensRobolectricTest {
         assertNotNull(error)
         assertTrue(error!!.message.orEmpty().contains("معتمدة"))
         val persisted = db.rawQuery(
-            "SELECT id,approved_by,approved_at FROM shift_reconciliations WHERE shift_id=? AND tank_id=?",
+            "SELECT recon_id,approved_by,approved_at FROM shift_reconciliations WHERE shift_id=? AND tank_id=?",
             arrayOf(shiftId.toString(), tankId.toString())
         ).use { c -> assertTrue(c.moveToFirst()); Triple(c.getLong(0), c.getLong(1), c.getString(2)) }
         assertEquals(first.getLong("recon_id"), persisted.first)

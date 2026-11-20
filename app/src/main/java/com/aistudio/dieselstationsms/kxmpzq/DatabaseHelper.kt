@@ -30883,8 +30883,8 @@ private fun postSalesReversalJournal(
                 }
                 // Draft resubmission is an upsert: retain its identity and never erase an approved reconciliation.
                 val existing = db.rawQuery(
-                    """SELECT id,approved_by,approved_at FROM shift_reconciliations
-                       WHERE shift_id=? AND tank_id=? ORDER BY id DESC LIMIT 1""",
+                    """SELECT recon_id,approved_by,approved_at FROM shift_reconciliations
+                       WHERE shift_id=? AND tank_id=? ORDER BY recon_id DESC LIMIT 1""",
                     arrayOf(shiftId.toString(),tankId.toString())
                 ).use { c ->
                     if (c.moveToFirst()) Triple(c.getLong(0), !c.isNull(1), !c.isNull(2)) else null
@@ -30895,7 +30895,7 @@ private fun postSalesReversalJournal(
                     }
                     val changed = db.update(
                         "shift_reconciliations", cv,
-                        "id=? AND shift_id=? AND tank_id=? AND approved_by IS NULL AND approved_at IS NULL",
+                        "recon_id=? AND shift_id=? AND tank_id=? AND approved_by IS NULL AND approved_at IS NULL",
                         arrayOf(existing.first.toString(),shiftId.toString(),tankId.toString())
                     )
                     require(changed == 1) { "تعذر تحديث مسودة التسوية بسبب تغير حالتها بالتزامن" }
