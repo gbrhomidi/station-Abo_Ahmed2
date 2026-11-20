@@ -1422,7 +1422,7 @@ class InventoryScreensRobolectricTest {
     @Test
     fun healthScorePersistsAllFourV3ComponentsAndUsesExactWeights() {
         val db = helper.writableDatabase
-        val productId = createProduct(0.0, 5.0)
+        val productId = createProduct(1.0, 5.0)
         db.insertOrThrow("inventory_movements", null, ContentValues().apply {
             put("uuid", UUID.randomUUID().toString()); put("movement_code", "HS-"+UUID.randomUUID().toString().take(8))
             put("product_id", productId); put("station_id", 1); put("movement_type", "out")
