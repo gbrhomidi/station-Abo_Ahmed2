@@ -110,6 +110,32 @@ class InventoryScreensRobolectricTest {
         })
     }
 
+    private fun prepareReconciliationReadings(tankId: Long, shiftId: Long, openingLiters: Double, closingLiters: Double): Pair<Long, Long> {
+        val db=helper.writableDatabase
+        val start=db.rawQuery("SELECT start_time FROM shifts WHERE id=?",arrayOf(shiftId.toString())).use {
+            check(it.moveToFirst()); it.getString(0)
+        }
+        val openingAt=java.time.LocalDateTime.parse(start.replace(' ','T')).minusMinutes(5)
+            .toString().replace('T',' ')
+        db.insertOrThrow("tank_readings",null,ContentValues().apply {
+            put("tank_id",tankId); put("reading_at",java.time.LocalDateTime.parse(start.replace(' ','T')).minusDays(2)
+                .toString().replace('T',' ')); put("current_liters",openingLiters+500.0)
+            put("source","manual"); put("recorded_by",actorId)
+        })
+        val openingId=db.insertOrThrow("tank_readings",null,ContentValues().apply {
+            put("tank_id",tankId); put("reading_at",openingAt); put("current_liters",openingLiters)
+            put("source","manual"); put("recorded_by",actorId)
+        })
+        db.insertOrThrow("tank_readings",null,ContentValues().apply {
+            put("tank_id",tankId); put("reading_at",java.time.LocalDateTime.parse(start.replace(' ','T')).plusMinutes(1)
+                .toString().replace('T',' ')); put("current_liters",openingLiters+900.0)
+            put("source","manual"); put("recorded_by",actorId)
+        })
+        val dip=helper.insertDipReading(JSONObject().put("tank_id",tankId).put("shift_id",shiftId)
+            .put("dip_cm",100.0).put("dip_liters",closingLiters).put("tolerance_threshold",1000.0),1,actorId)
+        return openingId to dip.getLong("dip_id")
+    }
+
     @Test
     fun dryStockLocationScopesBatchQuantityAndNearestExpiry() {
         val db = helper.writableDatabase
@@ -258,9 +284,14 @@ class InventoryScreensRobolectricTest {
             put("status", "open")
         })
         val payload = JSONObject().put("shift_id", shiftId).put("tank_id", tankId)
-            .put("actual_liters", 250.0).put("tolerance_threshold", 0.5)
+            .put("actual_liters", 250.0).put("tolerance_threshold", 0.01)
+        val readingIds = prepareReconciliationReadings(tankId, shiftId, 250.0, 250.0)
         val first = helper.submitShiftReconciliation(payload, 1, actorId)
         assertEquals("DRAFT", first.getString("status"))
+        assertEquals(readingIds.first, first.getLong("opening_reading_id"))
+        assertEquals(readingIds.second, first.getLong("closing_reading_id"))
+        assertEquals(250.0, first.getDouble("opening_liters"), 0.0001)
+        assertTrue(first.getJSONObject("calculation_window").getString("start").isNotBlank())
         val second = helper.submitShiftReconciliation(payload, 1, actorId)
         assertTrue(second.getLong("recon_id") > first.getLong("recon_id"))
         val count = db.rawQuery(
@@ -273,6 +304,44 @@ class InventoryScreensRobolectricTest {
             arrayOf(shiftId.toString(), tankId.toString())
         ).use { c -> c.moveToFirst(); c.getInt(0) }
         assertEquals(0, approved)
+    }
+
+    @Test
+    fun wetStockReconciliationIntegratesOpeningDeliverySaleAndClosingDipInShiftWindow() {
+        val db=helper.writableDatabase
+        val tankId=createLowFuelTank(1,"RECON-E2E")
+        val shiftId=db.insertOrThrow("shifts",null,ContentValues().apply {
+            put("uuid",UUID.randomUUID().toString()); put("shift_code","RECON-E2E-"+UUID.randomUUID().toString().take(8))
+            put("station_id",1); put("shift_date","2026-11-19"); put("shift_type","morning")
+            put("start_time","2026-11-19 06:00:00"); put("status","open")
+        })
+        prepareReconciliationReadings(tankId,shiftId,1000.0,950.0)
+        val pumpId=db.insertOrThrow("pumps",null,ContentValues().apply {
+            put("uuid",UUID.randomUUID().toString()); put("pump_code","P-E2E-"+UUID.randomUUID().toString().take(6))
+            put("pump_number","E2E"); put("station_id",1); put("tank_id",tankId); put("status","active")
+        })
+        db.insertOrThrow("fuel_sales",null,ContentValues().apply {
+            put("uuid",UUID.randomUUID().toString()); put("shift_id",shiftId); put("pump_id",pumpId)
+            put("fuel_type_id",1); put("quantity",100.0); put("price_per_liter",1.0)
+            put("total_amount",100.0); put("station_id",1); put("status","completed"); put("is_deleted",0)
+            put("sale_date","2026-11-19")
+        })
+        db.insertOrThrow("tank_refills",null,ContentValues().apply {
+            put("uuid",UUID.randomUUID().toString()); put("refill_code","REF-E2E-"+UUID.randomUUID().toString().take(6))
+            put("tank_id",tankId); put("station_id",1); put("fuel_type_id",1)
+            put("delivered_quantity",50.0); put("actual_quantity",50.0)
+            put("arrival_date","2026-11-19 10:00:00"); put("is_deleted",0)
+        })
+        val result=helper.submitShiftReconciliation(
+            JSONObject().put("shift_id",shiftId).put("tank_id",tankId).put("actual_liters",950.0),1,actorId
+        )
+        assertEquals(1000.0,result.getDouble("opening_liters"),0.0001)
+        assertEquals(50.0,result.getDouble("deliveries_liters"),0.0001)
+        assertEquals(100.0,result.getDouble("sales_liters"),0.0001)
+        assertEquals(950.0,result.getDouble("expected_liters"),0.0001)
+        assertEquals(0.0,result.getDouble("variance_liters"),0.0001)
+        assertTrue(result.getLong("opening_reading_id")>0)
+        assertTrue(result.getLong("closing_reading_id")>0)
     }
 
     @Test
@@ -313,8 +382,9 @@ class InventoryScreensRobolectricTest {
             put("start_time", "2026-11-20 06:00:00")
             put("status", "open")
         })
+        prepareReconciliationReadings(tankId, shiftId, 250.0, 250.0)
         val payload = JSONObject().put("shift_id", shiftId).put("tank_id", tankId)
-            .put("actual_liters", 250.0).put("tolerance_threshold", 0.5)
+            .put("actual_liters", 250.0).put("tolerance_threshold", 0.01)
         val draft = helper.submitShiftReconciliation(payload, 1, actorId)
         val reconId = draft.getLong("recon_id")
         db.execSQL(
@@ -332,8 +402,13 @@ class InventoryScreensRobolectricTest {
         assertTrue(runCatching {
             db.delete("shift_reconciliations", "recon_id=?", arrayOf(reconId.toString()))
         }.isFailure)
+        prepareReconciliationReadings(tankId, shiftId, 250.0, 240.0)
+        val approvedReplacement = JSONObject(payload.toString())
+            .put("actual_liters", 240.0)
+            .put("cause", "MANUAL_ADJUSTMENT")
+            .put("notes", "محاولة استبدال تسوية معتمدة")
         assertTrue(runCatching {
-            helper.submitShiftReconciliation(payload.put("actual_liters", 240.0), 1, actorId)
+            helper.submitShiftReconciliation(approvedReplacement, 1, actorId)
         }.isFailure)
         val current = db.rawQuery(
             "SELECT approved_by, actual_liters FROM shift_reconciliations WHERE recon_id=?",
@@ -359,10 +434,12 @@ class InventoryScreensRobolectricTest {
             put("shift_type", "morning"); put("start_time", "2026-11-19 06:00:00")
             put("status", "open")
         })
+        prepareReconciliationReadings(tankId, shiftId, 250.0, 250.0)
         val payload = JSONObject().put("shift_id", shiftId).put("tank_id", tankId)
-            .put("actual_liters", 250.0).put("tolerance_threshold", 0.5)
+            .put("actual_liters", 250.0).put("tolerance_threshold", 0.01)
             .put("cause", "FUEL_SALE").put("notes", "اختبار سجل التدقيق")
         helper.submitShiftReconciliation(payload, 1, actorId)
+        prepareReconciliationReadings(tankId, shiftId, 250.0, 240.0)
         helper.submitShiftReconciliation(payload.put("actual_liters", 240.0), 1, actorId)
         val history = helper.getShiftReconciliationAudit(JSONObject().put("shift_id", shiftId).put("tank_id", tankId), 1)
         assertEquals(3, history.length())

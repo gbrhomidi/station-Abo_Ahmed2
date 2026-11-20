@@ -30635,89 +30635,160 @@ private fun postSalesReversalJournal(
     fun submitShiftReconciliation(data: JSONObject, stationScopeId: Int, actorId: Long): JSONObject {
         val shiftId = data.optLong("shift_id", 0L)
         val tankId = data.optLong("tank_id", 0L)
-        val actual = data.optDouble("actual_liters", -1.0)
-        require(stationScopeId > 0 && shiftId > 0 && tankId > 0 && actual.isFinite() && actual >= 0.0) {
-            "بيانات التسوية غير مكتملة"
-        }
+        require(stationScopeId > 0 && shiftId > 0 && tankId > 0) { "بيانات التسوية غير مكتملة" }
         val adjustments = data.optDouble("adjustments_liters", 0.0)
-        val tolerance = data.optDouble("tolerance_threshold", 0.5)
-        require(adjustments.isFinite() && tolerance.isFinite() && tolerance >= 0.0) { "قيم التسوية غير صالحة" }
+        val tolerance = data.optDouble("tolerance_threshold", 0.01)
+        require(adjustments.isFinite() && tolerance.isFinite() && tolerance >= 0.0 && tolerance <= 0.01) {
+            "حد التسامح يجب أن يكون بين صفر و0.01 لتر"
+        }
         dbLock.lock()
         return try {
             val db = writableDatabase
             db.beginTransaction()
             try {
-                var opening = 0.0
-                var deliveries = 0.0
-                var sales = 0.0
                 var shiftStatus = "open"
+                var shiftStart = ""
+                var shiftEnd: String? = null
                 db.rawQuery(
-                    """SELECT COALESCE((SELECT current_liters FROM tank_readings
-                       WHERE tank_id=? ORDER BY reading_at ASC,reading_id ASC LIMIT 1),t.current_quantity,0),
-                       s.status FROM tanks t JOIN shifts s ON s.id=? AND s.station_id=?
-                       WHERE t.id=? AND t.station_id=?""",
-                    arrayOf(tankId.toString(), shiftId.toString(), stationScopeId.toString(), tankId.toString(), stationScopeId.toString())
+                    "SELECT status,start_time,end_time FROM shifts WHERE id=? AND station_id=? AND is_deleted=0",
+                    arrayOf(shiftId.toString(), stationScopeId.toString())
                 ).use { c ->
-                    require(c.moveToFirst()) { "الخزان أو الوردية خارج نطاق المحطة" }
-                    opening = c.getDouble(0); shiftStatus = c.getString(1)
+                    require(c.moveToFirst()) { "الوردية غير موجودة أو خارج نطاق المحطة" }
+                    shiftStatus = c.getString(0); shiftStart = c.getString(1); shiftEnd = c.getString(2)
                 }
                 require(shiftStatus != "reconciled" && shiftStatus != "closed") { "الوردية مغلقة ولا يمكن تعديل تسويتها" }
+
+                var opening = 0.0
+                var openingReadingId = 0L
+                var openingAt = ""
+                db.rawQuery(
+                    """SELECT tr.reading_id,tr.reading_at,tr.current_liters
+                         FROM tank_readings tr JOIN tanks t ON t.id=tr.tank_id
+                        WHERE tr.tank_id=? AND t.station_id=? AND t.is_deleted=0 AND tr.reading_at<=?
+                        ORDER BY tr.reading_at DESC,tr.reading_id DESC LIMIT 1""",
+                    arrayOf(tankId.toString(), stationScopeId.toString(), shiftStart)
+                ).use { c ->
+                    require(c.moveToFirst()) { "لا توجد قراءة افتتاحية موثقة للخزان قبل بداية الوردية" }
+                    openingReadingId=c.getLong(0); openingAt=c.getString(1); opening=c.getDouble(2)
+                }
+
+                var actual = 0.0
+                var closingReadingId = 0L
+                var closingAt = ""
+                val windowEnd = shiftEnd ?: getCurrentDateTime()
+                db.rawQuery(
+                    """SELECT d.id,d.created_at,d.dip_liters
+                         FROM tank_dip_readings d JOIN tanks t ON t.id=d.tank_id
+                        WHERE d.tank_id=? AND d.shift_id=? AND t.station_id=? AND t.is_deleted=0
+                          AND d.created_at>=? AND d.created_at<=?
+                        ORDER BY d.created_at DESC,d.id DESC LIMIT 1""",
+                    arrayOf(tankId.toString(),shiftId.toString(),stationScopeId.toString(),shiftStart,windowEnd)
+                ).use { c ->
+                    require(c.moveToFirst()) { "يجب تسجيل قراءة غمس ختامية مرتبطة بالخزان والوردية قبل التسوية" }
+                    closingReadingId=c.getLong(0); closingAt=c.getString(1); actual=c.getDouble(2)
+                }
+                if (data.has("actual_liters")) {
+                    val supplied=data.optDouble("actual_liters",Double.NaN)
+                    require(supplied.isFinite() && kotlin.math.abs(supplied-actual)<=0.000001) {
+                        "الكمية الفعلية لا تطابق قراءة الغمس الختامية المحفوظة"
+                    }
+                }
+
+                var deliveries=0.0
+                var sales=0.0
                 db.rawQuery(
                     """SELECT COALESCE(SUM(fs.quantity),0) FROM fuel_sales fs
-                       JOIN pumps p ON p.id=fs.pump_id WHERE p.tank_id=? AND fs.shift_id=?
-                       AND fs.is_deleted=0 AND fs.status NOT IN ('cancelled','reversed')""",
-                    arrayOf(tankId.toString(), shiftId.toString())
-                ).use { c -> if (c.moveToFirst()) sales = c.getDouble(0) }
+                         JOIN pumps p ON p.id=fs.pump_id
+                        WHERE p.tank_id=? AND fs.shift_id=? AND fs.station_id=?
+                          AND fs.is_deleted=0 AND fs.status NOT IN ('cancelled','reversed')""",
+                    arrayOf(tankId.toString(),shiftId.toString(),stationScopeId.toString())
+                ).use { c -> if(c.moveToFirst()) sales=c.getDouble(0) }
                 db.rawQuery(
                     """SELECT COALESCE(SUM(COALESCE(actual_quantity,delivered_quantity)),0)
-                       FROM tank_refills WHERE tank_id=? AND is_deleted=0 AND arrival_date IS NOT NULL
-                       AND arrival_date >= (SELECT start_time FROM shifts WHERE id=?)
-                       AND arrival_date <= COALESCE((SELECT end_time FROM shifts WHERE id=?),?)""",
-                    arrayOf(tankId.toString(), shiftId.toString(), shiftId.toString(), getCurrentDateTime())
-                ).use { c -> if (c.moveToFirst()) deliveries = c.getDouble(0) }
-                val expected = opening + deliveries - sales + adjustments
-                val variance = actual - expected
-                val pct = if (expected == 0.0) if (variance == 0.0) 0.0 else 100.0 else variance / expected * 100.0
-                val cause = data.optString("cause", "").takeIf { it.isNotBlank() }
-                if (kotlin.math.abs(pct) > tolerance) {
-                    require(!cause.isNullOrBlank()) { "سبب الفارق مطلوب عند تجاوز التسامح" }
+                         FROM tank_refills WHERE tank_id=? AND station_id=? AND is_deleted=0
+                          AND arrival_date IS NOT NULL AND arrival_date>=? AND arrival_date<=?""",
+                    arrayOf(tankId.toString(),stationScopeId.toString(),shiftStart,windowEnd)
+                ).use { c -> if(c.moveToFirst()) deliveries=c.getDouble(0) }
+
+                val expected=opening+deliveries-sales+adjustments
+                val variance=actual-expected
+                val pct=if(expected==0.0) if(variance==0.0) 0.0 else 100.0 else variance/expected*100.0
+                val cause=data.optString("cause","").takeIf{it.isNotBlank()}
+                if(kotlin.math.abs(variance)>tolerance) {
+                    require(!cause.isNullOrBlank()) { "سبب الفارق مطلوب عند تجاوز 0.01 لتر" }
                     require(data.optString("notes").isNotBlank()) { "ملاحظات الفارق مطلوبة" }
                 }
-                if (cause != null) db.rawQuery(
+                if(cause!=null) db.rawQuery(
                     "SELECT 1 FROM inventory_reason_codes WHERE code=? AND applies_to IN ('FUEL','BOTH')",
                     arrayOf(cause)
                 ).use { c -> require(c.moveToFirst()) { "سبب الفارق غير معتمد" } }
-                // A submission is a draft. Approval is a separate privileged operation.
-                // Preserve previous submissions as audit evidence; never delete history here.
-                val cv = ContentValues().apply {
-                    put("shift_id", shiftId); put("tank_id", tankId)
-                    put("opening_liters", opening); put("deliveries_liters", deliveries)
-                    put("sales_liters", sales); put("adjustments_liters", adjustments)
-                    put("expected_liters", expected); put("actual_liters", actual)
-                    put("variance_liters", variance); put("variance_pct", pct)
-                    put("cause", cause); put("notes", data.optString("notes"))
-                    put("created_by", actorId)
+
+                val cv=ContentValues().apply {
+                    put("shift_id",shiftId); put("tank_id",tankId); put("opening_liters",opening)
+                    put("deliveries_liters",deliveries); put("sales_liters",sales)
+                    put("adjustments_liters",adjustments); put("expected_liters",expected)
+                    put("actual_liters",actual); put("variance_liters",variance); put("variance_pct",pct)
+                    put("cause",cause); put("notes",data.optString("notes")); put("created_by",actorId)
                     putNull("approved_by"); putNull("approved_at")
                 }
-                // The schema intentionally enforces one current reconciliation per shift/tank.
-                // Replace that current row atomically; do not claim append-only history because
-                // this table has UNIQUE(shift_id, tank_id).
-                db.delete("shift_reconciliations", "shift_id=? AND tank_id=?",
-                    arrayOf(shiftId.toString(), tankId.toString()))
-                val id = db.insertOrThrow("shift_reconciliations", null, cv)
+                db.delete("shift_reconciliations","shift_id=? AND tank_id=?",arrayOf(shiftId.toString(),tankId.toString()))
+                val id=db.insertOrThrow("shift_reconciliations",null,cv)
                 db.setTransactionSuccessful()
-                JSONObject().put("recon_id", id).put("status", "DRAFT")
-                    .put("expected_liters", expected).put("actual_liters", actual)
-                    .put("variance_liters", variance).put("variance_pct", pct)
+                JSONObject().put("recon_id",id).put("status","DRAFT")
+                    .put("opening_reading_id",openingReadingId).put("opening_at",openingAt)
+                    .put("closing_reading_id",closingReadingId).put("closing_at",closingAt)
+                    .put("calculation_window",JSONObject().put("start",shiftStart).put("end",windowEnd))
+                    .put("opening_liters",opening).put("deliveries_liters",deliveries)
+                    .put("sales_liters",sales).put("adjustments_liters",adjustments)
+                    .put("expected_liters",expected).put("actual_liters",actual)
+                    .put("variance_liters",variance).put("variance_pct",pct)
             } finally { db.endTransaction() }
         } finally { dbLock.unlock() }
     }
 
     fun insertDipReading(data: JSONObject, stationScopeId: Int, actorId: Long): JSONObject {
-        val tankId=data.optLong("tank_id",0L); val dipCm=data.optDouble("dip_cm",-1.0); val dipLiters=data.optDouble("dip_liters",-1.0)
-        require(tankId>0 && dipCm>=0.0 && dipLiters>=0.0) { "قراءة الغمس بالسنتيمتر واللتر مطلوبة" }
+        val tankId=data.optLong("tank_id",0L)
+        val dipCm=data.optDouble("dip_cm",-1.0)
+        val dipLiters=data.optDouble("dip_liters",-1.0)
+        val shiftId=data.optLong("shift_id",0L)
+        require(stationScopeId>0 && tankId>0 && dipCm.isFinite() && dipCm>=0.0 &&
+            dipLiters.isFinite() && dipLiters>=0.0) { "قراءة الغمس بالسنتيمتر واللتر مطلوبة" }
         dbLock.lock()
-        return try { val db=writableDatabase; var book=0.0; db.rawQuery("SELECT COALESCE((SELECT current_liters FROM tank_readings WHERE tank_id=? ORDER BY reading_at DESC,reading_id DESC LIMIT 1),current_quantity,0) FROM tanks WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(tankId.toString(),tankId.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){ "الخزان غير موجود أو خارج نطاق المحطة" };book=c.getDouble(0)}; val variance=dipLiters-book; val pct=if(book==0.0) if(variance==0.0)0.0 else 100.0 else variance/book*100.0; val exceeded=kotlin.math.abs(pct)>data.optDouble("tolerance_threshold",0.5); val reason=data.optString("reason_code","").takeIf{it.isNotBlank()}; if(exceeded){require(reason!=null){"سبب الفارق مطلوب عند تجاوز التسامح"}}; if(reason!=null) db.rawQuery("SELECT 1 FROM inventory_reason_codes WHERE code=? AND applies_to IN ('FUEL','BOTH')",arrayOf(reason)).use{c->require(c.moveToFirst()){ "سبب الفارق غير معتمد" }}; val cv=ContentValues().apply{put("tank_id",tankId);put("dip_cm",dipCm);put("dip_liters",dipLiters);put("book_liters",book);put("variance_liters",variance);put("variance_percent",pct);put("tolerance_exceeded",if(exceeded)1 else 0);if(reason!=null)put("reason_code",reason);val sid=data.optLong("shift_id",0L);if(sid>0)put("shift_id",sid);put("notes",data.optString("notes"));if(actorId>0)put("created_by",actorId);put("created_at",getCurrentDateTime())}; val id=db.insertOrThrow("tank_dip_readings",null,cv); JSONObject().put("dip_id",id).put("variance_liters",variance).put("variance_percent",pct).put("tolerance_exceeded",exceeded)
+        return try {
+            val db=writableDatabase
+            var book=0.0
+            db.rawQuery(
+                """SELECT COALESCE((SELECT current_liters FROM tank_readings
+                    WHERE tank_id=? ORDER BY reading_at DESC,reading_id DESC LIMIT 1),t.current_quantity,0)
+                    FROM tanks t WHERE t.id=? AND t.station_id=? AND t.is_deleted=0""",
+                arrayOf(tankId.toString(),tankId.toString(),stationScopeId.toString())
+            ).use { c -> require(c.moveToFirst()){"الخزان غير موجود أو خارج نطاق المحطة"}; book=c.getDouble(0) }
+            if(shiftId>0) db.rawQuery(
+                """SELECT 1 FROM shifts WHERE id=? AND station_id=? AND status='open' AND is_deleted=0
+                    AND start_time<=? AND (end_time IS NULL OR end_time>=?)""",
+                arrayOf(shiftId.toString(),stationScopeId.toString(),getCurrentDateTime(),getCurrentDateTime())
+            ).use { c -> require(c.moveToFirst()){"الوردية غير مفتوحة أو خارج نطاق المحطة/الزمن"} }
+            val variance=dipLiters-book
+            val pct=if(book==0.0) if(variance==0.0) 0.0 else 100.0 else variance/book*100.0
+            val exceeded=kotlin.math.abs(pct)>data.optDouble("tolerance_threshold",0.5)
+            val reason=data.optString("reason_code","").takeIf{it.isNotBlank()}
+            if(exceeded) require(reason!=null){"سبب الفارق مطلوب عند تجاوز التسامح"}
+            if(reason!=null) db.rawQuery(
+                "SELECT 1 FROM inventory_reason_codes WHERE code=? AND applies_to IN ('FUEL','BOTH')",
+                arrayOf(reason)
+            ).use { c -> require(c.moveToFirst()){"سبب الفارق غير معتمد"} }
+            val cv=ContentValues().apply {
+                put("tank_id",tankId); put("dip_cm",dipCm); put("dip_liters",dipLiters)
+                put("book_liters",book); put("variance_liters",variance); put("variance_percent",pct)
+                put("tolerance_exceeded",if(exceeded)1 else 0)
+                if(reason!=null) put("reason_code",reason)
+                if(shiftId>0) put("shift_id",shiftId)
+                put("notes",data.optString("notes")); if(actorId>0) put("created_by",actorId)
+                put("created_at",getCurrentDateTime())
+            }
+            val id=db.insertOrThrow("tank_dip_readings",null,cv)
+            JSONObject().put("dip_id",id).put("variance_liters",variance)
+                .put("variance_percent",pct).put("tolerance_exceeded",exceeded)
         } finally { dbLock.unlock() }
     }
 
