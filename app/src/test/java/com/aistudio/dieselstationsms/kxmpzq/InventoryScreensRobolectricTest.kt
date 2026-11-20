@@ -1532,14 +1532,18 @@ class InventoryScreensRobolectricTest {
         ).use { c -> c.moveToFirst(); c.getInt(0) }
         assertEquals(2, activeBeforeRestore)
 
-        db.update("inventory_levels", ContentValues().apply { put("quantity_on_hand", 12.0) },
+        db.update("inventory_levels", ContentValues().apply { put("quantity_on_hand", 1000.0) },
             "product_id=?", arrayOf(productId.toString()))
-        db.update("products", ContentValues().apply { put("quantity", 12.0) },
+        db.update("products", ContentValues().apply { put("quantity", 1000.0) },
             "id=? AND station_id=1", arrayOf(productId.toString()))
-        db.update("inventory_movements", ContentValues().apply {
-            put("movement_type", "out")
+        db.insertOrThrow("inventory_movements", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("movement_code", "RESTOCK-TEST-" + UUID.randomUUID().toString().take(8))
+            put("product_id", productId); put("station_id", 1); put("movement_type", "out")
+            put("quantity_before", 1000.0); put("quantity_change", -1.0); put("quantity_after", 999.0)
+            put("performed_by", actorId); put("status", "completed"); put("is_deleted", 0)
             put("created_at", helper.currentDateForBridge() + " 12:00:00")
-        }, "product_id=? AND station_id=1", arrayOf(productId.toString()))
+        })
         helper.runInventoryAnomalyDetection(1)
         val activeAfterRestore = db.rawQuery(
             "SELECT COUNT(*) FROM inventory_anomalies WHERE station_id=1 AND item_id=? AND item_type='PRODUCT' AND status IN ('OPEN','ACKNOWLEDGED')",
