@@ -1484,6 +1484,51 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun verifiedPumpMeterVarianceIsDetectedAndDeduplicated() {
+        val db = helper.writableDatabase
+        val tankId = createLowFuelTank(1, "PUMP-VARIANCE")
+        val pumpId = db.insertOrThrow("pumps", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("pump_code", "PV-" + UUID.randomUUID().toString().take(8))
+            put("pump_number", "PV1")
+            put("station_id", 1)
+            put("tank_id", tankId)
+            put("status", "active")
+        })
+        val nozzleId = db.insertOrThrow("pump_nozzles", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("nozzle_code", "NV-" + UUID.randomUUID().toString().take(8))
+            put("nozzle_number", "1")
+            put("pump_id", pumpId)
+            put("fuel_type_id", 1)
+            put("status", "active")
+        })
+        db.insertOrThrow("meter_readings", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("reading_code", "MR-" + UUID.randomUUID().toString().take(8))
+            put("pump_id", pumpId); put("nozzle_id", nozzleId); put("station_id", 1)
+            put("reading_date", helper.currentDateForBridge())
+            put("opening_reading", 1000.0); put("closing_reading", 1200.0)
+            put("sold_liters", 200.0); put("system_sold_liters", 180.0)
+            put("difference", 20.0); put("tolerance_limit", 0.5)
+            put("read_by", actorId); put("status", "verified")
+        })
+        val first = helper.runInventoryAnomalyDetection(1)
+        val found = (0 until first.length()).map { first.getJSONObject(it) }
+            .filter { it.optString("type") == "PUMP_VARIANCE" }
+        assertEquals(1, found.size)
+        assertEquals(nozzleId, found.single().getLong("item_id"))
+        val second = helper.runInventoryAnomalyDetection(1)
+        assertEquals(0, (0 until second.length()).count {
+            second.getJSONObject(it).optString("type") == "PUMP_VARIANCE"
+        })
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_anomalies WHERE station_id=1 AND item_id=? AND anomaly_type='PUMP_VARIANCE' AND status IN ('OPEN','ACKNOWLEDGED')",
+            arrayOf(nozzleId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+    }
+
+    @Test
     fun demandForecastPersistsDailyProductForecastWithXyzMethod() {
         val db = helper.writableDatabase
         val productId = createProduct(12.0, 2.0)

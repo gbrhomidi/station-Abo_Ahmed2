@@ -38223,6 +38223,94 @@ private fun postSalesReversalJournal(
                     else resolve("PRODUCT_DEAD_STOCK", "PRODUCT", productId)
                 }
             }
+
+            // Compare only the latest verified/approved physical reading per nozzle.
+            // Missing or draft system-sales evidence is unavailable, never zero.
+            db.rawQuery(
+                """SELECT mr.id,mr.nozzle_id,mr.pump_id,mr.sold_liters,mr.system_sold_liters,
+                          mr.difference,mr.tolerance_limit,mr.reading_date
+                   FROM meter_readings mr
+                   JOIN pumps p ON p.id=mr.pump_id AND p.station_id=mr.station_id
+                   JOIN pump_nozzles n ON n.id=mr.nozzle_id AND n.pump_id=mr.pump_id
+                   WHERE mr.station_id=? AND mr.is_deleted=0
+                     AND p.is_deleted=0 AND p.status='active' AND n.status='active'
+                     AND mr.status IN ('verified','approved')
+                     AND mr.system_sold_liters IS NOT NULL AND mr.system_sold_liters>0
+                     AND mr.sold_liters>=0 AND date(mr.reading_date)>=date(?,'-7 day')
+                   ORDER BY date(mr.reading_date) DESC,mr.id DESC""",
+                arrayOf(stationScopeId.toString(), today.toString())
+            ).use { c ->
+                val seenNozzles = mutableSetOf<Long>()
+                while (c.moveToNext()) {
+                    val nozzleId = c.getLong(1)
+                    if (!seenNozzles.add(nozzleId)) continue
+                    val pumpId = c.getLong(2)
+                    val measured = c.getDouble(3)
+                    val systemSales = c.getDouble(4)
+                    val difference = if (c.isNull(5)) measured - systemSales else c.getDouble(5)
+                    val tolerance = c.getDouble(6).coerceAtLeast(0.0)
+                    val differencePct = kotlin.math.abs(difference) * 100.0 / systemSales
+                    if (differencePct > tolerance) {
+                        upsert("PUMP_VARIANCE", "FUEL", nozzleId,
+                            if (differencePct >= maxOf(tolerance * 2.0, 1.0)) "critical" else "warning",
+                            differencePct, tolerance,
+                            "فرق عداد المضخة: قراءة=$measured لتر، مبيعات النظام=$systemSales لتر، " +
+                                "الفرق=$difference لتر ($differencePct%)، حد السماح=$tolerance%. " +
+                                "قراءة موثقة #${c.getLong(0)} بتاريخ ${c.getString(7)} للمضخة #$pumpId")
+                    } else resolve("PUMP_VARIANCE", "FUEL", nozzleId)
+                }
+            }
+
+            // Unexplained loss uses consecutive ATG readings only. Completed fuel sales
+            // for pumps attached to this tank are reconciled over the exact interval.
+            db.rawQuery(
+                """SELECT t.id,t.tank_name,t.capacity_liters,
+                          prev.current_liters,prev.reading_at,latest.current_liters,latest.reading_at
+                   FROM tanks t
+                   JOIN tank_readings latest ON latest.reading_id=(
+                       SELECT r.reading_id FROM tank_readings r
+                       WHERE r.tank_id=t.id AND r.source='ATG'
+                       ORDER BY datetime(r.reading_at) DESC,r.reading_id DESC LIMIT 1)
+                   JOIN tank_readings prev ON prev.reading_id=(
+                       SELECT r.reading_id FROM tank_readings r
+                       WHERE r.tank_id=t.id AND r.source='ATG'
+                         AND datetime(r.reading_at)<datetime(latest.reading_at)
+                       ORDER BY datetime(r.reading_at) DESC,r.reading_id DESC LIMIT 1)
+                   WHERE t.station_id=? AND t.is_deleted=0 AND t.status='active'
+                     AND latest.current_liters<prev.current_liters
+                     AND datetime(latest.reading_at)>datetime(prev.reading_at)
+                     AND julianday(latest.reading_at)-julianday(prev.reading_at)<=2.0""",
+                arrayOf(stationScopeId.toString())
+            ).use { c ->
+                while (c.moveToNext()) {
+                    val tankId = c.getLong(0)
+                    val tankName = c.getString(1) ?: "خزان"
+                    val capacity = c.getDouble(2)
+                    val previous = c.getDouble(3)
+                    val previousAt = c.getString(4)
+                    val latest = c.getDouble(5)
+                    val latestAt = c.getString(6)
+                    val measuredDrop = previous - latest
+                    val sales = db.rawQuery(
+                        """SELECT COALESCE(SUM(quantity),0) FROM fuel_sales
+                           WHERE station_id=? AND is_deleted=0 AND status='completed'
+                             AND pump_id IN (SELECT id FROM pumps WHERE tank_id=? AND station_id=? AND is_deleted=0)
+                             AND datetime(COALESCE(NULLIF(sale_date,''),created_at))>datetime(?)
+                             AND datetime(COALESCE(NULLIF(sale_date,''),created_at))<=datetime(?)""",
+                        arrayOf(stationScopeId.toString(),tankId.toString(),stationScopeId.toString(),previousAt,latestAt)
+                    ).use { sc -> if (sc.moveToFirst()) sc.getDouble(0) else 0.0 }
+                    val unexplained = measuredDrop - sales
+                    val threshold = maxOf(50.0, capacity * 0.01)
+                    if (unexplained > threshold) {
+                        upsert("FUEL_SUDDEN_LOSS", "FUEL", tankId,
+                            if (unexplained >= maxOf(threshold * 3.0, capacity * 0.03)) "critical" else "warning",
+                            unexplained, threshold,
+                            "فقد وقود غير مفسر في $tankName: هبوط ATG=$measuredDrop لتر، " +
+                                "مبيعات الفترة=$sales لتر، الفقد الصافي=$unexplained لتر. من $previousAt إلى $latestAt")
+                    } else resolve("FUEL_SUDDEN_LOSS", "FUEL", tankId)
+                }
+            }
+
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
