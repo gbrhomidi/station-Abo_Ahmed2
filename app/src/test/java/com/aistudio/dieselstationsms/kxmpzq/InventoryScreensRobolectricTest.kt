@@ -1517,7 +1517,12 @@ class InventoryScreensRobolectricTest {
         val found = (0 until first.length()).map { first.getJSONObject(it) }
             .filter { it.optString("type") == "PUMP_VARIANCE" }
         assertEquals(1, found.size)
-        assertEquals(nozzleId, found.single().getLong("item_id"))
+        // The public JSON contract intentionally exposes anomaly_id/type/item_type;
+        // verify the scoped entity identity against the persisted ledger row instead.
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_anomalies WHERE anomaly_id=? AND station_id=1 AND item_type='FUEL' AND item_id=? AND anomaly_type='PUMP_VARIANCE'",
+            arrayOf(found.single().getLong("anomaly_id").toString(), nozzleId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
         val second = helper.runInventoryAnomalyDetection(1)
         assertEquals(0, (0 until second.length()).count {
             second.getJSONObject(it).optString("type") == "PUMP_VARIANCE"
