@@ -1537,6 +1537,7 @@ class InventoryScreensRobolectricTest {
         db.update("products", ContentValues().apply { put("quantity", 12.0) },
             "id=? AND station_id=1", arrayOf(productId.toString()))
         db.update("inventory_movements", ContentValues().apply {
+            put("movement_type", "out")
             put("created_at", helper.currentDateForBridge() + " 12:00:00")
         }, "product_id=? AND station_id=1", arrayOf(productId.toString()))
         helper.runInventoryAnomalyDetection(1)
