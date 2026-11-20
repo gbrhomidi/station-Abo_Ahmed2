@@ -4997,7 +4997,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val data = JSONObject(jsonData).apply { put("station_id", stationId) }
                 val id = db.addFuelSale(data, stationId, activity.currentUserId)
                 DebugLogger.info("Sale", "Added sale id=$id")
-                runCatching { db.publishEvent(JSONObject().put("event_type", "fuel_sale_completed").put("consumer", "stock-levels").put("idempotency_key", "fuel-sale:$id").put("payload", JSONObject().put("sale_id", id).put("shift_id", data.optLong("shift_id", 0L)).put("tank_id", data.optLong("tank_id", 0L)).put("pump_id", data.optLong("pump_id", 0L)).put("fuel_type_id", data.optLong("fuel_type_id", 0L)).put("liters", data.optDouble("quantity", 0.0)).put("total", data.optDouble("total_amount", 0.0))), stationId) }
+// Transactional outbox event is inserted by DatabaseHelper with the sale.
                 successResponse(id, "تم إضافة البيع بنجاح")
             } catch (e: Exception) {
                 DebugLogger.logException("Sale", e)
@@ -5022,7 +5022,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 }
                 val result = db.completeSale(data, stationId, activity.currentUserId)
                 if (result.optBoolean("success", false)) {
-                    runCatching { val saleId = result.optLong("sale_id", 0L); if (saleId > 0L) db.publishEvent(JSONObject().put("event_type", "pos_sale_completed").put("consumer", "stock-levels").put("idempotency_key", "pos-sale:$saleId").put("payload", JSONObject().put("sale_id", saleId).put("transaction_id", saleId).put("shift_id", data.optLong("shift_id", 0L)).put("lines", data.optJSONArray("products") ?: JSONArray())), stationId) }
+// Transactional outbox event is inserted by DatabaseHelper with the sale.
                 }
                 if (result.optBoolean("success", false) && isCreditSale) {
                     val saleId = result.optLong("sale_id", 0L)
@@ -13848,7 +13848,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     database.endTransaction()
                 }
 
-                runCatching { db.publishEvent(JSONObject().put("event_type", "fuel_sale_completed").put("consumer", "stock-levels").put("idempotency_key", "fuel-sale:$saleId").put("payload", JSONObject().put("sale_id", saleId).put("shift_id", input.optLong("shift_id", 0L)).put("tank_id", input.optLong("tank_id", 0L)).put("pump_id", input.optLong("pump_id", 0L)).put("fuel_type_id", input.optLong("fuel_type_id", 0L)).put("liters", input.optDouble("quantity", 0.0)).put("unit_price", unitPrice).put("total", input.optDouble("total_amount", 0.0))), stationScopeId) } .onFailure { DebugLogger.logException("FuelSaleEvent", it) }
+// Transactional outbox event is inserted by DatabaseHelper with the sale.
 
                 // Post-commit SMS is isolated: a queue error must not report a committed sale as failed.
                 val smsResult = if (creditSale) {

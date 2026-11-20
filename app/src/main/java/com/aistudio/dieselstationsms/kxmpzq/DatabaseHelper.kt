@@ -12327,7 +12327,28 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             db.beginTransaction()
             try {
                 val existingSaleId = findFinancialIdempotency(db, "fuel_sale", stationScopeId, idempotencyKey)
-                if (existingSaleId != null) return existingSaleId
+                if (existingSaleId != null) {
+                    insertEventOutbox(
+                        db,
+                        eventType = "fuel_sale_completed",
+                        consumer = "stock-levels",
+                        idempotencyKey = "fuel-sale:$existingSaleId",
+                        payload = JSONObject().apply {
+                            put("sale_id", existingSaleId)
+                            put("transaction_id", existingSaleId)
+                            put("shift_id", shiftId)
+                            put("tank_id", data.optLong("tank_id", 0L))
+                            put("pump_id", pumpId ?: 0)
+                            put("fuel_type_id", fuelTypeId)
+                            put("liters", liters)
+                            put("unit_price", pricePerLiter)
+                            put("total", totalAmount)
+                        },
+                        stationScopeId = stationScopeId
+                    )
+                    db.setTransactionSuccessful()
+                    return existingSaleId
+                }
                 require(reserveFinancialIdempotency(db, "fuel_sale", stationScopeId, idempotencyKey)) { "مفتاح العملية مستخدم مسبقاً" }
                 if (resolvedPrice.priceListItemId != null && (resolvedPrice.quantityLimit ?: 0.0) > 0.0) {
                     consumePriceListQuantity(db, resolvedPrice.priceListItemId, liters, stationScopeId)
@@ -12511,6 +12532,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     else if (isCreditSale) 0.0 else totalAmount
                 )
                 if (fuelCostAmount > 0.000001) postSaleCostJournalWithinTransaction(db, saleId, stationScopeId, cashierId, "fuel", fuelCostAmount)
+                insertEventOutbox(
+                    db,
+                    eventType = "fuel_sale_completed",
+                    consumer = "stock-levels",
+                    idempotencyKey = "fuel-sale:$saleId",
+                    payload = JSONObject().apply {
+                        put("sale_id", saleId)
+                        put("transaction_id", saleId)
+                        put("shift_id", shiftId)
+                        put("tank_id", data.optLong("tank_id", 0L))
+                        put("pump_id", pumpId ?: 0)
+                        put("fuel_type_id", fuelTypeId)
+                        put("liters", liters)
+                        put("unit_price", pricePerLiter)
+                        put("total", totalAmount)
+                    },
+                    stationScopeId = stationScopeId
+                )
                 completeFinancialIdempotency(db, "fuel_sale", stationScopeId, idempotencyKey, saleId)
                 db.setTransactionSuccessful()
                 saleId
@@ -12677,6 +12716,30 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val idempotencyKey = data.optString("idempotency_key", "").trim()
             val existingSaleId = findFinancialIdempotency(db, "product_sale", stationScopeId, idempotencyKey)
             if (existingSaleId != null) {
+                insertEventOutbox(
+                    db,
+                    eventType = "pos_sale_completed",
+                    consumer = "stock-levels",
+                    idempotencyKey = "pos-sale:$existingSaleId",
+                    payload = JSONObject().apply {
+                        put("sale_id", existingSaleId)
+                        put("transaction_id", existingSaleId)
+                        put("shift_id", shiftId)
+                        put("lines", JSONArray().apply {
+                            prepared.forEach { item ->
+                                put(JSONObject().apply {
+                                    put("product_id", item.optLong("product_id"))
+                                    put("quantity", item.optDouble("quantity"))
+                                    put("batch_id", item.optLong("batch_id", 0L))
+                                    put("serial_id", item.optLong("serial_id", 0L))
+                                    put("location_id", item.optLong("location_id", 0L))
+                                })
+                            }
+                        })
+                    },
+                    stationScopeId = stationScopeId
+                )
+                db.setTransactionSuccessful()
                 result.put("success", true)
                 result.put("sale_id", existingSaleId)
                 return result
@@ -12793,6 +12856,29 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
             val productCostTotal = prepared.sumOf { it.optDouble("cost_price", 0.0).coerceAtLeast(0.0) * it.optDouble("quantity", 0.0) }
             if (productCostTotal > 0.000001) postSaleCostJournalWithinTransaction(db, saleId, stationScopeId, cashierId, "products", productCostTotal)
+            insertEventOutbox(
+                db,
+                eventType = "pos_sale_completed",
+                consumer = "stock-levels",
+                idempotencyKey = "pos-sale:$saleId",
+                payload = JSONObject().apply {
+                    put("sale_id", saleId)
+                    put("transaction_id", saleId)
+                    put("shift_id", shiftId)
+                    put("lines", JSONArray().apply {
+                        prepared.forEach { item ->
+                            put(JSONObject().apply {
+                                put("product_id", item.optLong("product_id"))
+                                put("quantity", item.optDouble("quantity"))
+                                put("batch_id", item.optLong("batch_id", 0L))
+                                put("serial_id", item.optLong("serial_id", 0L))
+                                put("location_id", item.optLong("location_id", 0L))
+                            })
+                        }
+                    })
+                },
+                stationScopeId = stationScopeId
+            )
             completeFinancialIdempotency(db, "product_sale", stationScopeId, idempotencyKey, saleId)
             db.setTransactionSuccessful()
             result.put("success", true)
@@ -37774,21 +37860,52 @@ private fun postSalesReversalJournal(
         return JSONObject().put("success", true).put("invoice_id", invoiceId).put("status", "APPROVED").put("approved_by", accountantId)
     }
 
+    /** Inserts into the caller's transaction so a committed sale can never lose its outbox event. */
+    private fun insertEventOutbox(
+        db: SQLiteDatabase,
+        eventType: String,
+        consumer: String,
+        idempotencyKey: String?,
+        payload: JSONObject,
+        stationScopeId: Int
+    ): Long {
+        require(stationScopeId > 0 && eventType.isNotBlank() && consumer.isNotBlank()) {
+            "نطاق المحطة ونوع الحدث والمستهلك مطلوبة"
+        }
+        val key = idempotencyKey?.trim()?.takeIf { it.isNotBlank() }
+        val values = ContentValues().apply {
+            put("event_type", eventType)
+            put("payload", payload.toString())
+            put("consumer", consumer)
+            put("station_id", stationScopeId)
+            if (key != null) put("idempotency_key", key)
+        }
+        val inserted = db.insertWithOnConflict("events_outbox", null, values, SQLiteDatabase.CONFLICT_IGNORE)
+        if (inserted > 0L) return inserted
+        require(key != null) { "تعذر حفظ الحدث دون مفتاح منع تكرار" }
+        return db.rawQuery(
+            "SELECT event_id FROM events_outbox WHERE station_id=? AND consumer=? AND idempotency_key=?",
+            arrayOf(stationScopeId.toString(), consumer, key)
+        ).use { cursor ->
+            require(cursor.moveToFirst()) { "تعذر استعادة الحدث الموجود بمفتاح منع التكرار" }
+            cursor.getLong(0)
+        }
+    }
+
     fun publishEvent(data: JSONObject, stationScopeId: Int): Long {
-        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
-        val eventType=data.optString("event_type").trim(); val consumer=data.optString("consumer","stock-levels").trim()
-        require(eventType.isNotBlank() && consumer.isNotBlank()) { "نوع الحدث والمستهلك مطلوبان" }
-        val key=data.optString("idempotency_key").trim().takeIf { it.isNotBlank() }
-        val db=writableDatabase; db.beginTransaction()
+        val eventType = data.optString("event_type").trim()
+        val consumer = data.optString("consumer", "stock-levels").trim()
+        val payload = data.optJSONObject("payload") ?: data
+        val key = data.optString("idempotency_key").trim().takeIf { it.isNotBlank() }
+        val db = writableDatabase
+        db.beginTransaction()
         try {
-            val values=ContentValues().apply { put("event_type",eventType); put("payload",data.optJSONObject("payload")?.toString() ?: data.toString()); put("consumer",consumer); put("station_id",stationScopeId); if(key!=null) put("idempotency_key",key) }
-            val inserted=db.insertWithOnConflict("events_outbox",null,values,SQLiteDatabase.CONFLICT_IGNORE)
-            val id=if(inserted>0L) inserted else {
-                require(key!=null) { "تعذر حفظ الحدث" }
-                db.rawQuery("SELECT event_id FROM events_outbox WHERE station_id=? AND consumer=? AND idempotency_key=?",arrayOf(stationScopeId.toString(),consumer,key)).use { c -> require(c.moveToFirst()); c.getLong(0) }
-            }
-            db.setTransactionSuccessful(); return id
-        } finally { db.endTransaction() }
+            val id = insertEventOutbox(db, eventType, consumer, key, payload, stationScopeId)
+            db.setTransactionSuccessful()
+            return id
+        } finally {
+            db.endTransaction()
+        }
     }
 
     fun claimPendingEvents(data: JSONObject, stationScopeId: Int): JSONArray {

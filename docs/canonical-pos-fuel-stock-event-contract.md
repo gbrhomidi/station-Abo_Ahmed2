@@ -13,7 +13,7 @@ This deliberately selects the review's preferred native path. Adding consumeProd
 
 1. pos.html sends one completeSale request and includes its operation idempotency key.
 2. MainActivity.WebAppInterface.completeSale injects the authenticated station scope and delegates to DatabaseHelper.completeSale.
-3. Only a successful SQLite result triggers pos_sale_completed publication.
+3. DatabaseHelper.completeSale inserts pos_sale_completed into events_outbox before the sale transaction commits, so a committed sale and its event are atomic.
 4. The event uses consumer stock-levels and key pos-sale:<sale_id>.
 5. The bridge retains the existing success/data/error envelope.
 
@@ -22,7 +22,7 @@ This deliberately selects the review's preferred native path. Adding consumeProd
 1. fuel-sales.html submits save through executeFuelSalesAsync.
 2. The allowlisted dispatcher invokes saveFuelSaleRecord on Dispatchers.IO.
 3. The native method wraps addFuelSale and delivery-fee accounting in one SQLite transaction.
-4. After that transaction commits, it publishes fuel_sale_completed to consumer stock-levels with key fuel-sale:<sale_id>. The event includes pump_id as well as shift, tank, fuel type, litres and totals.
+4. DatabaseHelper.addFuelSale inserts fuel_sale_completed into events_outbox before its transaction commits, using key fuel-sale:<sale_id>. The event includes pump_id as well as shift, tank, fuel type, litres and totals.
 5. SMS and other post-commit side effects remain isolated from the committed sale result.
 
 ## Non-duplication and retry rules
@@ -31,7 +31,7 @@ This deliberately selects the review's preferred native path. Adding consumeProd
 - Do not treat the asynchronous dispatch acknowledgement (queued) as sale confirmation; the screen waits for the native callback and a real sale_id.
 - Keep sale idempotency in the SQLite sale path and event idempotency in events_outbox separate but stable.
 - A duplicate event delivery must be deduplicated by the outbox identity/consumer contract; consumers must not infer a new sale from a retry.
-- A post-commit event publication failure is written to diagnostic logs and must never cause the UI to resubmit a committed sale automatically. Durable retry/reconciliation remains a separate outbox-operational acceptance item.
+- The outbox insert participates in the same SQLite transaction as the sale, eliminating the crash window between sale commit and event enqueue. Delivery is at-least-once; consumers must make their external effect idempotent.
 
 ## Verification
 
@@ -43,4 +43,4 @@ sales-stock-event-contract-regression-test.js checks the actual screen and bridg
 - aligned stock consumer and stable fuel event identity;
 - preservation of pump identity in the fuel event payload.
 
-This is a source/contract regression test, not a substitute for the existing Kotlin/Robolectric SQLite transaction and outbox tests. The Actions run remains the authoritative build/test result for each pushed SHA.
+InventoryEventOutboxRobolectricTest covers station/consumer-scoped idempotency, claim/lease, acknowledgement, expired-lease crash recovery, retry/backoff, and terminal failure. The source/contract test verifies both sale paths enqueue inside their own SQLite transaction. The Actions run remains the authoritative build/test result for each pushed SHA.

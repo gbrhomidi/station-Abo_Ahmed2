@@ -5,6 +5,7 @@ const read = (...p) => fs.readFileSync(path.join(__dirname, ...p), 'utf8');
 const main = read('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt');
 const pos = read('app/src/main/assets/screens/pos.html');
 const fuel = read('app/src/main/assets/screens/fuel-sales.html');
+const db = read('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt');
 function part(s, a, b) { const i=s.indexOf(a); assert.notEqual(i,-1,a); const j=s.indexOf(b,i+a.length); assert.notEqual(j,-1,b); return s.slice(i,j); }
 
 const posUi = part(pos, 'async function completeSale()', '// 11. عرض الفاتورة');
@@ -14,9 +15,8 @@ for (const name of ['consumeProductStockJson','consumeFuelStockJson','publishEve
 
 const posBridge = part(main, 'fun completeSale(jsonData: String): String {', 'fun getNextInvoiceNumber(): String');
 assert.ok(posBridge.includes('db.completeSale(data, stationId, activity.currentUserId)'));
-assert.ok(posBridge.includes('if (result.optBoolean("success", false))'));
-assert.ok(posBridge.includes('"idempotency_key", "pos-sale:$saleId"'));
-assert.ok(posBridge.includes('"consumer", "stock-levels"'));
+assert.ok(posBridge.includes('db.completeSale(data, stationId, activity.currentUserId)'));
+assert.ok(!posBridge.includes('db.publishEvent('), 'POS bridge must not enqueue outside the sale transaction');
 assert.ok(posBridge.includes('dataResponse(result)'));
 
 const dispatch = part(main, 'fun executeFuelSalesAsync(', 'fun getStartupState(): String');
@@ -29,10 +29,27 @@ assert.ok(fuelSave.includes('database.beginTransaction()'));
 assert.ok(fuelSave.includes('saleId = db.addFuelSale(input, stationScopeId, currentUserId)'));
 assert.ok(fuelSave.includes('database.setTransactionSuccessful()'));
 assert.ok(fuelSave.includes('database.endTransaction()'));
-assert.ok(fuelSave.includes('"event_type", "fuel_sale_completed"'));
-assert.ok(fuelSave.includes('"consumer", "stock-levels"'));
-assert.ok(fuelSave.includes('"idempotency_key", "fuel-sale:$saleId"'));
-assert.ok(fuelSave.includes('onFailure { DebugLogger.logException("FuelSaleEvent", it) }'),
-    'post-commit outbox failures must be visible in diagnostics');
-assert.ok(fuelSave.includes('put("pump_id", input.optLong("pump_id", 0L))'));
-console.log('Canonical POS/fuel SQLite stock-event contract PASS.');
+assert.ok(!fuelSave.includes('db.publishEvent('), 'Fuel bridge must not enqueue after committing the sale');
+const fuelNative = part(db, 'fun addFuelSale(data: JSONObject, stationScopeId: Int, cashierId: Long): Long {', 'fun getSales(stationScopeId: Int): JSONArray');
+assert.ok(fuelNative.includes('insertEventOutbox('));
+assert.ok(fuelNative.includes('eventType = "fuel_sale_completed"'));
+assert.ok(fuelNative.includes('idempotencyKey = "fuel-sale:$saleId"'));
+assert.ok(fuelNative.includes('put("pump_id", pumpId ?: 0)'));
+assert.ok(fuelNative.indexOf('insertEventOutbox(') < fuelNative.indexOf('db.setTransactionSuccessful()'),
+    'Fuel event must be persisted before the sale transaction commits');
+
+const posNativeDb = part(db, 'fun completeSale(data: JSONObject, stationScopeId: Int, cashierId: Long): JSONObject {', 'private fun resolveDryStockSelection');
+assert.ok(posNativeDb.includes('insertEventOutbox('));
+assert.ok(posNativeDb.includes('eventType = "pos_sale_completed"'));
+assert.ok(posNativeDb.includes('idempotencyKey = "pos-sale:$saleId"'));
+assert.ok(posNativeDb.indexOf('insertEventOutbox(') < posNativeDb.indexOf('db.setTransactionSuccessful()'),
+    'POS event must be persisted before the sale transaction commits');
+
+assert.ok(db.includes('private fun insertEventOutbox('));
+assert.ok(db.includes('fun claimPendingEvents('));
+assert.ok(db.includes("status='PROCESSING'"));
+assert.ok(db.includes('lease_until'));
+assert.ok(db.includes('fun acknowledgeEvent('));
+assert.ok(db.includes('fun failEvent('));
+
+console.log('Canonical POS/fuel transactional outbox contract PASS.');
