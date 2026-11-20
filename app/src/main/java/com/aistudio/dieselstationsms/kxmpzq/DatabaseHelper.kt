@@ -30881,8 +30881,26 @@ private fun postSalesReversalJournal(
                     put("cause",cause); put("notes",data.optString("notes")); put("created_by",actorId)
                     putNull("approved_by"); putNull("approved_at")
                 }
-                db.delete("shift_reconciliations","shift_id=? AND tank_id=?",arrayOf(shiftId.toString(),tankId.toString()))
-                val id=db.insertOrThrow("shift_reconciliations",null,cv)
+                // Draft resubmission is an upsert: retain its identity and never erase an approved reconciliation.
+                val existing = db.rawQuery(
+                    """SELECT id,approved_by,approved_at FROM shift_reconciliations
+                       WHERE shift_id=? AND tank_id=? ORDER BY id DESC LIMIT 1""",
+                    arrayOf(shiftId.toString(),tankId.toString())
+                ).use { c ->
+                    if (c.moveToFirst()) Triple(c.getLong(0), !c.isNull(1), !c.isNull(2)) else null
+                }
+                val id = if (existing != null) {
+                    require(!existing.second && !existing.third) {
+                        "التسوية معتمدة ولا يمكن تعديلها؛ يلزم إجراء عكسي موثق بصلاحية مستقلة"
+                    }
+                    val changed = db.update(
+                        "shift_reconciliations", cv,
+                        "id=? AND shift_id=? AND tank_id=? AND approved_by IS NULL AND approved_at IS NULL",
+                        arrayOf(existing.first.toString(),shiftId.toString(),tankId.toString())
+                    )
+                    require(changed == 1) { "تعذر تحديث مسودة التسوية بسبب تغير حالتها بالتزامن" }
+                    existing.first
+                } else db.insertOrThrow("shift_reconciliations",null,cv)
                 db.setTransactionSuccessful()
                 JSONObject().put("recon_id",id).put("status","DRAFT")
                     .put("opening_reading_id",openingReadingId).put("opening_at",openingAt)
