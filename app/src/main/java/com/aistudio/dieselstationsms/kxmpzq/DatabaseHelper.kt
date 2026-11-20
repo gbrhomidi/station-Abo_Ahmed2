@@ -270,9 +270,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensurePhase2DryStockSchema(db)
             ensurePhase3Phase4Schema(db)
             ensurePhase3ReceiptSchema(db)
+            // SupplierPayablesRepository owns the base supplier_invoices table.
+            SupplierPayablesRepository.ensureSchema(db)
             ensurePhase4ProcurementSchema(db)
             DebtDueDateRepository.ensureSchema(db)
-            SupplierPayablesRepository.ensureSchema(db)
             CustomerReceivablesRepository.ensureSchema(db)
             SmsOutboxSchema.ensureSchema(db)
             db.setTransactionSuccessful()
@@ -347,7 +348,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     }
                     67 -> { /* V67 -> V68: re-apply additive inventory schema repair for installed V67 databases. */ }
                     68 -> { /* V68 -> V69: add durable station-scoped outbox metadata. */ }
-                    71 -> ensurePhase4ProcurementSchema(db)
                 }
             }
             // V64 repairs Fleet schema for every legacy database, including installations already at V63.
@@ -374,9 +374,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensurePhase2DryStockSchema(db)
             ensurePhase3Phase4Schema(db)
             ensurePhase3ReceiptSchema(db)
+            // The V72 extension must run after the payable owner creates its base table.
+            SupplierPayablesRepository.ensureSchema(db)
             ensurePhase4ProcurementSchema(db)
             DebtDueDateRepository.ensureSchema(db)
-            SupplierPayablesRepository.ensureSchema(db)
             CustomerReceivablesRepository.ensureSchema(db)
             // Apply the idempotent SMS attempt schema for every upgraded database,
             // including installations previously opened at V57 before the Stage 6 schema repair completed.
