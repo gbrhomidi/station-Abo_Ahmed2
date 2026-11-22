@@ -65,8 +65,10 @@ class InventoryEventOutboxRobolectricTest {
         assertEquals(id, claimed.getJSONObject(0).getLong("event_id"))
         assertEquals("PROCESSING", claimed.getJSONObject(0).getString("status"))
         assertEquals(1, claimed.getJSONObject(0).getInt("attempts"))
-        assertTrue(helper.acknowledgeEvent(id, 1, "stock-levels"))
-        assertFalse(helper.acknowledgeEvent(id, 1, "stock-levels"))
+        val leaseToken = claimed.getJSONObject(0).getString("lease_token")
+        assertTrue(leaseToken.isNotBlank())
+        assertTrue(helper.acknowledgeEvent(id, 1, "stock-levels", leaseToken))
+        assertFalse(helper.acknowledgeEvent(id, 1, "stock-levels", leaseToken))
         assertEquals(0, helper.claimPendingEvents(JSONObject().put("consumer", "stock-levels"), 1).length())
         assertEquals("DELIVERED", db.rawQuery("SELECT status FROM events_outbox WHERE event_id=?", arrayOf(id.toString()))
             .use { cursor -> check(cursor.moveToFirst()); cursor.getString(0) })
@@ -88,8 +90,10 @@ class InventoryEventOutboxRobolectricTest {
     @Test
     fun failedDeliveryBacksOffThenStopsAtAttemptLimit() {
         val id = helper.publishEvent(event(), 1)
-        assertEquals(1, helper.claimPendingEvents(JSONObject(), 1).length())
-        assertTrue(helper.failEvent(id, 1, "stock-levels", "temporary failure", maxAttempts = 2))
+        val firstClaim = helper.claimPendingEvents(JSONObject(), 1)
+        assertEquals(1, firstClaim.length())
+        val firstToken = firstClaim.getJSONObject(0).getString("lease_token")
+        assertTrue(helper.failEvent(id, 1, "stock-levels", firstToken, "temporary failure", maxAttempts = 2))
         assertEquals("PENDING", db.rawQuery("SELECT status FROM events_outbox WHERE event_id=?", arrayOf(id.toString()))
             .use { cursor -> check(cursor.moveToFirst()); cursor.getString(0) })
         db.update("events_outbox", ContentValues().apply { put("available_at", "2000-01-01 00:00:00") },
@@ -97,9 +101,31 @@ class InventoryEventOutboxRobolectricTest {
         val secondClaim = helper.claimPendingEvents(JSONObject(), 1)
         assertEquals(1, secondClaim.length())
         assertEquals(2, secondClaim.getJSONObject(0).getInt("attempts"))
-        assertTrue(helper.failEvent(id, 1, "stock-levels", "permanent failure", maxAttempts = 2))
+        val secondToken = secondClaim.getJSONObject(0).getString("lease_token")
+        assertTrue(helper.failEvent(id, 1, "stock-levels", secondToken, "permanent failure", maxAttempts = 2))
         assertEquals("FAILED", db.rawQuery("SELECT status FROM events_outbox WHERE event_id=?", arrayOf(id.toString()))
             .use { cursor -> check(cursor.moveToFirst()); cursor.getString(0) })
+    }
+
+    @Test
+    fun staleLeaseOwnerCannotAcknowledgeOrFailAfterReclaim() {
+        val id = helper.publishEvent(event(), 1)
+        val firstClaim = helper.claimPendingEvents(JSONObject(), 1).getJSONObject(0)
+        val staleToken = firstClaim.getString("lease_token")
+        assertTrue(staleToken.isNotBlank())
+
+        db.update("events_outbox", ContentValues().apply { put("lease_until", "2000-01-01 00:00:00") },
+            "event_id=?", arrayOf(id.toString()))
+        val reclaimed = helper.claimPendingEvents(JSONObject(), 1).getJSONObject(0)
+        val currentToken = reclaimed.getString("lease_token")
+        assertTrue(currentToken.isNotBlank())
+        assertFalse(staleToken == currentToken)
+
+        assertFalse(helper.acknowledgeEvent(id, 1, "stock-levels", staleToken))
+        assertFalse(helper.failEvent(id, 1, "stock-levels", staleToken, "late worker failure"))
+        assertTrue(helper.acknowledgeEvent(id, 1, "stock-levels", currentToken))
+        assertEquals("DELIVERED", db.rawQuery("SELECT status FROM events_outbox WHERE event_id=?",
+            arrayOf(id.toString())).use { c -> check(c.moveToFirst()); c.getString(0) })
     }
 
     @Test

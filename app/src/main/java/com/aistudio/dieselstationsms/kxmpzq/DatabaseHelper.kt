@@ -2002,6 +2002,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureColumn(db, "events_outbox", "idempotency_key", "TEXT")
         ensureColumn(db, "events_outbox", "claimed_at", "TEXT")
         ensureColumn(db, "events_outbox", "lease_until", "TEXT")
+        ensureColumn(db, "events_outbox", "lease_token", "TEXT")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_phase3_events_station_pending ON events_outbox(station_id,consumer,status,available_at,event_id)")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_phase3_events_idempotency ON events_outbox(station_id,consumer,idempotency_key) WHERE idempotency_key IS NOT NULL")
         db.execSQL("""CREATE TABLE IF NOT EXISTS inventory_forecasts (
@@ -38197,34 +38198,56 @@ private fun postSalesReversalJournal(
         val limit=data.optInt("limit",50).coerceIn(1,200); val lease=data.optInt("lease_seconds",120).coerceIn(30,3600)
         val db=writableDatabase; db.beginTransaction()
         try {
-            db.execSQL("""UPDATE events_outbox SET status='PENDING',claimed_at=NULL,lease_until=NULL,available_at=CURRENT_TIMESTAMP,
+            db.execSQL("""UPDATE events_outbox SET status='PENDING',claimed_at=NULL,lease_until=NULL,lease_token=NULL,available_at=CURRENT_TIMESTAMP,
                 last_error=COALESCE(last_error,'انتهت مهلة الحجز؛ أعيد الحدث إلى قائمة الانتظار')
                 WHERE station_id=? AND consumer=? AND status='PROCESSING' AND lease_until IS NOT NULL AND datetime(lease_until)<=datetime('now')""",arrayOf(stationScopeId,consumer))
             val ids=mutableListOf<Long>()
             db.rawQuery("""SELECT event_id FROM events_outbox WHERE station_id=? AND consumer=? AND status='PENDING'
                 AND datetime(available_at)<=datetime('now') ORDER BY event_id LIMIT ?""",arrayOf(stationScopeId.toString(),consumer,limit.toString())).use { c -> while(c.moveToNext()) ids+=c.getLong(0) }
-            ids.forEach { id -> db.execSQL("""UPDATE events_outbox SET status='PROCESSING',attempts=attempts+1,claimed_at=CURRENT_TIMESTAMP,
-                lease_until=datetime('now','+'||?||' seconds') WHERE event_id=? AND station_id=? AND consumer=? AND status='PENDING'""",arrayOf(lease,id,stationScopeId,consumer)) }
+            ids.forEach { id ->
+                val leaseToken = UUID.randomUUID().toString()
+                db.execSQL("""UPDATE events_outbox SET status='PROCESSING',attempts=attempts+1,claimed_at=CURRENT_TIMESTAMP,
+                    lease_until=datetime('now','+'||?||' seconds'),lease_token=?
+                    WHERE event_id=? AND station_id=? AND consumer=? AND status='PENDING'""",
+                    arrayOf(lease,leaseToken,id,stationScopeId,consumer))
+            }
             val result=JSONArray()
             if(ids.isNotEmpty()) { val marks=ids.joinToString(",") { "?" }; db.rawQuery("SELECT * FROM events_outbox WHERE station_id=? AND event_id IN ($marks) AND status='PROCESSING' ORDER BY event_id",(listOf(stationScopeId.toString())+ids.map { it.toString() }).toTypedArray()).use { c -> while(c.moveToNext()) result.put(cursorToJsonObject(c)) } }
             db.setTransactionSuccessful(); return result
         } finally { db.endTransaction() }
     }
 
-    fun acknowledgeEvent(eventId: Long, stationScopeId: Int, consumer: String): Boolean {
-        require(eventId>0 && stationScopeId>0 && consumer.isNotBlank())
-        val values=ContentValues().apply { put("status","DELIVERED"); put("delivered_at",getCurrentDateTime()); putNull("claimed_at"); putNull("lease_until"); putNull("last_error") }
-        return writableDatabase.update("events_outbox",values,"event_id=? AND station_id=? AND consumer=? AND status='PROCESSING'",arrayOf(eventId.toString(),stationScopeId.toString(),consumer))==1
+    fun acknowledgeEvent(eventId: Long, stationScopeId: Int, consumer: String, leaseToken: String): Boolean {
+        require(eventId>0 && stationScopeId>0 && consumer.isNotBlank() && leaseToken.isNotBlank())
+        val values=ContentValues().apply {
+            put("status","DELIVERED"); put("delivered_at",getCurrentDateTime())
+            putNull("claimed_at"); putNull("lease_until"); putNull("lease_token"); putNull("last_error")
+        }
+        return writableDatabase.update(
+            "events_outbox", values,
+            "event_id=? AND station_id=? AND consumer=? AND status='PROCESSING' AND lease_token=?",
+            arrayOf(eventId.toString(),stationScopeId.toString(),consumer,leaseToken)
+        )==1
     }
 
-    fun failEvent(eventId: Long, stationScopeId: Int, consumer: String, error: String, maxAttempts: Int = 8): Boolean {
-        require(eventId>0 && stationScopeId>0 && consumer.isNotBlank())
+    fun failEvent(eventId: Long, stationScopeId: Int, consumer: String, leaseToken: String, error: String, maxAttempts: Int = 8): Boolean {
+        require(eventId>0 && stationScopeId>0 && consumer.isNotBlank() && leaseToken.isNotBlank())
         val db=writableDatabase
-        val attempts=db.rawQuery("SELECT attempts FROM events_outbox WHERE event_id=? AND station_id=? AND consumer=? AND status='PROCESSING'",arrayOf(eventId.toString(),stationScopeId.toString(),consumer)).use { c -> if(c.moveToFirst()) c.getInt(0) else return false }
+        val attempts=db.rawQuery(
+            "SELECT attempts FROM events_outbox WHERE event_id=? AND station_id=? AND consumer=? AND status='PROCESSING' AND lease_token=?",
+            arrayOf(eventId.toString(),stationScopeId.toString(),consumer,leaseToken)
+        ).use { c -> if(c.moveToFirst()) c.getInt(0) else return false }
         val terminal=attempts>=maxAttempts.coerceAtLeast(1); val delay=(30L shl (attempts-1).coerceIn(0,7)).coerceAtMost(3600L)
         val available=if(terminal) getCurrentDateTime() else db.rawQuery("SELECT datetime('now',?)",arrayOf("+$delay seconds")).use { c -> if(c.moveToFirst()) c.getString(0) else getCurrentDateTime() }
-        val values=ContentValues().apply { put("status",if(terminal) "FAILED" else "PENDING"); put("available_at",available); put("last_error",error.take(1000)); putNull("claimed_at"); putNull("lease_until") }
-        return db.update("events_outbox",values,"event_id=? AND station_id=? AND consumer=? AND status='PROCESSING'",arrayOf(eventId.toString(),stationScopeId.toString(),consumer))==1
+        val values=ContentValues().apply {
+            put("status",if(terminal) "FAILED" else "PENDING"); put("available_at",available)
+            put("last_error",error.take(1000)); putNull("claimed_at"); putNull("lease_until"); putNull("lease_token")
+        }
+        return db.update(
+            "events_outbox",values,
+            "event_id=? AND station_id=? AND consumer=? AND status='PROCESSING' AND lease_token=?",
+            arrayOf(eventId.toString(),stationScopeId.toString(),consumer,leaseToken)
+        )==1
     }
 
     /**
