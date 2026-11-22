@@ -12369,7 +12369,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val shiftId = getCurrentShift(stationScopeId)?.optLong("shift_id", 0L)?.toInt()
             ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية")
         val customerId = data.optLong("customer_id", 0L).takeIf { it > 0L }?.toInt()
-        val pumpId = data.optLong("pump_id", 0L).takeIf { it > 0L }?.toInt()
+        val pumpId = data.optLong("pump_id", 0L).takeIf { it > 0L }
+            ?: throw IllegalArgumentException("المضخة مطلوبة لتسجيل عملية بيع الوقود")?.toInt()
         val fuelTypeId = data.optLong("fuel_type_id", 0L).toInt()
         require(fuelTypeId > 0) { "نوع الوقود مطلوب" }
         val requestedAt = data.optString("transaction_time", "").trim().ifBlank { getCurrentDateTime() }
@@ -12410,6 +12411,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val idempotencyKey = data.optString("idempotency_key", "").trim()
             db.beginTransaction()
             try {
+                // Resolve the authoritative tank from the selected active pump. Never trust
+                // a browser-supplied tank_id for inventory events or stock reconciliation.
+                val resolvedTankId = db.rawQuery(
+                    """SELECT t.id
+                       FROM pumps p
+                       JOIN tanks t ON t.id = p.tank_id AND t.station_id = p.station_id
+                       WHERE p.id = ? AND p.station_id = ? AND p.is_deleted = 0
+                         AND p.status = 'active' AND t.is_deleted = 0 AND t.status <> 'retired'
+                         AND t.fuel_type_id = ?""",
+                    arrayOf(pumpId.toString(), stationScopeId.toString(), fuelTypeId.toString())
+                ).use { cursor ->
+                    require(cursor.moveToFirst()) { "المضخة غير نشطة أو لا تتصل بخزان صالح لنوع الوقود المحدد" }
+                    cursor.getLong(0)
+                }
                 val existingSaleId = findFinancialIdempotency(db, "fuel_sale", stationScopeId, idempotencyKey)
                 if (existingSaleId != null) {
                     insertEventOutbox(
@@ -12421,7 +12436,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                             put("sale_id", existingSaleId)
                             put("transaction_id", existingSaleId)
                             put("shift_id", shiftId)
-                            put("tank_id", data.optLong("tank_id", 0L))
+                            put("tank_id", resolvedTankId)
                             put("pump_id", pumpId ?: 0)
                             put("fuel_type_id", fuelTypeId)
                             put("liters", liters)
@@ -12625,7 +12640,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         put("sale_id", saleId)
                         put("transaction_id", saleId)
                         put("shift_id", shiftId)
-                        put("tank_id", data.optLong("tank_id", 0L))
+                        put("tank_id", resolvedTankId)
                         put("pump_id", pumpId ?: 0)
                         put("fuel_type_id", fuelTypeId)
                         put("liters", liters)

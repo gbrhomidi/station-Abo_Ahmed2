@@ -87,6 +87,45 @@ class FuelSalesDeliveryFeeRobolectricTest {
     }
 
     @Test
+    fun nativeFuelSaleRejectsMissingPumpBeforeAnyBusinessWrite() {
+        assertTrue("The fixture must contain an active pump connected to a tank", pumpId > 0L)
+        val tankId = scalarLong("SELECT tank_id FROM pumps WHERE id=? AND station_id=?",
+            arrayOf(pumpId.toString(), stationId.toString()))
+        val beforeSales = scalarLong("SELECT COUNT(*) FROM sales_transactions WHERE station_id=?",
+            arrayOf(stationId.toString()))
+        val beforeFuelRows = scalarLong("SELECT COUNT(*) FROM fuel_sales WHERE station_id=?",
+            arrayOf(stationId.toString()))
+        val beforeEvents = scalarLong("SELECT COUNT(*) FROM events_outbox WHERE station_id=?",
+            arrayOf(stationId.toString()))
+        val beforeTank = scalarDouble("SELECT current_quantity FROM tanks WHERE id=? AND station_id=?",
+            arrayOf(tankId.toString(), stationId.toString()))
+        val key = "missing-pump-${UUID.randomUUID()}"
+        val input = buildFuelSaleInput(DeliveryFeeAccounting.EXEMPT, 0.0, "")
+            .remove("pump_id")
+            .put("idempotency_key", key)
+
+        var rejected = false
+        try {
+            helper.addFuelSale(input, stationId, userId)
+        } catch (error: IllegalArgumentException) {
+            rejected = error.message.orEmpty().contains("المضخة")
+        }
+
+        assertTrue("The native SQLite entry point must reject a fuel sale without pump identity", rejected)
+        assertEquals(beforeSales, scalarLong("SELECT COUNT(*) FROM sales_transactions WHERE station_id=?",
+            arrayOf(stationId.toString())))
+        assertEquals(beforeFuelRows, scalarLong("SELECT COUNT(*) FROM fuel_sales WHERE station_id=?",
+            arrayOf(stationId.toString())))
+        assertEquals(beforeEvents, scalarLong("SELECT COUNT(*) FROM events_outbox WHERE station_id=?",
+            arrayOf(stationId.toString())))
+        assertEquals(beforeTank, scalarDouble("SELECT current_quantity FROM tanks WHERE id=? AND station_id=?",
+            arrayOf(tankId.toString(), stationId.toString())), 0.0001)
+        assertEquals(0L, scalarLong(
+            "SELECT COUNT(*) FROM financial_idempotency_keys WHERE station_id=? AND idempotency_key=?",
+            arrayOf(stationId.toString(), key)))
+    }
+
+    @Test
     fun exemptModeKeepsFuelAndInvoiceTotalsGrossWithoutFeeJournal() {
         assertMode(
             mode = DeliveryFeeAccounting.EXEMPT,
