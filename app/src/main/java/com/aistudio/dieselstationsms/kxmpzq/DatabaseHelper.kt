@@ -12369,8 +12369,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val shiftId = getCurrentShift(stationScopeId)?.optLong("shift_id", 0L)?.toInt()
             ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية")
         val customerId = data.optLong("customer_id", 0L).takeIf { it > 0L }?.toInt()
-        val pumpId = data.optLong("pump_id", 0L).takeIf { it > 0L }
-            ?: throw IllegalArgumentException("المضخة مطلوبة لتسجيل عملية بيع الوقود")?.toInt()
+        val pumpId = data.optLong("pump_id", 0L).takeIf { it > 0L }?.toInt()
+            ?: throw IllegalArgumentException("المضخة مطلوبة لتسجيل عملية بيع الوقود")
         val fuelTypeId = data.optLong("fuel_type_id", 0L).toInt()
         require(fuelTypeId > 0) { "نوع الوقود مطلوب" }
         val requestedAt = data.optString("transaction_time", "").trim().ifBlank { getCurrentDateTime() }
