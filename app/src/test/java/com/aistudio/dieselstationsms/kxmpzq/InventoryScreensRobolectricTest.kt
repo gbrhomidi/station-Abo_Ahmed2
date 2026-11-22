@@ -1857,8 +1857,10 @@ class InventoryScreensRobolectricTest {
         val id=helper.publishEvent(event,1); assertEquals(id,helper.publishEvent(event,1))
         val claimed=helper.claimPendingEvents(JSONObject(),1); assertEquals(1,claimed.length())
         assertEquals("PROCESSING",claimed.getJSONObject(0).getString("status")); assertEquals(1,claimed.getJSONObject(0).getInt("attempts"))
-        assertFalse(helper.acknowledgeEvent(id,2,"stock-levels"))
-        assertTrue(helper.acknowledgeEvent(id,1,"stock-levels")); assertFalse(helper.acknowledgeEvent(id,1,"stock-levels"))
+        val leaseToken=claimed.getJSONObject(0).getString("lease_token")
+        assertTrue(leaseToken.isNotBlank())
+        assertFalse(helper.acknowledgeEvent(id,2,"stock-levels",leaseToken))
+        assertTrue(helper.acknowledgeEvent(id,1,"stock-levels",leaseToken)); assertFalse(helper.acknowledgeEvent(id,1,"stock-levels",leaseToken))
         val status=helper.writableDatabase.rawQuery("SELECT status FROM events_outbox WHERE event_id=?",arrayOf(id.toString())).use { c -> check(c.moveToFirst()); c.getString(0) }
         assertEquals("DELIVERED",status)
     }
@@ -1866,8 +1868,11 @@ class InventoryScreensRobolectricTest {
     @Test
     fun outboxFailureReturnsClaimedEventToRetryQueue() {
         val id=helper.publishEvent(JSONObject().put("event_type","fuel_sale_completed"),1)
-        assertEquals(1,helper.claimPendingEvents(JSONObject(),1).length())
-        assertTrue(helper.failEvent(id,1,"stock-levels","temporary failure"))
+        val claimed=helper.claimPendingEvents(JSONObject(),1)
+        assertEquals(1,claimed.length())
+        val leaseToken=claimed.getJSONObject(0).getString("lease_token")
+        assertTrue(leaseToken.isNotBlank())
+        assertTrue(helper.failEvent(id,1,"stock-levels",leaseToken,"temporary failure"))
         val row=helper.writableDatabase.rawQuery("SELECT status,attempts,lease_until FROM events_outbox WHERE event_id=?",arrayOf(id.toString())).use { c -> check(c.moveToFirst()); Triple(c.getString(0),c.getInt(1),c.getString(2)) }
         assertEquals("PENDING",row.first); assertEquals(1,row.second); assertTrue(row.third==null)
     }
