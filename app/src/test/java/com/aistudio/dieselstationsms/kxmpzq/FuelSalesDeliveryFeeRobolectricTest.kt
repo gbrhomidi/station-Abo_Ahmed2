@@ -101,8 +101,8 @@ class FuelSalesDeliveryFeeRobolectricTest {
             arrayOf(tankId.toString(), stationId.toString()))
         val key = "missing-pump-${UUID.randomUUID()}"
         val input = buildFuelSaleInput(DeliveryFeeAccounting.EXEMPT, 0.0, "")
-            .remove("pump_id")
-            .put("idempotency_key", key)
+        input.remove("pump_id")
+        input.put("idempotency_key", key)
 
         var rejected = false
         try {
