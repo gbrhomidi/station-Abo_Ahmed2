@@ -28,6 +28,7 @@ This deliberately selects the review's preferred native path. Adding consumeProd
 ## Non-duplication and retry rules
 
 - Do not add JavaScript-side stock deduction or event publication.
+- Keep outbox publication, claiming, acknowledgement and failure transitions native-only. Do not expose these queue lifecycle operations through `@JavascriptInterface`; a future Kotlin consumer must verify the already-committed business effect before acknowledging and must never repeat the stock/tank mutation.
 - Do not treat the asynchronous dispatch acknowledgement (queued) as sale confirmation; the screen waits for the native callback and a real sale_id.
 - Keep sale idempotency in the SQLite sale path and event idempotency in events_outbox separate but stable.
 - A duplicate event delivery must be deduplicated by the outbox identity/consumer contract; consumers must not infer a new sale from a retry.

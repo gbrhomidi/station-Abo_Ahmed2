@@ -52,4 +52,12 @@ assert.ok(db.includes('lease_until'));
 assert.ok(db.includes('fun acknowledgeEvent('));
 assert.ok(db.includes('fun failEvent('));
 
+// WebView JavaScript is not a trusted outbox consumer. Keep queue publication,
+// leasing and terminal transitions inside native Kotlin code.
+const outboxBridge = part(main, '// Phase 3/4: Forecourt, procurement, durable events and local intelligence', '// 9. المخزون');
+for (const name of ['publishEvent', 'fetchPendingEvents', 'claimPendingEvents', 'acknowledgeEvent', 'failEvent']) {
+    assert.doesNotMatch(outboxBridge, new RegExp('@JavascriptInterface\\s*(?:fun\\s+)?' + name + '\\s*\\('),
+        `Outbox lifecycle method must not be exposed to WebView JavaScript: ${name}`);
+}
+
 console.log('Canonical POS/fuel transactional outbox contract PASS.');
