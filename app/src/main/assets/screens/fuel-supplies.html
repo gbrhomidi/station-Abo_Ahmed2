@@ -1070,7 +1070,7 @@
         let cashTotal = 0, creditTotal = 0, litersTotal = 0;
         rows.forEach(r => {
             const net = num(field(r, ['net_amount','total_amount']));
-            const liters = num(field(r, ['actual_quantity','delivered_quantity']));
+            const liters = num(field(r, ['delivered_quantity']));
             litersTotal += liters;
             if (getPaymentMethod(r) === 'credit') creditTotal += net; else cashTotal += net;
         });
@@ -1115,7 +1115,6 @@
             const tankName = field(row, ['tank_name','tank_id']) || '—';
             const fuelName = field(row, ['fuel_name_ar','fuel_name','fuel_type_id']) || '—';
             const delivered = num(field(row, ['delivered_quantity']));
-            const actual = num(field(row, ['actual_quantity'])) || delivered;
             const netAmount = num(field(row, ['net_amount','total_amount']));
             const tankerNumber = field(row, ['tanker_number']) || '—';
             const tankerDriver = field(row, ['tanker_driver']) || '—';
@@ -2046,7 +2045,7 @@
             if (!rows.length) {
                 $('reportResults').innerHTML = '<div class="empty-state" style="padding:20px;"><i class="fas fa-inbox"></i><p>لا توجد بيانات.</p></div>';
             } else {
-                const totalLiters = rows.reduce((s, r) => s + num(field(r, ['actual_quantity','delivered_quantity'])), 0);
+                const totalLiters = rows.reduce((s, r) => s + num(field(r, ['delivered_quantity'])), 0);
                 let cashTotal = 0, creditTotal = 0;
                 rows.forEach(r => {
                     const net = num(field(r, ['net_amount','total_amount']));
@@ -2089,7 +2088,7 @@
                                     return `<tr style="border-bottom:1px solid var(--border-color);">
                                         <td style="padding:6px;text-align:center;font-family:monospace;">${esc(field(r, ['refill_code']))}</td>
                                         <td style="padding:6px;text-align:center;">${esc(field(r, ['supplier_name','supplier_id']))}</td>
-                                        <td style="padding:6px;text-align:center;font-weight:700;">${fmt(field(r, ['actual_quantity','delivered_quantity']), 0)}</td>
+                                        <td style="padding:6px;text-align:center;font-weight:700;">${fmt(field(r, ['delivered_quantity']), 0)}</td>
                                         <td style="padding:6px;text-align:center;font-weight:700;">${fmt(field(r, ['net_amount','total_amount']), 2)}</td>
                                         <td style="padding:6px;text-align:center;">${paymentBadge(pm)}</td>
                                         <td style="padding:6px;text-align:center;font-size:0.7rem;">${esc(String(field(r, ['order_date','created_at'])).slice(0, 10))}</td>

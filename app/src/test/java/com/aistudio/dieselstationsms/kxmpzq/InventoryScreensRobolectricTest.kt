@@ -74,6 +74,34 @@ class InventoryScreensRobolectricTest {
         assertEquals(expectedVcf, result.getDouble("vcf"), 0.0000000001)
     }
 
+    @Test
+    fun completedLegacyRefillWithoutTrustedDeliveredQuantityCannotBeReversed() {
+        val db = helper.writableDatabase
+        val tankId = createLowFuelTank(1, "legacy-refill")
+        db.update("tanks", ContentValues().apply { put("current_quantity", 1000.0) },
+            "id=? AND station_id=?", arrayOf(tankId.toString(), "1"))
+        val refillId = db.insertOrThrow("tank_refills", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("refill_code", "LEGACY-" + UUID.randomUUID().toString().take(8))
+            put("tank_id", tankId)
+            put("station_id", 1)
+            put("fuel_type_id", 1)
+            put("delivered_quantity", 0.0)
+            put("actual_quantity", 500.0)
+            put("status", "completed")
+        })
+
+        val result = runCatching { helper.deleteTankRefillRecord(refillId, 1) }
+
+        assertTrue("Untrusted legacy quantity must block reversal", result.isFailure)
+        assertEquals(1000.0, db.rawQuery(
+            "SELECT current_quantity FROM tanks WHERE id=?", arrayOf(tankId.toString())
+        ).use { it.moveToFirst(); it.getDouble(0) }, 0.0001)
+        assertEquals(0, db.rawQuery(
+            "SELECT is_deleted FROM tank_refills WHERE id=?", arrayOf(refillId.toString())
+        ).use { it.moveToFirst(); it.getInt(0) })
+    }
+
     @After
     fun tearDown() {
         DatabaseHelper.closeInstance()

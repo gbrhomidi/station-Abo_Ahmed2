@@ -13705,7 +13705,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     SELECT r.id AS movement_id, 'fuel' AS stock_type, r.fuel_type_id AS item_id,
                            COALESCE(f.fuel_name_ar, f.fuel_name, 'وقود غير محدد') AS item_name,
                            f.fuel_code AS item_code, 'in' AS movement_type, 'refill' AS movement_subtype,
-                           ABS(COALESCE(COALESCE(r.actual_quantity, r.delivered_quantity),0)) AS quantity,
+                           ABS(COALESCE(r.delivered_quantity,0)) AS quantity,
                            COALESCE(r.unit_price,0) AS unit_cost,
                            COALESCE(r.net_amount, r.total_amount, 0) AS total_cost,
                            r.created_at AS movement_date, r.status,
@@ -13942,7 +13942,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     FROM fuel_sales fs JOIN sales_transactions st ON st.id=fs.sale_id
                     WHERE fs.is_deleted=0 AND st.is_deleted=0 AND st.station_id=? AND fs.fuel_type_id=?
                     UNION ALL
-                    SELECT r.created_at, 'in', ABS(COALESCE(r.actual_quantity,r.delivered_quantity))
+                    SELECT r.created_at, 'in', ABS(COALESCE(r.delivered_quantity,0))
                     FROM tank_refills r
                     WHERE r.is_deleted=0 AND r.station_id=? AND r.fuel_type_id=?
                     UNION ALL
@@ -21212,8 +21212,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 validateModule006Record("tank_refills", data, db, stationScopeId)
                 val tank = requireTankFuelMatch(db, data.optLong("tank_id"), data.optLong("fuel_type_id"), stationScopeId)
                 val oldApplied = if (old.optString("status") == "completed") {
-                    old.optDouble("delivered_quantity").takeIf { it.isFinite() && it > 0.0 }
-                        ?: old.optDouble("actual_quantity")
+                    val trustedDelivered = old.optDouble("delivered_quantity")
+                    require(trustedDelivered.isFinite() && trustedDelivered > 0.0) {
+                        "لا يمكن تعديل توريد مكتمل دون كمية توريد موثوقة؛ يتطلب السجل مراجعة"
+                    }
+                    trustedDelivered
                 } else 0.0
                 val newDelivered = data.optDouble("delivered_quantity")
                 require(newDelivered.isFinite() && newDelivered > 0.0) { "كمية التوريد الجديدة غير صالحة" }
@@ -21245,7 +21248,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
                 val tankId = old[0] as Long
                 val qty = if ((old[3] as String) == "completed") {
-                    (old[1] as Double).takeIf { it.isFinite() && it > 0.0 } ?: (old[2] as Double)
+                    val trustedDelivered = old[1] as Double
+                    require(trustedDelivered.isFinite() && trustedDelivered > 0.0) {
+                        "لا يمكن حذف توريد مكتمل دون كمية توريد موثوقة؛ يتطلب السجل مراجعة"
+                    }
+                    trustedDelivered
                 } else 0.0
                 val current = db.rawQuery("SELECT current_quantity FROM tanks WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(tankId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الخزان غير موجود ضمن المحطة" }; cursor.getDouble(0) }
                 require(current >= qty) { "لا يمكن عكس التعبئة لأن كمية الخزان الحالية أقل من الكمية المسجلة" }
@@ -30854,7 +30861,7 @@ private fun postSalesReversalJournal(
                     arrayOf(tankId.toString(),shiftId.toString(),stationScopeId.toString())
                 ).use { c -> if(c.moveToFirst()) sales=c.getDouble(0) }
                 db.rawQuery(
-                    """SELECT COALESCE(SUM(COALESCE(actual_quantity,delivered_quantity)),0)
+                    """SELECT COALESCE(SUM(COALESCE(delivered_quantity,0)),0)
                          FROM tank_refills WHERE tank_id=? AND station_id=? AND is_deleted=0
                           AND arrival_date IS NOT NULL AND arrival_date>=? AND arrival_date<=?""",
                     arrayOf(tankId.toString(),stationScopeId.toString(),shiftStart,windowEnd)
