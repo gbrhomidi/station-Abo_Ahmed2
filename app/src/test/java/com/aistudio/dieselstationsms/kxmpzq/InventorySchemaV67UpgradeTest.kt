@@ -54,7 +54,7 @@ class InventorySchemaV67UpgradeTest {
 
         helper = DatabaseHelper.getInstance(context)
         val upgraded = helper.writableDatabase
-        assertEquals(72, upgraded.version)
+        assertEquals(DatabaseHelper.VERSION, upgraded.version)
 
         listOf("tank_readings", "product_batches", "inventory_anomalies").forEach { table ->
             val exists = upgraded.rawQuery(
