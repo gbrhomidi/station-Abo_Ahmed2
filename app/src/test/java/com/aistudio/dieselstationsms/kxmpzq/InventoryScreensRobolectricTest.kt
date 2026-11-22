@@ -1533,8 +1533,19 @@ class InventoryScreensRobolectricTest {
         }
 
         // This V66 recovery fixture supplies an explicit coefficient after the migration recreates its table.
-        // Wet-stock reads resolve fuel type 2; retain type 1 for the other fixture paths.
-        upgraded.execSQL("INSERT INTO fuel_temperature_coefficients(fuel_type_id, coefficient_exp) VALUES(1, 0.00095), (2, 0.00095)")
+        // Wet-stock reads traverse every active tank in the station. Supply explicit test-only
+        // calibration for each fuel type actually referenced by those tanks, without
+        // overwriting any pre-existing calibrated coefficient.
+        upgraded.execSQL("""
+            INSERT OR IGNORE INTO fuel_temperature_coefficients(fuel_type_id, coefficient_exp)
+            SELECT DISTINCT t.fuel_type_id, 0.00095
+            FROM tanks t
+            WHERE t.station_id=1
+              AND t.fuel_type_id IS NOT NULL
+              AND t.is_deleted=0
+              AND t.status<>'retired'
+              AND t.deleted_at IS NULL
+        """.trimIndent())
 
         val productId = createProduct(8.0, 2.0)
         val tankId = createLowFuelTank(1, "V67")

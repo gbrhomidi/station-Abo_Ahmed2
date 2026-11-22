@@ -66,8 +66,19 @@ class InventorySchemaV67UpgradeTest {
 
         // Exercise the exact Kotlin/SQLite read paths that previously failed.
         // This schema-recovery test supplies an explicit calibration fixture; production code must not invent one.
-        // Wet-stock reads resolve fuel type 2; retain type 1 for the other fixture paths.
-        upgraded.execSQL("INSERT INTO fuel_temperature_coefficients(fuel_type_id, coefficient_exp) VALUES(1, 0.00095), (2, 0.00095)")
+        // Wet-stock reads traverse every active tank in the station. Supply explicit test-only
+        // calibration for each fuel type actually referenced by those tanks, without
+        // overwriting any pre-existing calibrated coefficient.
+        upgraded.execSQL("""
+            INSERT OR IGNORE INTO fuel_temperature_coefficients(fuel_type_id, coefficient_exp)
+            SELECT DISTINCT t.fuel_type_id, 0.00095
+            FROM tanks t
+            WHERE t.station_id=1
+              AND t.fuel_type_id IS NOT NULL
+              AND t.is_deleted=0
+              AND t.status<>'retired'
+              AND t.deleted_at IS NULL
+        """.trimIndent())
         helper.getWetStockPage(1)
         helper.getDryStockPage(JSONObject(), 1)
         helper.runInventoryAnomalyDetection(1)
