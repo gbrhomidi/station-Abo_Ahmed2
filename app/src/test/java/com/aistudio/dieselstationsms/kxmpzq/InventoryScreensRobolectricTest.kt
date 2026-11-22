@@ -248,8 +248,6 @@ class InventoryScreensRobolectricTest {
     @Test
     fun dryStockSearchAndCategoryFiltersAreAppliedBeforeReturningProducts() {
         val db = helper.writableDatabase
-        // This legacy-schema fixture needs a known coefficient to exercise VCF-dependent reads.
-        upgraded.execSQL("INSERT INTO fuel_temperature_coefficients(fuel_type_id, coefficient_exp) VALUES(1, 0.00095)")
         val productId = createProduct(8.0, 2.0)
         val uniqueName = "DB19-FILTER-" + UUID.randomUUID().toString().take(8)
         assertEquals(1, db.update("products", ContentValues().apply {
@@ -1533,6 +1531,9 @@ class InventoryScreensRobolectricTest {
             ).use { it.moveToFirst() }
             assertTrue("V67 migration must create $table", exists)
         }
+
+        // This V66 recovery fixture supplies an explicit coefficient after the migration recreates its table.
+        upgraded.execSQL("INSERT INTO fuel_temperature_coefficients(fuel_type_id, coefficient_exp) VALUES(1, 0.00095)")
 
         val productId = createProduct(8.0, 2.0)
         val tankId = createLowFuelTank(1, "V67")
