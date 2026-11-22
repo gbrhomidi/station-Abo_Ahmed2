@@ -57,7 +57,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 72
+        const val VERSION = 73
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -2088,6 +2088,46 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureColumn(db, "tank_refills", "receipt_id", "INTEGER REFERENCES purchase_order_receipts(receipt_id)")
         ensureColumn(db, "tank_refills", "receipt_key", "TEXT")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS uq_tank_refills_station_receipt_key ON tank_refills(station_id,receipt_key) WHERE receipt_key IS NOT NULL AND receipt_key <> ''")
+        ensureSupplierInvoiceApprovalPermission(db)
+    }
+
+    /** Seed a dedicated accountant permission without overwriting deliberate revocations. */
+    private fun ensureSupplierInvoiceApprovalPermission(db: SQLiteDatabase) {
+        db.execSQL(
+            """INSERT OR IGNORE INTO permissions
+               (uuid, permission_code, permission_name, permission_name_ar, module, module_name_ar,
+                action, requires_station, is_active, is_deleted)
+               VALUES ('PER-SUPPLIER-INVOICE-APPROVE-V1', 'supplier_invoice.approve',
+                       'Approve Supplier Invoice Variances', 'اعتماد فروقات فواتير الموردين',
+                       'procurement', 'المشتريات', 'approve', 1, 1, 0)"""
+        )
+        val permissionId = db.rawQuery(
+            "SELECT id FROM permissions WHERE permission_code='supplier_invoice.approve' AND is_active=1 AND is_deleted=0 LIMIT 1",
+            null
+        ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+        require(permissionId > 0L) { "تعذر تهيئة صلاحية اعتماد فروقات فواتير الموردين" }
+
+        val roles = mutableListOf<Pair<Long, String>>()
+        db.rawQuery(
+            "SELECT id,role_code FROM roles WHERE role_code IN ('SUPER_ADMIN','ADMIN','STATION_MANAGER','ACCOUNTANT') AND is_active=1 AND is_deleted=0",
+            null
+        ).use { c -> while (c.moveToNext()) roles += c.getLong(0) to c.getString(1) }
+        roles.forEach { (roleId, roleCode) ->
+            val existing = db.rawQuery(
+                "SELECT id FROM role_permissions WHERE role_id=? AND permission_id=? AND station_id IS NULL ORDER BY id LIMIT 1",
+                arrayOf(roleId.toString(), permissionId.toString())
+            ).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            if (existing == 0L) {
+                db.insertOrThrow("role_permissions", null, ContentValues().apply {
+                    put("uuid", "RP-SUPPLIER-INVOICE-APPROVE-$roleCode-V1")
+                    put("role_id", roleId)
+                    put("permission_id", permissionId)
+                    put("can_create", 0); put("can_read", 0); put("can_update", 0)
+                    put("can_delete", 0); put("can_export", 0); put("can_print", 0)
+                    put("can_approve", 1); putNull("station_id"); put("is_deleted", 0)
+                })
+            }
+        }
     }
 
     /** Phase 2 dry-stock schema. All additions are nullable/defaulted for legacy data. */
@@ -37792,9 +37832,59 @@ private fun postSalesReversalJournal(
     // Phase 3/4: procurement, events, forecourt and local intelligence
     // ========================================================================
     fun createPurchaseOrder(data: JSONObject, stationScopeId: Int, actorId: Long): JSONObject {
-        val itemType=data.optString("item_type").uppercase(Locale.ROOT); val itemId=data.optLong("item_id",0); val quantity=data.optDouble("quantity",0.0)
-        require(itemType in listOf("PRODUCT","FUEL") && itemId>0 && quantity>0) { "بيانات أمر الشراء غير صالحة" }
-        dbLock.lock(); return try { val db=writableDatabase; db.beginTransaction(); try { val number="PO-${stationScopeId}-${System.currentTimeMillis()}"; val po=db.insertOrThrow("purchase_orders",null,ContentValues().apply{put("po_number",number);put("station_id",stationScopeId);data.optLong("supplier_id",0).takeIf{it>0}?.let{put("supplier_id",it)};put("created_by",actorId);put("expected_at",data.optString("expected_at").takeIf{it.isNotBlank()})});db.insertOrThrow("purchase_order_lines",null,ContentValues().apply{put("po_id",po);put("item_type",itemType);put("item_id",itemId);put("quantity",quantity);put("unit_price",data.optDouble("unit_price",0.0))});db.setTransactionSuccessful();JSONObject().put("po_id",po).put("po_number",number).put("status","draft")}finally{db.endTransaction()}}finally{dbLock.unlock()}
+        require(stationScopeId > 0 && actorId > 0L) { "المحطة والمستخدم مطلوبان" }
+        val itemType = data.optString("item_type").trim().uppercase(Locale.ROOT)
+        val itemId = data.optLong("item_id", 0L)
+        val quantity = data.optDouble("quantity", Double.NaN)
+        val unitPrice = data.optDouble("unit_price", 0.0)
+        val supplierId = data.optLong("supplier_id", 0L)
+        require(itemType in listOf("PRODUCT", "FUEL") && itemId > 0L &&
+            quantity.isFinite() && quantity > 0.0 && unitPrice.isFinite() && unitPrice >= 0.0) {
+            "بيانات أمر الشراء أو الكمية أو سعر الوحدة غير صالحة"
+        }
+        require(supplierId > 0L) { "يجب تحديد مورد صالح لأمر الشراء" }
+
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                require(db.rawQuery(
+                    """SELECT 1 FROM parties WHERE id=? AND is_active=1 AND is_deleted=0
+                       AND (station_id IS NULL OR station_id=?) LIMIT 1""",
+                    arrayOf(supplierId.toString(), stationScopeId.toString())
+                ).use { it.moveToFirst() }) { "المورد غير نشط أو خارج نطاق المحطة" }
+                val itemExists = if (itemType == "PRODUCT") {
+                    db.rawQuery(
+                        "SELECT 1 FROM products WHERE id=? AND station_id=? AND is_deleted=0 AND status='active' LIMIT 1",
+                        arrayOf(itemId.toString(), stationScopeId.toString())
+                    ).use { it.moveToFirst() }
+                } else {
+                    db.rawQuery(
+                        "SELECT 1 FROM fuel_types WHERE id=? AND is_active=1 AND is_deleted=0 LIMIT 1",
+                        arrayOf(itemId.toString())
+                    ).use { it.moveToFirst() }
+                }
+                require(itemExists) { "الصنف أو نوع الوقود غير نشط أو غير متاح للمحطة" }
+
+                val number = "PO-$stationScopeId-${System.currentTimeMillis()}"
+                val po = db.insertOrThrow("purchase_orders", null, ContentValues().apply {
+                    put("po_number", number); put("station_id", stationScopeId)
+                    put("supplier_id", supplierId); put("created_by", actorId)
+                    put("expected_at", data.optString("expected_at").takeIf { it.isNotBlank() })
+                })
+                db.insertOrThrow("purchase_order_lines", null, ContentValues().apply {
+                    put("po_id", po); put("item_type", itemType); put("item_id", itemId)
+                    put("quantity", quantity); put("unit_price", unitPrice)
+                })
+                db.setTransactionSuccessful()
+                JSONObject().put("po_id", po).put("po_number", number).put("status", "draft")
+            } finally {
+                db.endTransaction()
+            }
+        } finally {
+            dbLock.unlock()
+        }
     }
 
     fun receivePurchaseOrder(data: JSONObject, stationScopeId: Int, actorId: Long): JSONObject {
@@ -38001,14 +38091,41 @@ private fun postSalesReversalJournal(
     }
 
     fun approveSupplierInvoiceMatch(data: JSONObject, stationScopeId: Int, accountantId: Long): JSONObject {
-        require(stationScopeId > 0 && accountantId > 0) { "المحطة والمحاسب مطلوبان" }
-        val invoiceId = data.optLong("invoice_id", 0L); require(invoiceId > 0) { "معرف الفاتورة مطلوب" }
+        require(stationScopeId > 0 && accountantId > 0L) { "المحطة والمحاسب مطلوبان" }
+        val invoiceId = data.optLong("invoice_id", 0L)
+        require(invoiceId > 0L) { "معرف الفاتورة مطلوب" }
         val db = writableDatabase
-        val updated = db.update("supplier_invoices", ContentValues().apply {
-            put("match_status", "APPROVED"); put("accountant_approved_by", accountantId); put("accountant_approved_at", getCurrentDateTime()); put("updated_at", getCurrentDateTime())
-        }, "id=? AND station_id=? AND match_status='VARIANCE'", arrayOf(invoiceId.toString(), stationScopeId.toString()))
-        require(updated == 1) { "لا يمكن اعتماد فاتورة غير موجودة أو بلا فروقات معلقة" }
-        return JSONObject().put("success", true).put("invoice_id", invoiceId).put("status", "APPROVED").put("approved_by", accountantId)
+        db.beginTransaction()
+        try {
+            require(userCanAccessApprovalStation(db, accountantId, stationScopeId)) {
+                "المعتمد لا يملك صلاحية الوصول إلى المحطة"
+            }
+            val canApprove = db.rawQuery(
+                """SELECT 1 FROM permissions p JOIN users u ON u.id=?
+                   LEFT JOIN role_permissions rp ON rp.role_id=u.role_id
+                     AND rp.permission_id=p.id AND rp.is_deleted=0
+                     AND (rp.station_id IS NULL OR rp.station_id=?)
+                   LEFT JOIN user_permissions up ON up.user_id=u.id AND up.permission_id=p.id
+                   WHERE p.permission_code='supplier_invoice.approve'
+                     AND p.is_active=1 AND p.is_deleted=0
+                     AND COALESCE(up.is_granted,rp.can_approve,0)=1 LIMIT 1""",
+                arrayOf(accountantId.toString(), stationScopeId.toString())
+            ).use { it.moveToFirst() }
+            require(canApprove) { "لا يملك المستخدم صلاحية اعتماد فروقات فواتير الموردين" }
+
+            val now = getCurrentDateTime()
+            val updated = db.update("supplier_invoices", ContentValues().apply {
+                put("match_status", "APPROVED"); put("accountant_approved_by", accountantId)
+                put("accountant_approved_at", now); put("updated_at", now)
+            }, "id=? AND station_id=? AND match_status='VARIANCE'",
+                arrayOf(invoiceId.toString(), stationScopeId.toString()))
+            require(updated == 1) { "لا يمكن اعتماد فاتورة غير موجودة أو بلا فروقات معلقة" }
+            db.setTransactionSuccessful()
+            return JSONObject().put("success", true).put("invoice_id", invoiceId)
+                .put("status", "APPROVED").put("approved_by", accountantId)
+        } finally {
+            db.endTransaction()
+        }
     }
 
     /** Inserts into the caller's transaction so a committed sale can never lose its outbox event. */

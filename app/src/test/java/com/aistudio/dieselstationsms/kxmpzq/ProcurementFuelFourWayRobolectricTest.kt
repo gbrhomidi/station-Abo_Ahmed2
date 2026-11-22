@@ -93,9 +93,19 @@ class ProcurementFuelFourWayRobolectricTest {
         assertTrue(!match.getBoolean("matched")); assertTrue(match.getBoolean("requires_accountant_approval"))
         val invoiceId = match.getJSONObject("invoice").getLong("invoice_id")
         assertEquals("VARIANCE", scalarText("SELECT match_status FROM supplier_invoices WHERE id=?", arrayOf(invoiceId.toString())))
-        val approved = helper.approveSupplierInvoiceMatch(JSONObject().put("invoice_id", invoiceId), 1, actorId)
+        val cashierId = createUserForRole("CASHIER")
+        assertTrue(runCatching {
+            helper.approveSupplierInvoiceMatch(JSONObject().put("invoice_id", invoiceId), 1, cashierId)
+        }.isFailure)
+        assertEquals("VARIANCE", scalarText("SELECT match_status FROM supplier_invoices WHERE id=?", arrayOf(invoiceId.toString())))
+        assertEquals(0L, scalar("SELECT COUNT(*) FROM supplier_invoices WHERE id=? AND accountant_approved_by IS NOT NULL", arrayOf(invoiceId.toString())))
+
+        val accountantId = createUserForRole("ACCOUNTANT")
+        val approved = helper.approveSupplierInvoiceMatch(JSONObject().put("invoice_id", invoiceId), 1, accountantId)
         assertEquals("APPROVED", approved.getString("status"))
         assertEquals("APPROVED", scalarText("SELECT match_status FROM supplier_invoices WHERE id=?", arrayOf(invoiceId.toString())))
+        assertEquals(accountantId, scalar("SELECT accountant_approved_by FROM supplier_invoices WHERE id=?", arrayOf(invoiceId.toString())))
+        assertEquals(1L, scalar("SELECT COUNT(*) FROM supplier_invoices WHERE id=? AND accountant_approved_at IS NOT NULL", arrayOf(invoiceId.toString())))
     }
 
 
@@ -143,6 +153,71 @@ class ProcurementFuelFourWayRobolectricTest {
         }.isFailure)
         assertEquals(0L, scalar("SELECT COUNT(*) FROM supplier_invoices WHERE station_id=1 AND invoice_number=?",
             arrayOf(duplicateNumber)))
+    }
+
+    private fun createUserForRole(roleCode: String): Long {
+        val roleId = scalar("SELECT id FROM roles WHERE role_code=? AND is_active=1 AND is_deleted=0 LIMIT 1", arrayOf(roleCode))
+        return db.insertOrThrow("users", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("username", "proc-${roleCode.lowercase()}-${UUID.randomUUID()}")
+            put("password_hash", "test-only"); put("full_name", "Procurement $roleCode")
+            put("role_id", roleId); put("station_id", 1); put("status", "active"); put("is_deleted", 0)
+        })
+    }
+
+    @Test
+    fun purchaseOrderCreationRejectsMissingSupplierAndInvalidCommercialInputs() {
+        val base = JSONObject().put("item_type", "FUEL").put("item_id", fuelTypeId)
+            .put("quantity", 10.0).put("unit_price", 2.0)
+        assertTrue(runCatching { helper.createPurchaseOrder(base, 1, actorId) }.isFailure)
+        assertTrue(runCatching {
+            helper.createPurchaseOrder(JSONObject(base.toString()).put("supplier_id", supplierId).put("unit_price", -1.0), 1, actorId)
+        }.isFailure)
+        assertTrue(runCatching {
+            helper.createPurchaseOrder(JSONObject(base.toString()).put("supplier_id", supplierId).put("item_id", Long.MAX_VALUE), 1, actorId)
+        }.isFailure)
+        assertEquals(0L, scalar("SELECT COUNT(*) FROM purchase_orders"))
+        val valid = helper.createPurchaseOrder(JSONObject(base.toString()).put("supplier_id", supplierId), 1, actorId)
+        assertTrue(valid.getLong("po_id") > 0L)
+        assertEquals(1L, scalar("SELECT COUNT(*) FROM purchase_orders"))
+    }
+
+    @Test
+    fun v72UpgradeSeedsVarianceApprovalPermissionWithoutChangingInvoices() {
+        val po = helper.createPurchaseOrder(JSONObject().put("item_type", "FUEL").put("item_id", fuelTypeId)
+            .put("quantity", 100.0).put("unit_price", 2.0).put("supplier_id", supplierId), 1, actorId)
+        val poId = po.getLong("po_id")
+        val lineId = scalar("SELECT line_id FROM purchase_order_lines WHERE po_id=?", arrayOf(poId.toString()))
+        helper.receivePurchaseOrder(JSONObject().put("po_id", poId).put("receipt_key", "v72-migration-${UUID.randomUUID()}")
+            .put("received_lines", JSONArray().put(JSONObject().put("line_id", lineId).put("received_quantity", 100.0).put("tank_id", tankId))), 1, actorId)
+        val invoice = JSONObject().put("invoice_number", "MIG-${UUID.randomUUID()}")
+            .put("subtotal", 200.0).put("tax_amount", 0.0).put("total_amount", 200.0)
+            .put("lines", JSONArray().put(JSONObject().put("po_line_id", lineId).put("quantity", 100.0)
+                .put("unit_price", 2.0).put("tax_rate", 0.0).put("tax_amount", 0.0).put("line_total", 200.0)))
+        val matched = helper.matchInvoiceFourWay(JSONObject().put("po_id", poId).put("invoice", invoice), 1)
+        val invoiceId = matched.getJSONObject("invoice").getLong("invoice_id")
+        val savedTotal = scalarDouble("SELECT total_amount FROM supplier_invoices WHERE id=?", arrayOf(invoiceId.toString()))
+
+        val permissionId = scalar("SELECT id FROM permissions WHERE permission_code='supplier_invoice.approve'")
+        db.delete("role_permissions", "permission_id=?", arrayOf(permissionId.toString()))
+        db.delete("permissions", "id=?", arrayOf(permissionId.toString()))
+        DatabaseHelper.closeInstance()
+        val versionDb = android.database.sqlite.SQLiteDatabase.openDatabase(
+            context.getDatabasePath(DatabaseHelper.DATABASE_NAME).absolutePath, null,
+            android.database.sqlite.SQLiteDatabase.OPEN_READWRITE
+        )
+        try { versionDb.execSQL("PRAGMA user_version=72") } finally { versionDb.close() }
+        DatabaseHelper.closeInstance()
+        helper = DatabaseHelper.getInstance(context)
+        db = helper.writableDatabase
+
+        assertEquals(73L, scalar("PRAGMA user_version"))
+        assertEquals(1L, scalar("SELECT COUNT(*) FROM permissions WHERE permission_code='supplier_invoice.approve' AND is_active=1 AND is_deleted=0"))
+        assertEquals(savedTotal, scalarDouble("SELECT total_amount FROM supplier_invoices WHERE id=?", arrayOf(invoiceId.toString())), 0.0001)
+        assertEquals(1L, scalar("""SELECT COUNT(*) FROM role_permissions rp
+            JOIN roles r ON r.id=rp.role_id JOIN permissions p ON p.id=rp.permission_id
+            WHERE p.permission_code='supplier_invoice.approve' AND r.role_code='ACCOUNTANT'
+              AND rp.can_approve=1 AND rp.is_deleted=0""".trimIndent()))
     }
 
     private fun scalar(sql: String, args: Array<String> = emptyArray()): Long = db.rawQuery(sql, args).use { check(it.moveToFirst()); it.getLong(0) }
