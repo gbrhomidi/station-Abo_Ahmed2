@@ -37884,8 +37884,70 @@ private fun postSalesReversalJournal(
                         invoiceId = db.insertOrThrow("supplier_invoices",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("station_id",stationScopeId);put("po_id",poId);put("supplier_id",po.optLong("supplier_id"));put("source_type","product_purchase");put("source_id",poId);put("invoice_number",invoiceNumber);put("invoice_date",invoiceInput.optString("invoice_date").takeIf{it.isNotBlank()});put("subtotal",headerSubtotal);put("tax_amount",headerTax);put("total_amount",headerTotal);put("remaining_amount",headerTotal);put("created_by",data.optLong("created_by",0L).takeIf{it>0})})
                     }
                     val persistedLineCount = db.rawQuery("SELECT COUNT(*) FROM supplier_invoice_lines WHERE invoice_id=?", arrayOf(invoiceId.toString())).use { c -> c.moveToFirst(); c.getInt(0) }
+                    // A persisted supplier invoice is immutable: retries may repeat the same
+                    // document, but may not silently replace its header or line payload.
+                    val seenInvoiceLineIds = mutableSetOf<Long>()
+                    if (persistedLineCount > 0) {
+                        require(persistedLineCount == invoiceLines.length()) {
+                            "محتوى فاتورة المورد المعاد إرساله لا يطابق المستند المحفوظ"
+                        }
+                        val submittedSubtotal = invoiceInput.optDouble("subtotal", Double.NaN)
+                        val submittedTax = invoiceInput.optDouble("tax_amount", Double.NaN)
+                        val submittedTotal = invoiceInput.optDouble("total_amount", Double.NaN)
+                        require(submittedSubtotal.isFinite() && submittedTax.isFinite() && submittedTotal.isFinite() &&
+                            submittedSubtotal >= 0.0 && submittedTax >= 0.0 && submittedTotal >= 0.0 &&
+                            kotlin.math.abs(submittedSubtotal + submittedTax - submittedTotal) <= 0.01) {
+                            "إجماليات فاتورة المورد المعاد إرسالها غير صالحة"
+                        }
+                        val storedHeader = db.rawQuery(
+                            "SELECT subtotal,tax_amount,total_amount FROM supplier_invoices WHERE id=? AND station_id=? AND is_deleted=0",
+                            arrayOf(invoiceId.toString(), stationScopeId.toString())
+                        ).use { c ->
+                            require(c.moveToFirst()) { "فاتورة المورد المحفوظة غير موجودة" }
+                            doubleArrayOf(c.getDouble(0), c.getDouble(1), c.getDouble(2))
+                        }
+                        require(kotlin.math.abs(submittedSubtotal - storedHeader[0]) <= 0.01 &&
+                            kotlin.math.abs(submittedTax - storedHeader[1]) <= 0.01 &&
+                            kotlin.math.abs(submittedTotal - storedHeader[2]) <= 0.01) {
+                            "رقم فاتورة المورد مرتبط بإجماليات مختلفة عن المستند المحفوظ"
+                        }
+                        for (i in 0 until invoiceLines.length()) {
+                            val il = invoiceLines.getJSONObject(i)
+                            val lineId = il.optLong("po_line_id", il.optLong("line_id", 0L))
+                            require(lineId > 0L && seenInvoiceLineIds.add(lineId)) {
+                                "بند فاتورة المورد مكرر أو لا يرتبط ببند أمر شراء"
+                            }
+                            val quantity = il.optDouble("quantity", Double.NaN)
+                            val price = il.optDouble("unit_price", Double.NaN)
+                            val taxRate = il.optDouble("tax_rate", 0.0)
+                            val tax = il.optDouble("tax_amount", quantity * price * taxRate / 100.0)
+                            val total = il.optDouble("line_total", quantity * price + tax)
+                            require(quantity.isFinite() && quantity > 0.0 && price.isFinite() && price >= 0.0 &&
+                                taxRate.isFinite() && taxRate in 0.0..100.0 && tax.isFinite() && tax >= 0.0 &&
+                                total.isFinite() && total >= 0.0 &&
+                                kotlin.math.abs(tax - quantity * price * taxRate / 100.0) <= 0.01 &&
+                                kotlin.math.abs(total - (quantity * price + tax)) <= 0.01) {
+                                "بيانات بند فاتورة المورد المعاد إرساله غير صالحة"
+                            }
+                            val storedLine = db.rawQuery(
+                                """SELECT quantity,unit_price,tax_rate,tax_amount,line_total
+                                   FROM supplier_invoice_lines WHERE invoice_id=? AND po_line_id=?""",
+                                arrayOf(invoiceId.toString(), lineId.toString())
+                            ).use { c ->
+                                require(c.moveToFirst()) { "بند فاتورة المورد المحفوظ غير موجود" }
+                                doubleArrayOf(c.getDouble(0), c.getDouble(1), c.getDouble(2), c.getDouble(3), c.getDouble(4))
+                            }
+                            require(kotlin.math.abs(quantity - storedLine[0]) <= 0.000001 &&
+                                kotlin.math.abs(price - storedLine[1]) <= 0.000001 &&
+                                kotlin.math.abs(taxRate - storedLine[2]) <= 0.000001 &&
+                                kotlin.math.abs(tax - storedLine[3]) <= 0.01 &&
+                                kotlin.math.abs(total - storedLine[4]) <= 0.01) {
+                                "بند فاتورة المورد المعاد إرساله يختلف عن المستند المحفوظ"
+                            }
+                        }
+                    }
                     if (persistedLineCount == 0) for (i in 0 until invoiceLines.length()) {
-                        val il=invoiceLines.getJSONObject(i); val lineId=il.optLong("po_line_id",il.optLong("line_id",0L)); require(lineId>0) { "بند أمر الشراء مفقود في الفاتورة" }
+                        val il=invoiceLines.getJSONObject(i); val lineId=il.optLong("po_line_id",il.optLong("line_id",0L)); require(lineId>0 && seenInvoiceLineIds.add(lineId)) { "بند فاتورة المورد مكرر أو بند أمر الشراء مفقود" }
                         val item=db.rawQuery("SELECT item_type,item_id FROM purchase_order_lines WHERE line_id=? AND po_id=?",arrayOf(lineId.toString(),poId.toString())).use{c->require(c.moveToFirst()){ "بند الفاتورة لا ينتمي لأمر الشراء" };Pair(c.getString(0),c.getLong(1))}
                         val q=il.optDouble("quantity",Double.NaN); val price=il.optDouble("unit_price",Double.NaN); val taxRate=il.optDouble("tax_rate",0.0); val tax=il.optDouble("tax_amount",q*price*taxRate/100.0); val total=il.optDouble("line_total",q*price+tax)
                         require(q.isFinite()&&q>=0&&price.isFinite()&&price>=0&&taxRate.isFinite()&&taxRate in 0.0..100.0&&tax.isFinite()&&tax>=0&&total.isFinite()&&total>=0){"بيانات بند الفاتورة غير صالحة"}

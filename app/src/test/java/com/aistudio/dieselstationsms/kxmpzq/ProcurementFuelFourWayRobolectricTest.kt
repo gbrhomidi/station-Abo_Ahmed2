@@ -98,6 +98,53 @@ class ProcurementFuelFourWayRobolectricTest {
         assertEquals("APPROVED", scalarText("SELECT match_status FROM supplier_invoices WHERE id=?", arrayOf(invoiceId.toString())))
     }
 
+
+    @Test
+    fun persistedInvoiceRetryRejectsChangedHeaderOrLineAndDuplicateLines() {
+        val po = helper.createPurchaseOrder(JSONObject().put("item_type", "FUEL").put("item_id", fuelTypeId)
+            .put("quantity", 100.0).put("unit_price", 2.0).put("supplier_id", supplierId), 1, actorId)
+        val poId = po.getLong("po_id")
+        val lineId = scalar("SELECT line_id FROM purchase_order_lines WHERE po_id=?", arrayOf(poId.toString()))
+        helper.receivePurchaseOrder(JSONObject().put("po_id", poId).put("receipt_key", "immutable-invoice-${UUID.randomUUID()}")
+            .put("received_lines", JSONArray().put(JSONObject().put("line_id", lineId).put("received_quantity", 100.0).put("tank_id", tankId))), 1, actorId)
+
+        val invoiceNumber = "IMM-${UUID.randomUUID()}"
+        fun invoice(price: Double) = JSONObject().put("invoice_number", invoiceNumber)
+            .put("subtotal", 100.0 * price).put("tax_amount", 100.0 * price * 0.15)
+            .put("total_amount", 100.0 * price * 1.15)
+            .put("lines", JSONArray().put(JSONObject().put("po_line_id", lineId).put("quantity", 100.0)
+                .put("unit_price", price).put("tax_rate", 15.0)
+                .put("tax_amount", 100.0 * price * 0.15).put("line_total", 100.0 * price * 1.15)))
+
+        val first = helper.matchInvoiceFourWay(JSONObject().put("po_id", poId).put("invoice", invoice(2.5)), 1)
+        val invoiceId = first.getJSONObject("invoice").getLong("invoice_id")
+        val replay = helper.matchInvoiceFourWay(JSONObject().put("po_id", poId).put("invoice", invoice(2.5)), 1)
+        assertEquals(invoiceId, replay.getJSONObject("invoice").getLong("invoice_id"))
+        assertTrue(runCatching {
+            helper.matchInvoiceFourWay(JSONObject().put("po_id", poId).put("invoice", invoice(2.75)), 1)
+        }.isFailure)
+        assertEquals(287.5, scalarDouble("SELECT total_amount FROM supplier_invoices WHERE id=?", arrayOf(invoiceId.toString())), 0.0001)
+        assertEquals(1L, scalar("SELECT COUNT(*) FROM supplier_invoice_lines WHERE invoice_id=?", arrayOf(invoiceId.toString())))
+
+        val secondPo = helper.createPurchaseOrder(JSONObject().put("item_type", "FUEL").put("item_id", fuelTypeId)
+            .put("quantity", 20.0).put("unit_price", 2.0).put("supplier_id", supplierId), 1, actorId)
+        val secondPoId = secondPo.getLong("po_id")
+        val secondLine = scalar("SELECT line_id FROM purchase_order_lines WHERE po_id=?", arrayOf(secondPoId.toString()))
+        helper.receivePurchaseOrder(JSONObject().put("po_id", secondPoId).put("receipt_key", "duplicate-lines-${UUID.randomUUID()}")
+            .put("received_lines", JSONArray().put(JSONObject().put("line_id", secondLine).put("received_quantity", 20.0).put("tank_id", tankId))), 1, actorId)
+        val duplicateNumber = "DUP-${UUID.randomUUID()}"
+        val duplicated = JSONObject().put("invoice_number", duplicateNumber)
+            .put("subtotal", 40.0).put("tax_amount", 6.0).put("total_amount", 46.0)
+            .put("lines", JSONArray()
+                .put(JSONObject().put("po_line_id", secondLine).put("quantity", 20.0).put("unit_price", 2.0).put("tax_rate", 15.0).put("tax_amount", 6.0).put("line_total", 46.0))
+                .put(JSONObject().put("po_line_id", secondLine).put("quantity", 20.0).put("unit_price", 2.0).put("tax_rate", 15.0).put("tax_amount", 6.0).put("line_total", 46.0)))
+        assertTrue(runCatching {
+            helper.matchInvoiceFourWay(JSONObject().put("po_id", secondPoId).put("invoice", duplicated), 1)
+        }.isFailure)
+        assertEquals(0L, scalar("SELECT COUNT(*) FROM supplier_invoices WHERE station_id=1 AND invoice_number=?",
+            arrayOf(duplicateNumber)))
+    }
+
     private fun scalar(sql: String, args: Array<String> = emptyArray()): Long = db.rawQuery(sql, args).use { check(it.moveToFirst()); it.getLong(0) }
     private fun scalarDouble(sql: String, args: Array<String>): Double = db.rawQuery(sql, args).use { check(it.moveToFirst()); it.getDouble(0) }
     private fun scalarText(sql: String, args: Array<String>): String = db.rawQuery(sql, args).use { check(it.moveToFirst()); it.getString(0) }
