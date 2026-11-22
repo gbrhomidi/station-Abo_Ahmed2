@@ -53,6 +53,27 @@ class InventoryScreensRobolectricTest {
         })
     }
 
+    @Test
+    fun vcfRequiresExplicitCalibratedCoefficientAndUsesConfiguredValue() {
+        val db = helper.writableDatabase
+        try {
+            helper.calculateVcf(987654L, 25.0, 1)
+            throw AssertionError("VCF must reject a fuel type without a calibrated coefficient")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message.orEmpty().contains("معامل تمدد معاير"))
+        }
+
+        db.insertOrThrow("fuel_temperature_coefficients", null, ContentValues().apply {
+            put("fuel_type_id", 987654L)
+            put("coefficient_exp", 0.0012)
+        })
+        val result = helper.calculateVcf(987654L, 25.0, 1)
+        assertEquals(0.0012, result.getDouble("coefficient_exp"), 0.0000001)
+        val delta = 10.0
+        val expectedVcf = kotlin.math.exp(-0.0012 * delta - 0.8 * 0.0012 * 0.0012 * delta * delta)
+        assertEquals(expectedVcf, result.getDouble("vcf"), 0.0000000001)
+    }
+
     @After
     fun tearDown() {
         DatabaseHelper.closeInstance()

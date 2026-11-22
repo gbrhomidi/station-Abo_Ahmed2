@@ -2021,7 +2021,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             expiring_soon_ratio REAL NOT NULL DEFAULT 0, calculated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""".trimIndent())
         db.execSQL("""CREATE TABLE IF NOT EXISTS fuel_temperature_coefficients (
-            fuel_type_id INTEGER PRIMARY KEY, coefficient_exp REAL NOT NULL DEFAULT 0.00095, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            fuel_type_id INTEGER PRIMARY KEY, coefficient_exp REAL NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""".trimIndent())
         db.execSQL("""CREATE TABLE IF NOT EXISTS role_scopes (
             user_id INTEGER NOT NULL, station_id INTEGER NOT NULL, role_code TEXT NOT NULL, can_read INTEGER NOT NULL DEFAULT 1,
@@ -30739,7 +30739,7 @@ private fun postSalesReversalJournal(
             for (i in 0 until tanks.length()) {
                 val tank = tanks.getJSONObject(i)
                 val temperature = if (tank.isNull("temperature_c")) 15.0 else tank.optDouble("temperature_c", 15.0)
-                val alpha = db.rawQuery("SELECT coefficient_exp FROM fuel_temperature_coefficients WHERE fuel_type_id=?", arrayOf(tank.optLong("fuel_type_id").toString())).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.00095 }
+                val alpha = db.rawQuery("SELECT coefficient_exp FROM fuel_temperature_coefficients WHERE fuel_type_id=?", arrayOf(tank.optLong("fuel_type_id").toString())).use { c -> require(c.moveToFirst()) { "لا يوجد معامل تمدد معاير لنوع الوقود ${tank.optLong("fuel_type_id")}" }; c.getDouble(0) }
                 val delta = temperature - 15.0
                 val vcf = kotlin.math.exp(-alpha * delta - 0.8 * alpha * alpha * delta * delta)
                 tank.put("vcf", vcf).put("standard_liters_15c", tank.optDouble("current_liters", 0.0) * vcf)
@@ -38182,7 +38182,8 @@ private fun postSalesReversalJournal(
             "SELECT coefficient_exp FROM fuel_temperature_coefficients WHERE fuel_type_id=?",
             arrayOf(fuelTypeId.toString())
         ).use { c ->
-            if (c.moveToFirst()) c.getDouble(0) else 0.00095
+            require(c.moveToFirst()) { "لا يوجد معامل تمدد معاير لنوع الوقود $fuelTypeId" }
+            c.getDouble(0)
         }
         require(alpha.isFinite() && alpha in 0.0001..0.003) { "معامل تمدد الوقود غير صالح" }
         val delta = temperatureC - 15.0
