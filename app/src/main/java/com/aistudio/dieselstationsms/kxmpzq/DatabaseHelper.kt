@@ -6,6 +6,7 @@ import com.aistudio.dieselstationsms.kxmpzq.CustomerReceivablesRepository
 
 import com.aistudio.dieselstationsms.kxmpzq.sms.DebtDueDateRepository
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsOutboxSchema
+import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
@@ -174,10 +175,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
                 current.contextRef === applicationContext -> current
                 else -> {
-                    // Android has one stable Application context per process. Tests,
-                    // isolated processes, and wrapped app contexts may use a different
-                    // application context/database directory; never leak the previous
-                    // SQLiteOpenHelper into that context.
+                    // Invalidate the startup single-flight cache before retiring its
+                    // helper. Otherwise workers can keep receiving a helper whose SQLite
+                    // connection pool was closed during a context/database transition.
+                    DatabaseInitializationCoordinator.invalidate()
                     current.close()
                     DatabaseHelper(applicationContext).also {
                         instance = it
@@ -188,9 +189,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         @JvmStatic
         fun closeInstance() {
-            // Keep the process-wide helper identity stable for cached consumers.
-            // SQLiteOpenHelper reopens its connection on the next database access.
+            // Closing the helper also invalidates any process-wide cached reference held
+            // by the startup coordinator. The same helper may be reopened on next access,
+            // but no worker should be handed a cached initialization result across close.
             synchronized(this) {
+                DatabaseInitializationCoordinator.invalidate()
                 instance?.close()
             }
         }

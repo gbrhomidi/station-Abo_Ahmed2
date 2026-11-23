@@ -16,6 +16,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.util.UUID
 
@@ -98,6 +100,30 @@ class DatabaseHelperOpenLifecycleTest {
             secondHelper,
             DatabaseHelper.getInstance(secondContext)
         )
+    }
+
+    @Test
+    fun closingOrRebindingSingletonInvalidatesTheStartupDatabaseCache() = runBlocking {
+        val applicationContext = ApplicationProvider.getApplicationContext<Context>()
+        val first = DatabaseHelper.getInstance(applicationContext)
+        assertSame(first, DatabaseInitializationCoordinator.awaitDatabase(applicationContext))
+
+        DatabaseHelper.closeInstance()
+        val reopened = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
+        assertSame("closing SQLite must not leave a stale cached coordinator result", first, reopened)
+        assertTrue(reopened.writableDatabase.isOpen)
+
+        val isolatedContext = object : ContextWrapper(applicationContext) {
+            override fun getApplicationContext(): Context = this
+        }
+        val rebound = DatabaseHelper.getInstance(isolatedContext)
+        assertNotSame(first, rebound)
+        assertSame(
+            "context rebinding must invalidate the old coordinator helper",
+            rebound,
+            DatabaseInitializationCoordinator.awaitDatabase(isolatedContext)
+        )
+        assertTrue(rebound.writableDatabase.isOpen)
     }
 
     @Test
