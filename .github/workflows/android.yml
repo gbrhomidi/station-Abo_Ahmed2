@@ -60,8 +60,8 @@
 # GitHub Actions runtime
 # ----------------------------------------------------------------------------
 # - checkout uses a Node.js 24 compatible release.
-# - setup-java uses v6 / Node.js 24.
-# - upload-artifact uses v6 / Node.js 24.
+# - setup-java uses v6.3.0 / Node.js 24.
+# - upload-artifact uses v7.0.2 / Node.js 24.
 #
 # Final Release artifact
 # ----------------------------------------------------------------------------
@@ -233,25 +233,25 @@ jobs:
 
       # ----------------------------------------------------------------------
       #
-      # checkout@v7 is Node.js 24 compatible.
+      # checkout@v7.0.1 is Node.js 24 compatible.
       #
       # It also avoids the Node.js 20 deprecation warning reported previously.
       # ----------------------------------------------------------------------
 
       - name: Checkout Project
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
 
       # ----------------------------------------------------------------------
       # Java 17 + Gradle cache
       # ----------------------------------------------------------------------
       #
-      # setup-java@v6 uses Node.js 24 and is the current supported major
+      # setup-java@v6.3.0 uses Node.js 24 and is the current supported major
       # version for this workflow.
       # ----------------------------------------------------------------------
 
       - name: Set up Java 17
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@v6.3.0
         with:
           distribution: temurin
           java-version: '17'
@@ -370,7 +370,7 @@ jobs:
       # ----------------------------------------------------------------------
 
       - name: Set up Node.js 22 for Cloud Run tests
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '22'
 
@@ -464,7 +464,7 @@ jobs:
       # ----------------------------------------------------------------------
 
       - name: Checkout Project
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
 
       # ----------------------------------------------------------------------
@@ -472,7 +472,7 @@ jobs:
       # ----------------------------------------------------------------------
 
       - name: Set up Java 17
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@v6.3.0
         with:
           distribution: temurin
           java-version: '17'
@@ -832,7 +832,7 @@ jobs:
       # ======================================================================
 
       - name: Upload Release APK
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7.0.2
 
         with:
           name: Station_Abo_Ahmed_Release
