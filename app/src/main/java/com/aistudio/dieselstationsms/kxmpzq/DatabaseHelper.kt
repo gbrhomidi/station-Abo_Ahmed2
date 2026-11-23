@@ -189,14 +189,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         @JvmStatic
         fun closeInstance() {
-            // Detach the singleton before closing it. Keeping a closed SQLiteOpenHelper
-            // in the singleton slot makes the next getInstance() return a helper whose
-            // connection pool has already been closed (notably across worker/test lifecycles).
+            // SQLiteOpenHelper.close() releases its current connection; the same helper
+            // can reopen it on the next readableDatabase/writableDatabase access. Keep the
+            // process singleton identity stable so existing repositories and startup callers
+            // never retain a detached helper while a replacement is being initialized.
             synchronized(this) {
                 DatabaseInitializationCoordinator.invalidate()
-                val retiring = instance
-                instance = null
-                retiring?.close()
+                instance?.close()
             }
         }
     }
