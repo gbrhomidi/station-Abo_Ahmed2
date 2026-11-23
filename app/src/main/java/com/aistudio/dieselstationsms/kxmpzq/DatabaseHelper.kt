@@ -12775,6 +12775,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("occasion_code", data.optString("occasion_code", "").trim())
                     put("price_reason", resolvedPrice.reason ?: JSONObject.NULL); put("price_valid_until", resolvedPrice.validUntil ?: JSONObject.NULL)
                     put("track_batch", product.optInt("track_batch", 0)); put("track_expiry", product.optInt("track_expiry", 0)); put("track_serial", product.optInt("track_serial", 0))
+                    // Preserve caller-selected traceability references. resolveDryStockSelection
+                    // validates these IDs against the authoritative product/batch/serial rows.
+                    put("batch_id", item.optLong("batch_id", 0L))
+                    put("serial_id", item.optLong("serial_id", 0L))
                 }
             }
             require(total.isFinite() && total >= 0.0) { "إجمالي البيع غير صالح" }

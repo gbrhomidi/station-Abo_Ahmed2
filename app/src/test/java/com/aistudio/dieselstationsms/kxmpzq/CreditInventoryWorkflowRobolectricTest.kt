@@ -576,4 +576,103 @@ class CreditInventoryWorkflowRobolectricTest {
         verify(cash);verify(credit)
     }
 
+
+    @Test
+    fun completeSalePreservesSelectedSerialThroughSaleLineAndOutboxEvent() {
+        val db = helper.writableDatabase
+        val roleId = db.rawQuery("SELECT id FROM roles ORDER BY id LIMIT 1", null)
+            .use { check(it.moveToFirst()); it.getLong(0) }
+        val actorId = db.insertOrThrow("users", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("username", "serial-sale-${UUID.randomUUID().toString().take(8)}")
+            put("password_hash", "test-only")
+            put("full_name", "مستخدم اختبار بيع السيريال")
+            put("role_id", roleId)
+            put("station_id", 1)
+        })
+        db.insertOrThrow("accounts", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("account_code", "TEST-SERIAL-INV-" + UUID.randomUUID().toString().take(8))
+            put("account_name", "Test Inventory")
+            put("account_name_ar", "المخزون")
+            put("level", 1); put("account_type", "asset"); put("account_category", "inventory")
+            put("normal_balance", "debit"); put("is_active", 1); put("is_deleted", 0)
+            put("created_by", actorId)
+        })
+        db.insertOrThrow("accounts", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("account_code", "TEST-SERIAL-COGS-" + UUID.randomUUID().toString().take(8))
+            put("account_name", "Test Cost of Goods Sold")
+            put("account_name_ar", "تكلفة البضاعة المباعة")
+            put("level", 1); put("account_type", "expense"); put("account_category", "cost_of_sales")
+            put("normal_balance", "debit"); put("is_active", 1); put("is_deleted", 0)
+            put("created_by", actorId)
+        })
+        val categoryId = db.rawQuery(
+            "SELECT id FROM product_categories WHERE is_deleted=0 ORDER BY id LIMIT 1", null
+        ).use { check(it.moveToFirst()); it.getLong(0) }
+        val unitId = db.rawQuery("SELECT id FROM units ORDER BY id LIMIT 1", null)
+            .use { check(it.moveToFirst()); it.getLong(0) }
+        val productId = helper.insertProduct(
+            JSONObject().put("product_name", "Serial tracked product")
+                .put("product_name_ar", "منتج متتبع بالسيريال")
+                .put("category_id", categoryId).put("unit_id", unitId)
+                .put("purchase_price", 8.0).put("sale_price", 12.0)
+                .put("quantity", 1.0).put("minimum_stock", 0.0),
+            1, actorId
+        )
+        db.update("products", ContentValues().apply { put("track_serial", 1) },
+            "id=? AND station_id=1", arrayOf(productId.toString()))
+        helper.adjustProductStock(productId, 1.0, 1, actorId)
+        val serialId = helper.insertProductSerial(
+            JSONObject().put("product_id", productId)
+                .put("serial_no", "SALE-SERIAL-" + UUID.randomUUID()),
+            1, actorId
+        )
+        db.insertOrThrow("shifts", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("shift_code", "SERIAL-SH-" + UUID.randomUUID().toString().take(8))
+            put("station_id", 1); put("shift_date", helper.currentDateForBridge())
+            put("shift_type", "morning"); put("start_time", helper.currentDateForBridge() + " 08:00:00")
+            put("cashier_id", actorId); put("created_by", actorId); put("status", "open")
+        })
+
+        val key = "serial-sale-${UUID.randomUUID()}"
+        val payload = JSONObject().put("idempotency_key", key)
+            .put("products", JSONArray().put(
+                JSONObject().put("product_id", productId)
+                    .put("quantity", 1.0).put("serial_id", serialId)
+            ))
+        val result = helper.completeSale(payload, 1, actorId)
+        assertTrue("Serial-tracked POS sale should complete: ${result.optString("error")}", result.optBoolean("success"))
+        val saleId = result.getLong("sale_id")
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM sale_items WHERE sale_id=? AND product_id=? AND serial_id=?",
+            arrayOf(saleId.toString(), productId.toString(), serialId.toString())
+        ).use { check(it.moveToFirst()); it.getInt(0) })
+        val serial = db.rawQuery(
+            "SELECT status,sale_id FROM product_serials WHERE serial_id=? AND product_id=?",
+            arrayOf(serialId.toString(), productId.toString())
+        ).use { check(it.moveToFirst()); it.getString(0) to it.getLong(1) }
+        assertEquals("SOLD", serial.first)
+        assertEquals(saleId, serial.second)
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_movements WHERE station_id=1 AND product_id=? AND movement_type='out' AND reference_type='sale' AND reference_id=? AND ABS(quantity_change+1.0)<0.000001 AND is_deleted=0",
+            arrayOf(productId.toString(), saleId.toString())
+        ).use { check(it.moveToFirst()); it.getInt(0) })
+        val event = db.rawQuery(
+            "SELECT payload FROM events_outbox WHERE station_id=1 AND consumer='stock-levels' AND idempotency_key=?",
+            arrayOf("pos-sale:$saleId")
+        ).use { check(it.moveToFirst()); JSONObject(it.getString(0)) }
+        assertEquals(serialId, event.getJSONArray("lines").getJSONObject(0).getLong("serial_id"))
+
+        val replay = helper.completeSale(JSONObject(payload.toString()), 1, actorId)
+        assertTrue("Idempotent serial sale replay should return the committed sale: ${replay.optString("error")}", replay.optBoolean("success"))
+        assertEquals(saleId, replay.getLong("sale_id"))
+        assertEquals(1, db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_movements WHERE station_id=1 AND product_id=? AND movement_type='out' AND reference_type='sale' AND reference_id=? AND is_deleted=0",
+            arrayOf(productId.toString(), saleId.toString())
+        ).use { check(it.moveToFirst()); it.getInt(0) })
+    }
+
 }
