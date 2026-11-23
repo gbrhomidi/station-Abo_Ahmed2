@@ -36,7 +36,7 @@ assert.ok(fuelNative.includes('eventType = "fuel_sale_completed"'));
 assert.ok(fuelNative.includes('idempotencyKey = "fuel-sale:$saleId"'));
 assert.ok(fuelNative.includes('put("pump_id", pumpId ?: 0)'));
 assert.ok(fuelNative.includes('put("tank_id", resolvedTankId)'), 'Persist the authoritative tank on the fuel sale row');
-assert.ok(fuelNative.includes('ensureColumn(db, "fuel_sales", "tank_id", "INTEGER REFERENCES tanks(id)")'),
+assert.ok(db.includes('ensureColumn(db, "fuel_sales", "tank_id", "INTEGER REFERENCES tanks(id)")'),
     'Add tank_id without guessing historical values');
 const replay = part(fuelNative, 'val existingSaleId = findFinancialIdempotency', 'require(reserveFinancialIdempotency');
 assert.ok(replay.includes('SELECT tank_id, shift_id, pump_id, fuel_type_id, quantity'), 'Replay reads the original sale row');
