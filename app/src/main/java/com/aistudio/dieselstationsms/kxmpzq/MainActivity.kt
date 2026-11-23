@@ -34,6 +34,7 @@ import android.view.ViewGroup
 import android.webkit.*
 import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.Keep
@@ -535,6 +536,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Intercept the Android system back button for every WebView screen.
+        // The callback is disabled on root/auth/setup pages so Android performs
+        // its normal fallback behavior (finishing the Activity) there.
+        installSystemBackNavigation()
+
         lifecycleScope.launch {
             try {
                 // This await does not block the Activity. Concurrent startup callers share one IO open.
@@ -599,6 +605,67 @@ class MainActivity : AppCompatActivity() {
         val securityLockPending: Boolean,
         val developerModeEnabled: Boolean
     )
+
+    /**
+     * Handles the Android system navigation-bar back button for the whole app.
+     *
+     * Any authenticated WebView screen is treated as a child screen and is sent
+     * directly to the dashboard. Login, first-time setup, lock-screen, and the
+     * dashboard itself keep Android's default back behavior, which exits this
+     * Activity when no other enabled back callback handles the event.
+     */
+    private fun installSystemBackNavigation() {
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    val currentPage = webView?.url
+                        ?.substringBefore('?')
+                        ?.substringBefore('#')
+                        ?.substringAfterLast('/')
+                        .orEmpty()
+
+                    val isRootOrAuthPage = currentPage in setOf(
+                        "main.html",
+                        "login.html",
+                        "first-user-setup.html",
+                        "lock-screen.html"
+                    )
+
+                    if (isRootOrAuthPage) {
+                        // Disable this callback, then let the dispatcher invoke
+                        // Android's normal fallback behavior for the Activity.
+                        isEnabled = false
+                        onBackPressedDispatcher.onBackPressed()
+                        return
+                    }
+
+                    val dashboardUrl = "file:///android_asset/main.html"
+                    val currentWebView = webView
+                    if (currentWebView?.isAttachedToWindow == true) {
+                        // Let the shared HTML runtime animate the old page first.
+                        // The fallback delay keeps navigation reliable if a page has
+                        // not loaded the shared script yet.
+                        currentWebView.evaluateJavascript(
+                            "window.__stationBeginPageExit && window.__stationBeginPageExit();",
+                            null
+                        )
+                        handler.postDelayed({
+                            if (!isDestroyed.get()) webView?.loadUrl(dashboardUrl)
+                        }, 180L)
+                    } else {
+                        // If the WebView is still being attached, load it as soon
+                        // as it becomes available instead of losing the action.
+                        handler.post {
+                            if (!isDestroyed.get()) {
+                                webView?.loadUrl(dashboardUrl)
+                            }
+                        }
+                    }
+                }
+            }
+        )
+    }
 
     /**
      * Opening/upgrading SQLite can create many tables and indexes. Keep that work off
