@@ -6,6 +6,8 @@ import android.database.sqlite.SQLiteDatabase
 import android.os.Looper
 import android.webkit.WebView
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.testing.WorkManagerTestInitHelper
+import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import com.aistudio.dieselstationsms.kxmpzq.sms.DebtDueDateRepository
 import org.json.JSONArray
 import org.json.JSONObject
@@ -54,7 +56,9 @@ class FuelSalesDeliveryFeeRobolectricTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
+        DatabaseInitializationCoordinator.resetForTests()
         DatabaseHelper.closeInstance()
+        WorkManagerTestInitHelper.initializeTestWorkManager(context)
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
         helper = DatabaseHelper.getInstance(context)
         db = helper.writableDatabase
@@ -82,6 +86,7 @@ class FuelSalesDeliveryFeeRobolectricTest {
 
     @After
     fun tearDown() {
+        DatabaseInitializationCoordinator.resetForTests()
         DatabaseHelper.closeInstance()
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
     }

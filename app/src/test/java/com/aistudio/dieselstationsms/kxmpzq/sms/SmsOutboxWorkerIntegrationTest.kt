@@ -8,8 +8,10 @@ import androidx.work.ListenableWorker
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
+import androidx.work.testing.WorkManagerTestInitHelper
 import com.aistudio.dieselstationsms.kxmpzq.BusinessDay
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -38,6 +40,8 @@ class SmsOutboxWorkerIntegrationTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
+        DatabaseInitializationCoordinator.resetForTests()
+        WorkManagerTestInitHelper.initializeTestWorkManager(context)
         shadowOf(context.applicationContext as android.app.Application)
             .grantPermissions(Manifest.permission.SEND_SMS)
         DatabaseHelper.closeInstance()
@@ -53,6 +57,7 @@ class SmsOutboxWorkerIntegrationTest {
 
     @After
     fun tearDown() {
+        DatabaseInitializationCoordinator.resetForTests()
         DatabaseHelper.closeInstance()
     }
 

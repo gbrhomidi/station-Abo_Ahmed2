@@ -3,6 +3,7 @@ package com.aistudio.dieselstationsms.kxmpzq.startup
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -17,12 +18,22 @@ internal class SingleFlightInitializer<T : Any>(
     private val lock = Any()
     private var initializedValue: T? = null
     private var inFlight: CompletableDeferred<T>? = null
+    private var inFlightJob: Job? = null
+    private var generation: Long = 0L
 
+    /**
+     * Test reset is a lifecycle boundary: cancel the producer as well as its shared result.
+     * A producer that is already inside non-cooperative SQLite work must not publish a stale
+     * helper into the next test's generation.
+     */
     fun resetForTests() {
         synchronized(lock) {
-            initializedValue = null
+            generation++
+            inFlightJob?.cancel()
+            inFlightJob = null
             inFlight?.cancel()
             inFlight = null
+            initializedValue = null
         }
     }
 
@@ -31,19 +42,30 @@ internal class SingleFlightInitializer<T : Any>(
             initializedValue?.let { return it }
             inFlight ?: run {
                 val created = CompletableDeferred<T>()
+                val producerGeneration = generation
                 inFlight = created
                 created.invokeOnCompletion {
-                    synchronized(lock) { if (inFlight === created) inFlight = null }
+                    synchronized(lock) {
+                        if (inFlight === created) {
+                            inFlight = null
+                            inFlightJob = null
+                        }
+                    }
                 }
                 val job = scope.launch {
                     try {
-                        created.complete(initializeWithRetry(initializer))
+                        val value = initializeWithRetry(initializer)
+                        val mayPublish = synchronized(lock) {
+                            generation == producerGeneration && inFlight === created
+                        }
+                        if (mayPublish) created.complete(value) else created.cancel()
                     } catch (cancelled: CancellationException) {
                         created.cancel(cancelled)
                     } catch (failure: Exception) {
                         created.completeExceptionally(failure)
                     }
                 }
+                inFlightJob = job
                 job.invokeOnCompletion { cause ->
                     if (cause != null && !created.isCompleted) {
                         if (cause is CancellationException) created.cancel(cause)
@@ -61,9 +83,7 @@ internal class SingleFlightInitializer<T : Any>(
         while (true) {
             attempt++
             try {
-                val value = initializer()
-                synchronized(lock) { initializedValue = value }
-                return value
+                return initializer()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
