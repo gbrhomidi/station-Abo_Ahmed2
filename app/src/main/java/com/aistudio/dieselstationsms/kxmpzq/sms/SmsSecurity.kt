@@ -207,12 +207,22 @@ class SmsSecurity(
      */
     fun generateMessageHash(
         phone: String,
-        message: String
+        message: String,
+        messageId: String = "",
+        serviceCenter: String = ""
     ): String {
         val normalizedPhone = normalizePhone(phone)
         val normalizedMessage = normalizeMessage(message)
+        val normalizedMessageId = messageId.trim().take(128)
+        val normalizedServiceCenter = normalizePhone(serviceCenter)
 
-        val raw = "$normalizedPhone|$normalizedMessage"
+        // The source identity separates duplicate delivery from a legitimate
+        // later message containing the same meter reading. Empty metadata is
+        // intentionally supported for callers that only have legacy data.
+        val raw = listOf(
+            "v2", normalizedPhone, normalizedServiceCenter,
+            normalizedMessageId, normalizedMessage
+        ).joinToString("|")
 
         return sha256(raw).take(32)
     }

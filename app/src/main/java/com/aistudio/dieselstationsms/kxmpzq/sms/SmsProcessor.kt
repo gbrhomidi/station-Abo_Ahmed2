@@ -313,13 +313,15 @@ class SmsProcessor(
 
         return try {
 
-            /*
-             * Hash يعتمد على المرسل + النص.
-             */
+            // Preserve the Android source identity so a later valid reading
+            // with identical text is not mistaken for a replay.
+            val sourceMessageId = "${sms.timestampMillis}:${sms.indexOnIcc}"
             val messageHash =
                 security.generateMessageHash(
                     sender,
-                    rawBody
+                    rawBody,
+                    sourceMessageId,
+                    smsc
                 )
 
             /*
@@ -475,7 +477,12 @@ class SmsProcessor(
             // Pump-meter SMS is deterministic and must be evaluated before customer/driver routing.
             // A valid pump-meter message is fully consumed here; invalid/unrelated SMS continues through the existing pipeline.
             try {
-                if (PumpMeterSmsRepository(context, db).handleIncomingSms(sender, rawBody)) {
+                if (PumpMeterSmsRepository(context, db).handleIncomingSms(
+                        sender,
+                        rawBody,
+                        "${sms.timestampMillis}:${sms.indexOnIcc}",
+                        smsc
+                    )) {
                     diagnosticsOutcome = true
                     safeLogSms(sender, msgBody, "received", "pump_meter_handled")
                     metrics.recordEvent(SmsMetrics.EventType.SMS_RECEIVED, normalizedSender, "Pump meter SMS")
