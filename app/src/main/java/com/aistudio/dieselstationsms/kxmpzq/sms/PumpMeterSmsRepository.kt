@@ -1,12 +1,16 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
 import android.content.Context
+import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
+import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
 
 /** Deterministic pump-meter SMS reconciliation; financial decisions never use AI. */
 class PumpMeterSmsRepository(private val context: Context, private val db: DatabaseHelper) {
@@ -38,15 +42,49 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
         addColumn(database,"pump_nozzles","nozzle_number INTEGER NOT NULL DEFAULT 0")
         addColumn(database,"pump_nozzles","fuel_type_id INTEGER")
         addColumn(database,"pump_nozzles","is_deleted INTEGER NOT NULL DEFAULT 0")
+        addColumn(database,"pump_nozzles","status TEXT DEFAULT 'active'")
+        addColumn(database,"pump_nozzles","updated_at TEXT")
+        addColumn(database,"pump_nozzles","deleted_at TEXT")
         try { database.execSQL("UPDATE pump_nozzles SET station_id=(SELECT station_id FROM pumps WHERE pumps.id=pump_nozzles.pump_id) WHERE COALESCE(station_id,0)=0") } catch (_: Exception) {}
-        database.execSQL("CREATE TABLE IF NOT EXISTS pump_nozzles(id INTEGER PRIMARY KEY AUTOINCREMENT,station_id INTEGER NOT NULL DEFAULT 0,pump_id INTEGER NOT NULL,nozzle_code TEXT,nozzle_number INTEGER NOT NULL,fuel_type_id INTEGER,is_deleted INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(pump_id,nozzle_number))")
+        database.execSQL("CREATE TABLE IF NOT EXISTS pump_nozzles(id INTEGER PRIMARY KEY AUTOINCREMENT,uuid TEXT UNIQUE,nozzle_code TEXT,nozzle_number TEXT NOT NULL,station_id INTEGER NOT NULL DEFAULT 0,pump_id INTEGER NOT NULL,fuel_type_id INTEGER,meter_start REAL DEFAULT 0,meter_current REAL DEFAULT 0,status TEXT DEFAULT 'active',is_deleted INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT,deleted_at TEXT,UNIQUE(pump_id,nozzle_number))")
+        ensureTwoNozzles(database)
+        database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS ux_active_pump_nozzle_number ON pump_nozzles(pump_id,nozzle_number) WHERE COALESCE(is_deleted,0)=0")
+        database.execSQL("CREATE TRIGGER IF NOT EXISTS trg_pump_nozzle_insert_limit BEFORE INSERT ON pump_nozzles WHEN COALESCE(NEW.is_deleted,0)=0 AND (NEW.nozzle_number NOT IN ('1','2') OR (SELECT COUNT(*) FROM pump_nozzles WHERE pump_id=NEW.pump_id AND COALESCE(is_deleted,0)=0)>=2) BEGIN SELECT RAISE(ABORT, 'كل مضخة يجب أن تحتوي على فوهتين فقط'); END")
+        database.execSQL("CREATE TRIGGER IF NOT EXISTS trg_pump_nozzle_update_limit BEFORE UPDATE OF nozzle_number,is_deleted,status ON pump_nozzles WHEN COALESCE(NEW.is_deleted,0)=0 AND NEW.nozzle_number NOT IN ('1','2') BEGIN SELECT RAISE(ABORT, 'رقم الفوهة يجب أن يكون 1 أو 2'); END")
         database.execSQL("CREATE TABLE IF NOT EXISTS pump_shift_assignments(id INTEGER PRIMARY KEY AUTOINCREMENT,station_id INTEGER NOT NULL,pump_id INTEGER NOT NULL,employee_id INTEGER NOT NULL,shift_type TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1,assigned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,released_at TEXT,opening_confirmed INTEGER NOT NULL DEFAULT 0,closing_confirmed INTEGER NOT NULL DEFAULT 0,opening_notes TEXT,closing_notes TEXT)")
         database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS ux_active_pump_assignment ON pump_shift_assignments(station_id,pump_id) WHERE active=1")
         database.execSQL("CREATE TABLE IF NOT EXISTS pump_nozzle_meter_state(id INTEGER PRIMARY KEY AUTOINCREMENT,station_id INTEGER NOT NULL,pump_id INTEGER NOT NULL,nozzle_id INTEGER NOT NULL,employee_id INTEGER,shift_type TEXT,opening_reading REAL,closing_reading REAL,last_approved_reading REAL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(station_id,pump_id,nozzle_id))")
         database.execSQL("CREATE TABLE IF NOT EXISTS employee_deductions(id INTEGER PRIMARY KEY AUTOINCREMENT,station_id INTEGER NOT NULL,employee_id INTEGER NOT NULL,shift_id INTEGER,pump_id INTEGER NOT NULL,nozzle_id INTEGER NOT NULL,sms_message_id INTEGER,shortage_liters REAL NOT NULL,unit_sale_price REAL NOT NULL,amount REAL NOT NULL,status TEXT NOT NULL DEFAULT 'pending_review',notes TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,approved_by INTEGER,approved_at TEXT)")
-        database.execSQL("CREATE TABLE IF NOT EXISTS pump_sms_audit(id INTEGER PRIMARY KEY AUTOINCREMENT,station_id INTEGER NOT NULL,employee_id INTEGER,employee_code TEXT,sender_phone TEXT,pump_id INTEGER,pump_number INTEGER,nozzle_id INTEGER,nozzle_number INTEGER,shift_type TEXT,reading_kind TEXT NOT NULL,sms_reading REAL,previous_reading REAL,sold_liters REAL,expected_reading REAL,difference_liters REAL,unit_sale_price REAL,deduction_amount REAL,decision TEXT NOT NULL,reason TEXT,raw_message TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+        database.execSQL("CREATE TABLE IF NOT EXISTS pump_sms_audit(id INTEGER PRIMARY KEY AUTOINCREMENT,station_id INTEGER NOT NULL,employee_id INTEGER,employee_code TEXT,sender_phone TEXT,pump_id INTEGER,pump_number INTEGER,nozzle_id INTEGER,nozzle_number INTEGER,shift_type TEXT,reading_kind TEXT NOT NULL,sms_reading REAL,previous_reading REAL,sold_liters REAL,expected_reading REAL,difference_liters REAL,unit_sale_price REAL,deduction_amount REAL,decision TEXT NOT NULL,reason TEXT,raw_message TEXT NOT NULL,dedupe_key TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+        addColumn(database,"pump_sms_audit","dedupe_key TEXT")
+        database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS ux_pump_sms_audit_dedupe ON pump_sms_audit(dedupe_key) WHERE dedupe_key IS NOT NULL")
+        database.execSQL("CREATE INDEX IF NOT EXISTS idx_pump_sms_audit_station_decision ON pump_sms_audit(station_id,decision,id)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS idx_employee_deductions_station_status ON employee_deductions(station_id,status,id)")
     }
     private fun addColumn(database:SQLiteDatabase,table:String,definition:String){try{database.execSQL("ALTER TABLE "+table+" ADD COLUMN "+definition)}catch(_:Exception){}}
+    private fun ensureTwoNozzles(database: SQLiteDatabase) {
+        val ownTransaction = !database.inTransaction()
+        if (ownTransaction) database.beginTransaction()
+        try {
+            database.rawQuery("SELECT p.id,p.station_id,p.pump_number,p.meter_start,p.meter_current,COALESCE(t.fuel_type_id,0) FROM pumps p LEFT JOIN tanks t ON t.id=p.tank_id WHERE COALESCE(p.is_deleted,0)=0", null).use { pumps ->
+                while (pumps.moveToNext()) {
+                    val pumpId=pumps.getLong(0); val stationId=pumps.getLong(1); val pumpNumber=pumps.getString(2)
+                    val meterStart=pumps.getDouble(3); val meterCurrent=pumps.getDouble(4); val fuelType=pumps.getLong(5)
+                    val ids=mutableListOf<Long>()
+                    database.rawQuery("SELECT id FROM pump_nozzles WHERE pump_id=? AND COALESCE(is_deleted,0)=0 ORDER BY id", arrayOf(pumpId.toString())).use { c -> while(c.moveToNext()) ids += c.getLong(0) }
+                    if (ids.size > 2) ids.drop(2).forEach { id -> database.execSQL("UPDATE pump_nozzles SET is_deleted=1,status='retired',deleted_at=CURRENT_TIMESTAMP WHERE id=?", arrayOf(id)) }
+                    val active=ids.take(2).toMutableList()
+                    for (number in 1..2) {
+                        val existing=if(number<=active.size) active[number-1] else 0L
+                        if(existing>0) database.execSQL("UPDATE pump_nozzles SET station_id=?,nozzle_number=?,nozzle_code=COALESCE(NULLIF(nozzle_code,''),?),fuel_type_id=COALESCE(fuel_type_id,?),updated_at=CURRENT_TIMESTAMP WHERE id=?", arrayOf(stationId,number,"NZ-$pumpNumber-$number",fuelType,existing))
+                        else database.execSQL("INSERT INTO pump_nozzles(uuid,station_id,nozzle_code,nozzle_number,pump_id,fuel_type_id,meter_start,meter_current,status,is_deleted) VALUES(?,?,?,?,?,?,?,?,?,0)", arrayOf("NZ-${pumpId}-${number}",stationId,"NZ-$pumpNumber-$number",number.toString(),pumpId,fuelType,meterStart,meterCurrent,"active"))
+                    }
+                }
+            }
+            if (ownTransaction) database.setTransactionSuccessful()
+        } finally { if (ownTransaction) database.endTransaction() }
+    }
+
 
     fun listNozzles(stationId:Int,pumpId:Int=0):JSONArray{
         ensureSchema(); val out=JSONArray()
@@ -69,8 +107,21 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
         }finally{database.endTransaction()}
     }
 
-    suspend fun handleIncomingSms(sender:String,body:String):Boolean{
-        val parsed=parse(body)?:return false; ensureSchema(); val database=db.writableDatabase
+    suspend fun handleIncomingSms(sender:String,body:String):Boolean {
+        val parsed=parse(body) ?: return false
+        ensureSchema()
+        val database=db.writableDatabase
+        val key=fingerprint(sender, body)
+        database.rawQuery("SELECT 1 FROM pump_sms_audit WHERE dedupe_key=? LIMIT 1", arrayOf(key)).use { if (it.moveToFirst()) return true }
+        database.beginTransaction()
+        return try {
+            val result=handleIncomingSmsInternal(sender, body, parsed, database, key)
+            database.setTransactionSuccessful()
+            result
+        } finally { database.endTransaction() }
+    }
+
+    private suspend fun handleIncomingSmsInternal(sender:String,body:String,parsed:Parsed,database:SQLiteDatabase,key:String):Boolean{
         val employee=findEmployee(database,normalizePhone(sender))
         if(employee==null){ auditRaw(database,sender,body,parsed,"UNAUTHORIZED","رقم المرسل غير مرتبط بموظف نشط"); return true }
         val pump=database.rawQuery("SELECT id,pump_number,station_id,employee_id FROM pumps WHERE pump_number=? AND station_id=? AND COALESCE(is_deleted,0)=0 LIMIT 1",arrayOf(parsed.pumpNumber.toString(),employee.stationId.toString())).use{c->if(!c.moveToFirst())null else JSONObject().apply{put("id",c.getLong(0));put("pump_number",c.getInt(1));put("station_id",c.getInt(2));put("employee_id",c.getLong(3))}}
@@ -103,6 +154,13 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
         warn(sender,"القراءة أعلى من المتوقع؛ لم يتم اعتمادها. يرجى مراجعة قراءة المضخة والمبيعات قبل إرسال القراءة الصحيحة."); return true
     }
 
+    fun listAudit(stationId:Int, limit:Int=50, offset:Int=0):JSONArray { ensureSchema(); val out=JSONArray(); val l=limit.coerceIn(1,200); val o=offset.coerceAtLeast(0); db.readableDatabase.rawQuery("SELECT * FROM pump_sms_audit WHERE station_id=? ORDER BY id DESC LIMIT ? OFFSET ?", arrayOf(stationId.toString(),l.toString(),o.toString())).use { c -> while(c.moveToNext()) out.put(cursorJson(c)) }; return out }
+    fun listDeductions(stationId:Int, limit:Int=50, offset:Int=0):JSONArray { ensureSchema(); val out=JSONArray(); val l=limit.coerceIn(1,200); val o=offset.coerceAtLeast(0); db.readableDatabase.rawQuery("SELECT * FROM employee_deductions WHERE station_id=? ORDER BY id DESC LIMIT ? OFFSET ?", arrayOf(stationId.toString(),l.toString(),o.toString())).use { c -> while(c.moveToNext()) out.put(cursorJson(c)) }; return out }
+    fun resolveDeduction(stationId:Int, id:Long, approved:Boolean, actorId:Long, note:String):JSONObject { ensureSchema(); require(id>0 && actorId>0); val d=db.writableDatabase; d.beginTransaction(); return try { val changed=d.update("employee_deductions", ContentValues().apply { put("status",if(approved) "approved" else "rejected"); put("approved_by",actorId); put("approved_at",SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(Date())); put("notes",note) }, "id=? AND station_id=? AND status='pending_review'", arrayOf(id.toString(),stationId.toString())); require(changed==1) { "الاستقطاع غير موجود أو تمت مراجعته مسبقاً" }; d.setTransactionSuccessful(); JSONObject().put("success",true).put("status",if(approved) "approved" else "rejected") } finally { d.endTransaction() } }
+    private fun assignedShift(database:SQLiteDatabase,station:Int,pump:Long,employee:Long):String? = database.rawQuery("SELECT shift_type FROM pump_shift_assignments WHERE station_id=? AND pump_id=? AND employee_id=? AND active=1 LIMIT 1", arrayOf(station.toString(),pump.toString(),employee.toString())).use { if(it.moveToFirst()) it.getString(0) else null }
+    private fun cursorJson(c:android.database.Cursor):JSONObject { val o=JSONObject(); for(i in 0 until c.columnCount) { val n=c.getColumnName(i); if(c.isNull(i)) o.put(n,JSONObject.NULL) else when(c.getType(i)) { android.database.Cursor.FIELD_TYPE_INTEGER -> o.put(n,c.getLong(i)); android.database.Cursor.FIELD_TYPE_FLOAT -> o.put(n,c.getDouble(i)); else -> o.put(n,c.getString(i)) } }; return o }
+    private fun fingerprint(sender:String, body:String):String = MessageDigest.getInstance("SHA-256").digest((normalizePhone(sender)+"|"+body.trim()).toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
     private fun parse(body:String):Parsed?{val m=FORMAT.matchEntire(body.trim())?:return null;return runCatching{Parsed(m.groupValues[1].toInt(),m.groupValues[2].replace(',','.').toDouble(),m.groupValues[3].first(),m.groupValues[4].toInt())}.getOrNull()}
     private fun findEmployee(database:SQLiteDatabase,phone:String):Employee?{database.rawQuery("SELECT id,employee_code,station_id,phone FROM employees WHERE COALESCE(status,'active')='active' AND COALESCE(is_deleted,0)=0",null).use{c->while(c.moveToNext())if(normalizePhone(c.getString(3).orEmpty())==phone)return Employee(c.getLong(0),c.getString(1).orEmpty(),c.getInt(2),c.getString(3).orEmpty())};return null}
     private fun currentShift(database:SQLiteDatabase,station:Int,pump:Long,employee:Long):String?=database.rawQuery("SELECT shift_type FROM pump_shift_assignments WHERE station_id=? AND pump_id=? AND employee_id=? AND active=1 LIMIT 1",arrayOf(station.toString(),pump.toString(),employee.toString())).use{if(it.moveToFirst())it.getString(0)else null}
@@ -114,18 +172,18 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
     private fun recordApprovedMeterReading(database:SQLiteDatabase,station:Int,pump:Long,nozzle:Long,employee:Long,opening:Double,closing:Double,sold:Double){
         try{
             val code="SMS-"+System.currentTimeMillis()+"-"+pump+"-"+nozzle
-            database.execSQL("INSERT INTO meter_readings(reading_code,pump_id,nozzle_id,station_id,reading_date,opening_reading,closing_reading,sold_liters,status,is_deleted) VALUES(?,?,?,?,CURRENT_TIMESTAMP,?,?,?,?,0)",arrayOf<Any?>(code,pump,nozzle,station,opening,closing,sold,"approved"))
+            database.execSQL("INSERT INTO meter_readings(uuid,reading_code,pump_id,nozzle_id,station_id,reading_date,opening_reading,closing_reading,sold_liters,status,is_deleted) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP,?,?,?,?,0)",arrayOf<Any?>("SMS-UUID-"+code,code,pump,nozzle,station,opening,closing,sold,"approved"))
             try{database.execSQL("UPDATE meter_readings SET read_by=? WHERE reading_code=?",arrayOf<Any?>(employee,code))}catch(_:Exception){}
             try{database.execSQL("UPDATE meter_readings SET system_sold_liters=?,difference=? WHERE reading_code=?",arrayOf<Any?>(sold,0.0,code))}catch(_:Exception){}
         }catch(e:Exception){Log.w(TAG,"Unable to mirror approved SMS reading into meter_readings",e)}
     }
     private fun auditRaw(database:SQLiteDatabase,sender:String,body:String,parsed:Parsed,decision:String,reason:String):Boolean{
-        database.execSQL("INSERT INTO pump_sms_audit(station_id,sender_phone,pump_number,nozzle_number,reading_kind,sms_reading,decision,reason,raw_message) VALUES(?,?,?,?,?,?,?,?,?)",arrayOf<Any?>(0,sender,parsed.pumpNumber,parsed.nozzleNumber,parsed.kind.toString(),parsed.reading,decision,reason,body)); return true
+        database.execSQL("INSERT INTO pump_sms_audit(station_id,sender_phone,pump_number,nozzle_number,reading_kind,sms_reading,decision,reason,raw_message,dedupe_key) VALUES(?,?,?,?,?,?,?,?,?,?)",arrayOf<Any?>(0,sender,parsed.pumpNumber,parsed.nozzleNumber,parsed.kind.toString(),parsed.reading,decision,reason,body,fingerprint(sender,body))); return true
     }
     private fun auditRawEmployee(database:SQLiteDatabase,e:Employee,sender:String,body:String,parsed:Parsed,decision:String,reason:String):Boolean{
-        database.execSQL("INSERT INTO pump_sms_audit(station_id,employee_id,employee_code,sender_phone,pump_number,nozzle_number,reading_kind,sms_reading,decision,reason,raw_message) VALUES(?,?,?,?,?,?,?,?,?,?,?)",arrayOf<Any?>(e.stationId,e.id,e.code,sender,parsed.pumpNumber,parsed.nozzleNumber,parsed.kind.toString(),parsed.reading,decision,reason,body)); return true
+        database.execSQL("INSERT INTO pump_sms_audit(station_id,employee_id,employee_code,sender_phone,pump_number,nozzle_number,reading_kind,sms_reading,decision,reason,raw_message,dedupe_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",arrayOf<Any?>(e.stationId,e.id,e.code,sender,parsed.pumpNumber,parsed.nozzleNumber,parsed.kind.toString(),parsed.reading,decision,reason,body,fingerprint(sender,body))); return true
     }
-    private fun audit(database:SQLiteDatabase,e:Employee,p:JSONObject,n:JSONObject?,parsed:Parsed,sender:String,body:String,decision:String,reason:String,previous:Double=Double.NaN,sold:Double=0.0,expected:Double=Double.NaN,diff:Double=0.0,price:Double=0.0,deduction:Double=0.0):Boolean{database.execSQL("INSERT INTO pump_sms_audit(station_id,employee_id,employee_code,sender_phone,pump_id,pump_number,nozzle_id,nozzle_number,shift_type,reading_kind,sms_reading,previous_reading,sold_liters,expected_reading,difference_liters,unit_sale_price,deduction_amount,decision,reason,raw_message) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",arrayOf<Any?>(e.stationId,e.id,e.code,sender,p.optLong("id"),p.optInt("pump_number"),n?.optLong("id"),n?.optInt("nozzle_number"),null,parsed.kind.toString(),parsed.reading,if(previous.isNaN())null else previous,sold,if(expected.isNaN())null else expected,diff,price,deduction,decision,reason,body));return true}
+    private fun audit(database:SQLiteDatabase,e:Employee,p:JSONObject,n:JSONObject?,parsed:Parsed,sender:String,body:String,decision:String,reason:String,previous:Double=Double.NaN,sold:Double=0.0,expected:Double=Double.NaN,diff:Double=0.0,price:Double=0.0,deduction:Double=0.0):Boolean{database.execSQL("INSERT INTO pump_sms_audit(station_id,employee_id,employee_code,sender_phone,pump_id,pump_number,nozzle_id,nozzle_number,shift_type,reading_kind,sms_reading,previous_reading,sold_liters,expected_reading,difference_liters,unit_sale_price,deduction_amount,decision,reason,raw_message,dedupe_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",arrayOf<Any?>(e.stationId,e.id,e.code,sender,p.optLong("id"),p.optInt("pump_number"),n?.optLong("id"),n?.optInt("nozzle_number"),assignedShift(database,e.stationId,p.optLong("id"),e.id),parsed.kind.toString(),parsed.reading,if(previous.isNaN())null else previous,sold,if(expected.isNaN())null else expected,diff,price,deduction,decision,reason,body,fingerprint(sender,body)));return true}
     private suspend fun warn(phone:String,message:String){try{SmsReplyManager(context,db).sendReplyOnce(phone,message,"pump-meter-"+normalizePhone(phone)+"-"+System.currentTimeMillis()/60000)}catch(e:Exception){Log.w(TAG,"Unable to send pump-meter warning",e)}}
     private fun normalizePhone(v:String):String{val d=v.filter{it.isDigit()};return when{d.startsWith("967")&&d.length>=12->d.substring(3);d.startsWith("0")&&d.length>=9->d.substring(1);else->d}}
     private fun normalizeShift(v:String)=if(v.lowercase(Locale.ROOT).contains("even")||v.contains("مساء"))"evening" else "morning"

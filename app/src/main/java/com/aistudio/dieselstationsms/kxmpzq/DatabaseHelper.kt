@@ -8309,10 +8309,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         db.execSQL("""
             INSERT OR IGNORE INTO pump_nozzles (id, uuid, nozzle_code, nozzle_number, pump_id, fuel_type_id, meter_start, meter_current, status) VALUES
-            (1, 'NZ-001-UUID', 'NZ-001-A', 'A', 1, 1, 0.00, 15420.50, 'active'),
-            (2, 'NZ-002-UUID', 'NZ-002-A', 'A', 2, 1, 0.00, 12350.75, 'active'),
-            (3, 'NZ-003-UUID', 'NZ-003-A', 'A', 3, 2, 0.00, 28900.00, 'active'),
-            (4, 'NZ-004-UUID', 'NZ-004-A', 'A', 4, 3, 0.00, 31500.25, 'active')
+            (1, 'NZ-001-UUID', 'NZ-001-1', '1', 1, 1, 0.00, 15420.50, 'active'),
+            (2, 'NZ-002-UUID', 'NZ-002-1', '1', 2, 1, 0.00, 12350.75, 'active'),
+            (3, 'NZ-003-UUID', 'NZ-003-1', '1', 3, 2, 0.00, 28900.00, 'active'),
+            (4, 'NZ-004-UUID', 'NZ-004-1', '1', 4, 3, 0.00, 31500.25, 'active'),
+            (5, 'NZ-001-2-UUID', 'NZ-001-2', '2', 1, 1, 0.00, 15420.50, 'active'),
+            (6, 'NZ-002-2-UUID', 'NZ-002-2', '2', 2, 1, 0.00, 12350.75, 'active'),
+            (7, 'NZ-003-2-UUID', 'NZ-003-2', '2', 3, 2, 0.00, 28900.00, 'active'),
+            (8, 'NZ-004-2-UUID', 'NZ-004-2', '2', 4, 3, 0.00, 31500.25, 'active')
         """)
 
         db.execSQL("""

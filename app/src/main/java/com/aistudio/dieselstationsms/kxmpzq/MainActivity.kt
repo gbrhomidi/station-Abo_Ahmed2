@@ -12878,6 +12878,22 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun getPumpMeterSmsAudit(jsonData: String = "{}"): String {
+            val helper=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity=getActivity() ?: return errorResponse("النشاط غير متاح"); requireInventoryPermission("meter_readings","read"); val p=JSONObject(jsonData.ifBlank { "{}" }); dataResponse(PumpMeterSmsRepository(activity.applicationContext,helper).listAudit(requireCurrentStationId(helper,activity.currentUserId),p.optInt("limit",50),p.optInt("offset",0))) } catch(e:Exception) { DebugLogger.logException("PumpMeterSmsAudit",e); errorResponse(e.message) }
+        }
+        @JavascriptInterface
+        fun getPumpMeterDeductions(jsonData: String = "{}"): String {
+            val helper=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity=getActivity() ?: return errorResponse("النشاط غير متاح"); requireInventoryPermission("meter_readings","read"); val p=JSONObject(jsonData.ifBlank { "{}" }); dataResponse(PumpMeterSmsRepository(activity.applicationContext,helper).listDeductions(requireCurrentStationId(helper,activity.currentUserId),p.optInt("limit",50),p.optInt("offset",0))) } catch(e:Exception) { DebugLogger.logException("PumpMeterDeductions",e); errorResponse(e.message) }
+        }
+        @JavascriptInterface
+        fun resolvePumpMeterDeduction(id: Long, approved: Boolean, note: String = ""): String {
+            val helper=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity=getActivity() ?: return errorResponse("النشاط غير متاح"); requireInventoryPermission("meter_readings","approve"); PumpMeterSmsRepository(activity.applicationContext,helper).resolveDeduction(requireCurrentStationId(helper,activity.currentUserId),id,approved,activity.currentUserId,note).toString() } catch(e:Exception) { DebugLogger.logException("PumpMeterDeductionResolution",e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
         fun getPumpNozzleRecords(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
