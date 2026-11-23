@@ -329,7 +329,7 @@ jobs:
       # stable browser explicitly instead of allowing a false-negative CI failure.
       - name: Set up Chromium for responsive viewport acceptance
         id: setup-chrome
-        uses: browser-actions/setup-chrome@v1
+        uses: browser-actions/setup-chrome@v2.1.2
         with:
           chrome-version: stable
 
