@@ -189,12 +189,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         @JvmStatic
         fun closeInstance() {
-            // Closing the helper also invalidates any process-wide cached reference held
-            // by the startup coordinator. The same helper may be reopened on next access,
-            // but no worker should be handed a cached initialization result across close.
+            // Detach the singleton before closing it. Keeping a closed SQLiteOpenHelper
+            // in the singleton slot makes the next getInstance() return a helper whose
+            // connection pool has already been closed (notably across worker/test lifecycles).
             synchronized(this) {
                 DatabaseInitializationCoordinator.invalidate()
-                instance?.close()
+                val retiring = instance
+                instance = null
+                retiring?.close()
             }
         }
     }

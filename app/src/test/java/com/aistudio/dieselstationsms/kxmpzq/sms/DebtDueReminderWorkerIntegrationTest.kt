@@ -75,6 +75,18 @@ class DebtDueReminderWorkerIntegrationTest {
     }
 
     @Test
+    fun closeInstanceDetachesClosedHelperBeforeNextAccess() {
+        val retired = database
+        DatabaseHelper.closeInstance()
+
+        val replacement = DatabaseHelper.getInstance(context)
+        assertTrue("A closed singleton must never be returned again", retired !== replacement)
+        assertTrue("The replacement helper must expose an open SQLite connection",
+            replacement.readableDatabase.isOpen)
+        database = replacement
+    }
+
+    @Test
     fun actualWorkerQueuesOnlyInsideConfiguredPreDueWindowAndUpdatesUniqueSchedule() = runBlocking {
         shadowOf(context.applicationContext as Application).grantPermissions(Manifest.permission.SEND_SMS)
 
