@@ -126,6 +126,30 @@ class FuelSalesDeliveryFeeRobolectricTest {
     }
 
     @Test
+    fun fuelSalePersistsAuthoritativeTankIdentity() {
+        assertTrue("The fixture must contain an active pump connected to a tank", pumpId > 0L)
+        val expectedTankId = scalarLong(
+            "SELECT tank_id FROM pumps WHERE id=? AND station_id=?",
+            arrayOf(pumpId.toString(), stationId.toString())
+        )
+        val input = buildFuelSaleInput(DeliveryFeeAccounting.EXEMPT, 0.0, "")
+        val saleId = helper.addFuelSale(input, stationId, userId)
+
+        assertEquals(expectedTankId, scalarLong(
+            "SELECT tank_id FROM fuel_sales WHERE sale_id=? AND station_id=?",
+            arrayOf(saleId.toString(), stationId.toString())
+        ))
+        val eventPayload = db.rawQuery(
+            "SELECT payload FROM events_outbox WHERE station_id=? AND consumer='stock-levels' AND event_type='fuel_sale_completed' AND idempotency_key=?",
+            arrayOf(stationId.toString(), "fuel-sale:$saleId")
+        ).use { cursor ->
+            assertTrue("The sale must publish its durable inventory event", cursor.moveToFirst())
+            JSONObject(cursor.getString(0))
+        }
+        assertEquals(expectedTankId, eventPayload.getLong("tank_id"))
+    }
+
+    @Test
     fun exemptModeKeepsFuelAndInvoiceTotalsGrossWithoutFeeJournal() {
         assertMode(
             mode = DeliveryFeeAccounting.EXEMPT,

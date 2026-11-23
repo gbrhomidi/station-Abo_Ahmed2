@@ -42,6 +42,7 @@ sales-stock-event-contract-regression-test.js checks the actual screen and bridg
 - fuel asynchronous dispatch to the native save implementation;
 - the fuel sale + delivery-fee transaction boundary;
 - aligned stock consumer and stable fuel event identity;
-- preservation of pump identity in the fuel event payload.
+- preservation of pump identity in the fuel event payload and tank identity in the durable fuel_sales row;
+- additive tank_id migration and replay independence from mutable pump-to-tank configuration.
 
 InventoryEventOutboxRobolectricTest covers station/consumer-scoped idempotency, claim/lease, acknowledgement, expired-lease crash recovery, retry/backoff, and terminal failure. The source/contract test verifies both sale paths enqueue inside their own SQLite transaction. The Actions run remains the authoritative build/test result for each pushed SHA.

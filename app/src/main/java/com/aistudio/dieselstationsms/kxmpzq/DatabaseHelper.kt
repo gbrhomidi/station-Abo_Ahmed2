@@ -1369,6 +1369,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 sale_id INTEGER REFERENCES sales_transactions(id),
                 shift_id INTEGER REFERENCES shifts(id),
                 pump_id INTEGER REFERENCES pumps(id),
+                tank_id INTEGER REFERENCES tanks(id),
                 fuel_type_id INTEGER REFERENCES fuel_types(id),
                 quantity REAL DEFAULT 0,
                 price_per_liter REAL DEFAULT 0,
@@ -2389,6 +2390,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 station_id INTEGER REFERENCES stations(id),
                 shift_id INTEGER REFERENCES shifts(id),
                 pump_id INTEGER REFERENCES pumps(id),
+                tank_id INTEGER REFERENCES tanks(id),
                 fuel_type_id INTEGER REFERENCES fuel_types(id),
                 quantity REAL DEFAULT 0,
                 price_per_liter REAL DEFAULT 0,
@@ -2406,6 +2408,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
         """.trimIndent())
         ensureColumn(db, "fuel_sales", "station_id", "INTEGER")
+        // Historical rows remain NULL; today's pump mapping cannot establish their original tank.
+        ensureColumn(db, "fuel_sales", "tank_id", "INTEGER REFERENCES tanks(id)")
         ensureColumn(db, "fuel_sales", "status", "TEXT DEFAULT 'completed'")
         ensureColumn(db, "fuel_sales", "updated_at", "TEXT")
         ensureColumn(db, "fuel_sales", "business_day", "TEXT")
@@ -12412,8 +12416,46 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val idempotencyKey = data.optString("idempotency_key", "").trim()
             db.beginTransaction()
             try {
-                // Resolve the authoritative tank from the selected active pump. Never trust
-                // a browser-supplied tank_id for inventory events or stock reconciliation.
+                val existingSaleId = findFinancialIdempotency(db, "fuel_sale", stationScopeId, idempotencyKey)
+                if (existingSaleId != null) {
+                    // Replays use the immutable tank captured by the original sale, never
+                    // the current pump-to-tank mapping.
+                    val savedSale = db.rawQuery(
+                        """SELECT tank_id, shift_id, pump_id, fuel_type_id, quantity,
+                                  price_per_liter, total_amount
+                           FROM fuel_sales
+                           WHERE sale_id=? AND station_id=? AND is_deleted=0
+                           ORDER BY id LIMIT 1""",
+                        arrayOf(existingSaleId.toString(), stationScopeId.toString())
+                    ).use { cursor ->
+                        if (!cursor.moveToFirst() || cursor.isNull(0)) null else JSONObject().apply {
+                            put("tank_id", cursor.getLong(0))
+                            put("shift_id", cursor.getLong(1))
+                            put("pump_id", if (cursor.isNull(2)) JSONObject.NULL else cursor.getLong(2))
+                            put("fuel_type_id", cursor.getLong(3))
+                            put("liters", cursor.getDouble(4))
+                            put("unit_price", cursor.getDouble(5))
+                            put("total", cursor.getDouble(6))
+                        }
+                    }
+                    // Legacy rows with unknown tank identity remain audit-only.
+                    if (savedSale != null) {
+                        insertEventOutbox(
+                            db,
+                            eventType = "fuel_sale_completed",
+                            consumer = "stock-levels",
+                            idempotencyKey = "fuel-sale:$existingSaleId",
+                            payload = JSONObject(savedSale.toString())
+                                .put("sale_id", existingSaleId)
+                                .put("transaction_id", existingSaleId),
+                            stationScopeId = stationScopeId
+                        )
+                    }
+                    db.setTransactionSuccessful()
+                    return existingSaleId
+                }
+
+                // Resolve the authoritative tank only for a new sale.
                 val resolvedTankId = db.rawQuery(
                     """SELECT t.id
                        FROM pumps p
@@ -12425,29 +12467,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 ).use { cursor ->
                     require(cursor.moveToFirst()) { "المضخة غير نشطة أو لا تتصل بخزان صالح لنوع الوقود المحدد" }
                     cursor.getLong(0)
-                }
-                val existingSaleId = findFinancialIdempotency(db, "fuel_sale", stationScopeId, idempotencyKey)
-                if (existingSaleId != null) {
-                    insertEventOutbox(
-                        db,
-                        eventType = "fuel_sale_completed",
-                        consumer = "stock-levels",
-                        idempotencyKey = "fuel-sale:$existingSaleId",
-                        payload = JSONObject().apply {
-                            put("sale_id", existingSaleId)
-                            put("transaction_id", existingSaleId)
-                            put("shift_id", shiftId)
-                            put("tank_id", resolvedTankId)
-                            put("pump_id", pumpId ?: 0)
-                            put("fuel_type_id", fuelTypeId)
-                            put("liters", liters)
-                            put("unit_price", pricePerLiter)
-                            put("total", totalAmount)
-                        },
-                        stationScopeId = stationScopeId
-                    )
-                    db.setTransactionSuccessful()
-                    return existingSaleId
                 }
                 require(reserveFinancialIdempotency(db, "fuel_sale", stationScopeId, idempotencyKey)) { "مفتاح العملية مستخدم مسبقاً" }
                 if (resolvedPrice.priceListItemId != null && (resolvedPrice.quantityLimit ?: 0.0) > 0.0) {
@@ -12514,6 +12533,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("station_id", stationScopeId)
                     put("shift_id", shiftId)
                     if (pumpId != null) put("pump_id", pumpId)
+                    put("tank_id", resolvedTankId)
                     data.optLong("nozzle_id", 0L).takeIf { it > 0L }?.let { put("nozzle_id", it) }
                     put("fuel_type_id", fuelTypeId)
                     put("quantity", liters)
