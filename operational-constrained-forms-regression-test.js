@@ -70,4 +70,18 @@ expect(databaseHelper.includes('ensureMaintenanceScheduleStationScopeSchema(db)'
 expect(databaseHelper.includes('idx_maintenance_schedule_station_active'), 'فهرس عزل محطة جدولة الصيانة غير موجود');
 expect(databaseHelper.includes('"maintenance_schedule" -> OperationalTableSpec(') && databaseHelper.includes('"is_active", "station_id", "created_by"'), 'مواصفة CRUD لجدولة الصيانة لا تتضمن station_id');
 
+
+const maintenanceForms = ['maintenance-requests.html', 'maintenance-schedule.html', 'maintenance-log.html'];
+for (const name of maintenanceForms) {
+    const source = load(name);
+    const configuredLabels = [...source.matchAll(/"label"\s*:\s*"([^"]+)"/g)].map(match => match[1]);
+    expect(configuredLabels.length > 0, \`حقول \${name} لا تحتوي تسميات قابلة للتحقق\`);
+    expect(configuredLabels.every(label => !/[A-Za-z]{2,}/.test(label)), \`توجد تسمية حقل غير عربية في \${name}\`);
+    expect(source.includes('.stats-grid .stat-card, .stat-card { text-align: center; }'), \`محتوى البطاقات الإحصائية غير محاذى للوسط في \${name}\`);
+    expect(source.includes('.stat-card .stat-value, .stat-card .stat-label { text-align: center; }'), \`قيم/عناوين البطاقات الإحصائية غير محاذاة للوسط في \${name}\`);
+}
+const expenseLabels = [...load('expenses.html').matchAll(/"label"\s*:\s*"([^"]+)"/g)].map(match => match[1]);
+expect(expenseLabels.every(label => !/[A-Za-z]{2,}/.test(label)), 'توجد تسمية حقل غير عربية في نموذج المصروفات');
+expect(load('expenses.html').includes("!row && def.key === 'expense_code'"), 'كود المصروف لا يُخفى عند الإنشاء ليُولّد داخلياً');
+
 console.log('Operational constrained forms regression PASS.');

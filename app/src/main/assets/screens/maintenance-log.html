@@ -1270,6 +1270,11 @@
 </style>
   <script src="file:///android_asset/assets-local/js/business-day.js"></script>
     <script src="file:///android_asset/assets-local/js/navigation-runtime.js"></script>
+<style>
+/* Keep operational statistics readable and visually balanced in RTL WebView. */
+.stats-grid .stat-card, .stat-card { text-align: center; }
+.stat-card .stat-value, .stat-card .stat-label { text-align: center; }
+</style>
 </head>
 <body>
     <div class="offline-banner" id="offlineBanner"><i class="fas fa-triangle-exclamation"></i> Android Bridge غير متاح؛ لن تُحفظ أو تُعرض بيانات تجارية بديلة</div>
@@ -1327,7 +1332,7 @@
     <script>
     (() => {
         'use strict';
-        const CFG = {"title":"سجل الصيانة","icon":"fa-history","module":"assets","listMethod":"getMaintenanceHistoryRecords","listArgs":["{}"],"fields":[{"label":"maintenance request id","key":"maintenance_request_id","type":"number","required":true,"placeholder":""},{"label":"event type","key":"event_type","type":"text","required":true,"placeholder":""},{"label":"event description","key":"event_description","type":"textarea","required":true,"placeholder":""},{"label":"old value","key":"old_value","type":"number","required":false,"placeholder":""},{"label":"new value","key":"new_value","type":"number","required":false,"placeholder":""},{"label":"المنفذ","key":"performed_by","type":"text","required":true,"placeholder":""},{"label":"performed at","key":"performed_at","type":"datetime-local","required":false,"placeholder":""}],"valueFields":["old_value","new_value"],"titleFields":["maintenance_request_id","event_type","event_description"],"subtitleFields":["maintenance_request_id","event_type","event_description","old_value","new_value","performed_by","performed_at"],"createMethod":"saveMaintenanceHistoryRecord","updateMethod":"updateMaintenanceHistoryRecord","deleteMethod":"deleteMaintenanceHistoryRecord","note":"تُنفذ هذه الشاشة عمليات القراءة والإضافة والتعديل والحذف عبر جدول maintenance_history وعقود Typed Bridge الفعلية.","mode":"list","objectMode":false,"updateAction":null,"reportKind":"operational:MaintenanceHistory","aiMethod":null,"reports":["الكل","ملخص","تفصيلي","تحليل","حركات"],"resolveMethod":null,"operationKey":"maintenance_history"};
+        const CFG = {"title":"سجل الصيانة","icon":"fa-history","module":"assets","listMethod":"getMaintenanceHistoryRecords","listArgs":["{}"],"fields":[{"label":"معرّف طلب الصيانة","key":"maintenance_request_id","type":"number","required":true,"placeholder":""},{"label":"نوع الحدث","key":"event_type","type":"text","required":true,"placeholder":""},{"label":"وصف الحدث","key":"event_description","type":"textarea","required":true,"placeholder":""},{"label":"القيمة السابقة","key":"old_value","type":"number","required":false,"placeholder":""},{"label":"القيمة الجديدة","key":"new_value","type":"number","required":false,"placeholder":""},{"label":"المنفذ","key":"performed_by","type":"text","required":true,"placeholder":""},{"label":"تاريخ التنفيذ","key":"performed_at","type":"datetime-local","required":false,"placeholder":""}],"valueFields":["old_value","new_value"],"titleFields":["maintenance_request_id","event_type","event_description"],"subtitleFields":["maintenance_request_id","event_type","event_description","old_value","new_value","performed_by","performed_at"],"createMethod":"saveMaintenanceHistoryRecord","updateMethod":"updateMaintenanceHistoryRecord","deleteMethod":"deleteMaintenanceHistoryRecord","note":"تُنفذ هذه الشاشة عمليات القراءة والإضافة والتعديل والحذف عبر جدول maintenance_history وعقود Typed Bridge الفعلية.","mode":"list","objectMode":false,"updateAction":null,"reportKind":"operational:MaintenanceHistory","aiMethod":null,"reports":["الكل","ملخص","تفصيلي","تحليل","حركات"],"resolveMethod":null,"operationKey":"maintenance_history"};
         const bridge = window.AndroidInterface;
         const state = { rows: [], filtered: [], editing: null, filter: 'all', loadedAt: null };
         const $ = (id) => document.getElementById(id);
