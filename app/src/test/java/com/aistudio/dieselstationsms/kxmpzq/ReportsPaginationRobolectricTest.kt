@@ -348,6 +348,7 @@ class ReportsPaginationRobolectricTest {
             put("opening_reading", 100.0)
             put("closing_reading", 112.0)
             put("sold_liters", 12.0)
+            put("read_by", userId)
             put("status", "draft")
             put("is_deleted", 0)
         })
