@@ -5,6 +5,7 @@ import com.aistudio.dieselstationsms.kxmpzq.notifications.TaskNotificationManage
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
 import com.aistudio.dieselstationsms.kxmpzq.startup.StartupPerformanceMonitor
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsOutboxWorker
+import com.aistudio.dieselstationsms.kxmpzq.worker.InventoryEventOutboxWorker
 
 import android.app.Activity
 import android.app.Application
@@ -155,6 +156,8 @@ class MyApplication : Application() {
         }
 
         runCatching { SmsOutboxWorker.scheduleRecovery(this) }
+        runCatching { InventoryEventOutboxWorker.scheduleRecovery(this) }
+            .onFailure { Log.w(TAG, "Unable to schedule inventory event outbox recovery", it) }
             .onFailure { Log.w(TAG, "Unable to schedule SMS outbox recovery", it) }
 
         Log.d(TAG, "Application initialized successfully")

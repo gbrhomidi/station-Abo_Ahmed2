@@ -46,3 +46,16 @@ sales-stock-event-contract-regression-test.js checks the actual screen and bridg
 - additive tank_id migration and replay independence from mutable pump-to-tank configuration.
 
 InventoryEventOutboxRobolectricTest covers station/consumer-scoped idempotency, claim/lease, acknowledgement, expired-lease crash recovery, retry/backoff, and terminal failure. The source/contract test verifies both sale paths enqueue inside their own SQLite transaction. The Actions run remains the authoritative build/test result for each pushed SHA.
+
+
+## Native inventory-event consumer and recovery
+
+The native InventoryEventOutboxWorker leases station-scoped stock-levels events and performs read-only verification before acknowledgement:
+
+- POS: verifies the completed station/shift sale and persisted product movement for every payload line.
+- Fuel: verifies the saved fuel-sale row, transaction, shift, pump, tank, fuel type, litres, unit price and total.
+- Purchase receipt: verifies the receipt and PO line plus corresponding tank refill or product batch/movement.
+- Unknown or incomplete event types are rejected through retry/backoff/terminal failure policy; they are never acknowledged.
+- The verifier does not write inventory_levels, tank balances, fuel sales or stock movements. It only transitions the leased outbox row using its lease token.
+
+A one-time worker is enqueued after successful POS, fuel-sale and purchase-receipt commits. MyApplication also schedules a 15-minute periodic recovery pass. The worker waits for DatabaseInitializationCoordinator.awaitDatabase before touching SQLite.

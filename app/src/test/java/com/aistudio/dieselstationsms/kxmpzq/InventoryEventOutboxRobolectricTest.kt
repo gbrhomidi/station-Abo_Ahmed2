@@ -129,6 +129,20 @@ class InventoryEventOutboxRobolectricTest {
     }
 
     @Test
+    fun unknownInventoryEventIsRejectedWithoutAcknowledgement() {
+        val unknown = JSONObject().put("event_type", "unregistered_inventory_event")
+            .put("consumer", "stock-levels").put("idempotency_key", "unknown-event-key")
+            .put("payload", JSONObject().put("sale_id", 99))
+        val id = helper.publishEvent(unknown, 1)
+        assertEquals(0, helper.processPendingInventoryOutbox(1, 50))
+        assertEquals("PENDING", db.rawQuery(
+            "SELECT status FROM events_outbox WHERE event_id=?", arrayOf(id.toString())
+        ).use { c -> check(c.moveToFirst()); c.getString(0) })
+        assertEquals(1L, scalar("SELECT attempts FROM events_outbox WHERE event_id=?", arrayOf(id.toString())))
+        assertEquals(0L, scalar("SELECT COUNT(*) FROM events_outbox WHERE event_id=? AND status='DELIVERED'", arrayOf(id.toString())))
+    }
+
+    @Test
     fun claimsCannotCrossStationOrConsumerBoundaries() {
         val stockEvent = helper.publishEvent(event("stock-levels", "stock-key"), 1)
         val auditEvent = helper.publishEvent(event("audit-log", "audit-key"), 1)

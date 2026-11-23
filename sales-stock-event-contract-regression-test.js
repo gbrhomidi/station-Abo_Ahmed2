@@ -6,6 +6,8 @@ const main = read('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainAc
 const pos = read('app/src/main/assets/screens/pos.html');
 const fuel = read('app/src/main/assets/screens/fuel-sales.html');
 const db = read('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt');
+const worker = read('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/worker/InventoryEventOutboxWorker.kt');
+const app = read('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MyApplication.kt');
 function part(s, a, b) { const i=s.indexOf(a); assert.notEqual(i,-1,a); const j=s.indexOf(b,i+a.length); assert.notEqual(j,-1,b); return s.slice(i,j); }
 
 const posUi = part(pos, 'async function completeSale()', '// 11. عرض الفاتورة');
@@ -68,4 +70,19 @@ for (const name of ['publishEvent', 'fetchPendingEvents', 'claimPendingEvents', 
         `Outbox lifecycle method must not be exposed to WebView JavaScript: ${name}`);
 }
 
-console.log('Canonical POS/fuel transactional outbox contract PASS.');
+const consumer = part(db, 'fun processPendingInventoryOutbox(', 'private fun verifyPosSaleEvent(');
+assert.ok(consumer.includes('verifyPosSaleEvent'));
+assert.ok(consumer.includes('verifyFuelSaleEvent'));
+assert.ok(consumer.includes('verifyPurchaseReceiptEvent'));
+assert.ok(consumer.includes('failEvent('));
+assert.ok(consumer.includes('acknowledgeEvent('));
+assert.ok(worker.includes('DatabaseInitializationCoordinator.awaitDatabase'));
+assert.ok(worker.includes('pendingInventoryOutboxStationIds'));
+assert.ok(worker.includes('processPendingInventoryOutbox(stationId, 50)'));
+assert.ok(worker.includes('PeriodicWorkRequestBuilder<InventoryEventOutboxWorker>(15, TimeUnit.MINUTES)'));
+assert.ok(app.includes('InventoryEventOutboxWorker.scheduleRecovery(this)'));
+assert.ok(main.includes('InventoryEventOutboxWorker.enqueueNow(activity.applicationContext)'));
+assert.ok(main.includes('InventoryEventOutboxWorker.enqueueNow(a.applicationContext)'));
+assert.doesNotMatch(worker, /UPDATE\s+(?:inventory_levels|tanks|fuel_sales)/i,
+    'Outbox worker must never mutate inventory/tank balances');
+console.log('Canonical POS/fuel/purchase transactional outbox contract PASS.');

@@ -55,6 +55,7 @@ import com.aistudio.dieselstationsms.kxmpzq.receiver.*
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
 import com.aistudio.dieselstationsms.kxmpzq.notifications.TaskNotificationManager
 import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
+import com.aistudio.dieselstationsms.kxmpzq.worker.InventoryEventOutboxWorker
 import com.aistudio.dieselstationsms.kxmpzq.startup.StartupPerformanceMonitor
 import com.aistudio.dieselstationsms.kxmpzq.startup.ServiceStatusRepository
 import com.aistudio.dieselstationsms.kxmpzq.startup.ServiceLaunchResult
@@ -5089,7 +5090,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 }
                 val result = db.completeSale(data, stationId, activity.currentUserId)
                 if (result.optBoolean("success", false)) {
-// Transactional outbox event is inserted by DatabaseHelper with the sale.
+                    InventoryEventOutboxWorker.enqueueNow(activity.applicationContext)
                 }
                 if (result.optBoolean("success", false) && isCreditSale) {
                     val saleId = result.optLong("sale_id", 0L)
@@ -5475,7 +5476,14 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         // Phase 3/4: Forecourt, procurement, durable events and local intelligence
         @JavascriptInterface fun getForecourtSnapshot(jsonData: String = "{}"): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(h.getForecourtSnapshot(requireCurrentStationId(h,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)}
         @JavascriptInterface fun createPurchaseOrder(jsonData: String): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(h.createPurchaseOrder(JSONObject(jsonData),requireCurrentStationId(h,a.currentUserId),a.currentUserId)) } catch(e:Exception){errorResponse(e.message)}
-        @JavascriptInterface fun receivePurchaseOrder(jsonData: String): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(h.receivePurchaseOrder(JSONObject(jsonData),requireCurrentStationId(h,a.currentUserId),a.currentUserId)) } catch(e:Exception){errorResponse(e.message)}
+        @JavascriptInterface
+        fun receivePurchaseOrder(jsonData: String): String = try {
+            val h = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val a = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val result = h.receivePurchaseOrder(JSONObject(jsonData), requireCurrentStationId(h, a.currentUserId), a.currentUserId)
+            if (result.optBoolean("success", false)) InventoryEventOutboxWorker.enqueueNow(a.applicationContext)
+            dataResponse(result)
+        } catch (e: Exception) { errorResponse(e.message) }
         @JavascriptInterface fun matchInvoiceFourWay(jsonData: String): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(h.matchInvoiceFourWay(JSONObject(jsonData),requireCurrentStationId(h,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)}
         @JavascriptInterface fun approveSupplierInvoiceMatch(jsonData: String): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(h.approveSupplierInvoiceMatch(JSONObject(jsonData),requireCurrentStationId(h,a.currentUserId),a.currentUserId)) } catch(e:Exception){errorResponse(e.message)}
         @JavascriptInterface fun calculateVcf(jsonData: String): String = try { val h=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); val a=getActivity() ?: return errorResponse("النشاط غير متاح"); val d=JSONObject(jsonData); dataResponse(h.calculateVcf(d.optLong("fuel_type_id"),d.optDouble("temperature_c",15.0),requireCurrentStationId(h,a.currentUserId))) } catch(e:Exception){errorResponse(e.message)}
@@ -13944,6 +13952,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 } finally {
                     database.endTransaction()
                 }
+                InventoryEventOutboxWorker.enqueueNow(activity.applicationContext)
 
 // Transactional outbox event is inserted by DatabaseHelper with the sale.
 

@@ -38312,6 +38312,146 @@ private fun postSalesReversalJournal(
         return claimPendingEvents(data, stationScopeId)
     }
 
+
+    fun pendingInventoryOutboxStationIds(): List<Int> {
+        val ids = mutableListOf<Int>()
+        readableDatabase.rawQuery(
+            """SELECT DISTINCT station_id FROM events_outbox
+               WHERE station_id>0 AND consumer='stock-levels'
+                 AND ((status='PENDING' AND datetime(available_at)<=datetime('now'))
+                   OR (status='PROCESSING' AND lease_until IS NOT NULL AND datetime(lease_until)<=datetime('now')))
+               ORDER BY station_id""", null
+        ).use { c -> while (c.moveToNext()) ids += c.getInt(0) }
+        return ids
+    }
+
+    /** Verify committed effects only. No inventory or tank balance is ever mutated here. */
+    fun processPendingInventoryOutbox(stationScopeId: Int, limit: Int = 50): Int {
+        require(stationScopeId > 0)
+        val events = claimPendingEvents(JSONObject().put("consumer", "stock-levels")
+            .put("limit", limit.coerceIn(1, 50)), stationScopeId)
+        var acknowledged = 0
+        for (i in 0 until events.length()) {
+            val event = events.optJSONObject(i) ?: continue
+            val id = event.optLong("event_id", 0L)
+            val token = event.optString("lease_token").trim()
+            if (id <= 0L || token.isBlank()) continue
+            try {
+                val type = event.optString("event_type")
+                val payload = JSONObject(event.optString("payload", "{}"))
+                val valid = when (type) {
+                    "pos_sale_completed" -> verifyPosSaleEvent(stationScopeId, payload)
+                    "fuel_sale_completed" -> verifyFuelSaleEvent(stationScopeId, payload)
+                    "purchase_order_received" -> verifyPurchaseReceiptEvent(stationScopeId, payload)
+                    else -> false
+                }
+                if (valid) {
+                    if (acknowledgeEvent(id, stationScopeId, "stock-levels", token)) acknowledged++
+                } else {
+                    failEvent(id, stationScopeId, "stock-levels", token,
+                        if (type in setOf("pos_sale_completed", "fuel_sale_completed", "purchase_order_received"))
+                            "لم يثبت المدقق وجود الأثر التجاري المحفوظ كاملاً" else "نوع حدث مخزون غير معروف: $type")
+                }
+            } catch (e: Exception) {
+                failEvent(id, stationScopeId, "stock-levels", token, (e.message ?: e.javaClass.simpleName).take(1000))
+            }
+        }
+        return acknowledged
+    }
+
+    private fun verifyPosSaleEvent(stationId: Int, payload: JSONObject): Boolean {
+        val saleId = payload.optLong("sale_id", 0L)
+        val shiftId = payload.optLong("shift_id", 0L)
+        val lines = payload.optJSONArray("lines") ?: return false
+        if (saleId <= 0L || shiftId <= 0L || lines.length() == 0) return false
+        val db = readableDatabase
+        if (!db.rawQuery(
+            "SELECT 1 FROM sales_transactions WHERE id=? AND station_id=? AND shift_id=? AND is_deleted=0 LIMIT 1",
+            arrayOf(saleId.toString(), stationId.toString(), shiftId.toString())
+        ).use { it.moveToFirst() }) return false
+        for (i in 0 until lines.length()) {
+            val line = lines.optJSONObject(i) ?: return false
+            val productId = line.optLong("product_id", 0L)
+            val qty = line.optDouble("quantity", Double.NaN)
+            if (productId <= 0L || !qty.isFinite() || qty <= 0.0) return false
+            val movementFound = db.rawQuery(
+                """SELECT COALESCE(SUM(ABS(quantity_change)),0) FROM inventory_movements
+                   WHERE station_id=? AND product_id=? AND reference_type='sale'
+                     AND reference_id=? AND status='completed' AND is_deleted=0""",
+                arrayOf(stationId.toString(), productId.toString(), saleId.toString())
+            ).use { c -> c.moveToFirst() && c.getDouble(0) + 0.000001 >= qty }
+            if (!movementFound) return false
+        }
+        return true
+    }
+
+    private fun verifyFuelSaleEvent(stationId: Int, payload: JSONObject): Boolean {
+        val saleId = payload.optLong("sale_id", 0L)
+        val shiftId = payload.optLong("shift_id", 0L)
+        val tankId = payload.optLong("tank_id", 0L)
+        val fuelTypeId = payload.optLong("fuel_type_id", 0L)
+        val pumpId = payload.optLong("pump_id", 0L)
+        val liters = payload.optDouble("liters", Double.NaN)
+        val price = payload.optDouble("unit_price", Double.NaN)
+        val total = payload.optDouble("total", Double.NaN)
+        if (saleId <= 0L || shiftId <= 0L || tankId <= 0L || fuelTypeId <= 0L ||
+            !liters.isFinite() || liters <= 0.0 || !price.isFinite() || price <= 0.0 ||
+            !total.isFinite() || total < 0.0) return false
+        return readableDatabase.rawQuery(
+            """SELECT 1 FROM fuel_sales f
+               JOIN sales_transactions s ON s.id=f.sale_id AND s.station_id=f.station_id
+               JOIN tanks t ON t.id=f.tank_id AND t.station_id=f.station_id
+               WHERE f.sale_id=? AND f.station_id=? AND f.shift_id=? AND f.tank_id=?
+                 AND f.fuel_type_id=? AND COALESCE(f.pump_id,0)=?
+                 AND ABS(f.quantity-?)<0.000001 AND ABS(f.price_per_liter-?)<0.000001
+                 AND ABS(f.total_amount-?)<0.01 AND f.is_deleted=0 AND s.is_deleted=0 LIMIT 1""",
+            arrayOf(saleId.toString(), stationId.toString(), shiftId.toString(), tankId.toString(),
+                fuelTypeId.toString(), pumpId.toString(), liters.toString(), price.toString(), total.toString())
+        ).use { it.moveToFirst() }
+    }
+
+    private fun verifyPurchaseReceiptEvent(stationId: Int, payload: JSONObject): Boolean {
+        val receiptId = payload.optLong("receipt_id", 0L)
+        val poId = payload.optLong("po_id", 0L)
+        val lineId = payload.optLong("line_id", 0L)
+        val qty = payload.optDouble("quantity", Double.NaN)
+        if (receiptId <= 0L || poId <= 0L || lineId <= 0L || !qty.isFinite() || qty <= 0.0) return false
+        val db = readableDatabase
+        if (!db.rawQuery("SELECT 1 FROM purchase_order_receipts WHERE receipt_id=? AND po_id=? AND station_id=?",
+            arrayOf(receiptId.toString(), poId.toString(), stationId.toString())).use { it.moveToFirst() }) return false
+        return when (payload.optString("item_type")) {
+            "FUEL" -> {
+                val tankId = payload.optLong("tank_id", 0L)
+                val refillId = payload.optLong("refill_id", 0L)
+                tankId > 0L && refillId > 0L && db.rawQuery(
+                    """SELECT 1 FROM tank_refills WHERE id=? AND tank_id=? AND station_id=?
+                       AND status='completed' AND ABS(delivered_quantity-?)<0.000001 LIMIT 1""",
+                    arrayOf(refillId.toString(), tankId.toString(), stationId.toString(), qty.toString())
+                ).use { it.moveToFirst() }
+            }
+            "PRODUCT" -> {
+                val productId = payload.optLong("product_id", 0L)
+                val batchId = payload.optLong("batch_id", 0L)
+                if (productId <= 0L || batchId <= 0L) false else {
+                    val lineOk = db.rawQuery(
+                        """SELECT 1 FROM purchase_order_lines WHERE line_id=? AND po_id=?
+                           AND item_type='PRODUCT' AND item_id=? AND received_quantity+0.000001>=?
+                           AND batch_id=? LIMIT 1""",
+                        arrayOf(lineId.toString(), poId.toString(), productId.toString(), qty.toString(), batchId.toString())
+                    ).use { it.moveToFirst() }
+                    val movementOk = db.rawQuery(
+                        """SELECT 1 FROM inventory_movements WHERE station_id=? AND product_id=?
+                           AND reference_type='purchase_order' AND reference_id=? AND movement_type='in'
+                           AND status='completed' AND ABS(quantity_change-?)<0.000001 LIMIT 1""",
+                        arrayOf(stationId.toString(), productId.toString(), poId.toString(), qty.toString())
+                    ).use { it.moveToFirst() }
+                    lineOk && movementOk
+                }
+            }
+            else -> false
+        }
+    }
+
     fun getForecourtSnapshot(stationScopeId: Int): JSONObject {
         require(stationScopeId > 0) { "معرف المحطة غير صالح" }
         val db = readableDatabase
