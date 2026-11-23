@@ -30599,6 +30599,31 @@ private fun postSalesReversalJournal(
         }
     }
 
+    fun setMeterReadingStatus(readingId: Long, stationScopeId: Int, actorId: Long, status: String): Int {
+        require(readingId > 0L) { "معرف قراءة العداد غير صالح" }
+        require(stationScopeId > 0) { "معرف المحطة مطلوب لقراءة العداد" }
+        require(actorId > 0L) { "معرف المستخدم مطلوب للتحقق من قراءة العداد" }
+        require(status in setOf("verified", "approved")) { "حالة قراءة العداد غير مدعومة" }
+        dbLock.lock()
+        return try {
+            val values = ContentValues().apply {
+                put("status", status)
+                if (status == "verified") put("verified_by", actorId)
+                if (status == "approved") put("approved_by", actorId)
+                put("updated_at", getCurrentDateTime())
+            }
+            val expectedStatus = if (status == "verified") "draft" else "verified"
+            writableDatabase.update(
+                "meter_readings",
+                values,
+                "id = ? AND station_id = ? AND is_deleted = 0 AND status = ?",
+                arrayOf(readingId.toString(), stationScopeId.toString(), expectedStatus)
+            )
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
     fun getAssetMaintenanceHistory(assetType: String, assetId: Int, limit: Int = 20): JSONArray {
         dbLock.lock()
         return try {

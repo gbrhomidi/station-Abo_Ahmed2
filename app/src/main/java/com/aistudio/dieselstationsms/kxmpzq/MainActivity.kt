@@ -12919,6 +12919,25 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun deleteMeterReadingRecord(id: Long) = operationalDelete("tanks", "meter_readings", id)
         @JavascriptInterface
         fun resolveMeterReadingRecord(id: Long, note: String = "") = operationalResolve("tanks", "meter_readings", id, note)
+        @JavascriptInterface
+        fun verifyMeterReading(id: Long): String = setMeterReadingStatus(id, "verified")
+        @JavascriptInterface
+        fun approveMeterReading(id: Long): String = setMeterReadingStatus(id, "approved")
+        private fun setMeterReadingStatus(id: Long, status: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                if (!db.hasPermission(activity.currentUserId, "tanks.update")) {
+                    throw SecurityException("لا تملك صلاحية تحديث قراءات العدادات")
+                }
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val rows = db.setMeterReadingStatus(id, stationId, activity.currentUserId, status)
+                successResponse(rows > 0, if (rows > 0) "تم تحديث حالة قراءة العداد" else "لم يتم العثور على السجل")
+            } catch (e: Exception) {
+                DebugLogger.logException("MeterReadingStatus", e)
+                errorResponse(e.message)
+            }
+        }
 
         @JavascriptInterface
         fun getTankLevelRecords(jsonData: String = "{}") = operationalList("tanks", "tank_level_log", jsonData)

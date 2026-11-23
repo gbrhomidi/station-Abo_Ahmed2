@@ -310,6 +310,55 @@ class ReportsPaginationRobolectricTest {
         assertEquals(0, byFuelType.getJSONArray("rows").length())
     }
 
+    @Test
+    fun meterReadingStatusUpdateIsStationScopedAndAudited() {
+        val verifiedId = insertReading("2026-11-05", "morning", balanced = true, status = "draft", sold = 12.0)
+        assertEquals(1, helper.setMeterReadingStatus(verifiedId, stationId, userId, "verified"))
+        db.rawQuery("SELECT status, verified_by, approved_by FROM meter_readings WHERE id = ?", arrayOf(verifiedId.toString())).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("verified", cursor.getString(0))
+            assertEquals(userId, cursor.getLong(1))
+            assertTrue(cursor.isNull(2))
+        }
+        assertEquals(1, helper.setMeterReadingStatus(verifiedId, stationId, userId, "approved"))
+        db.rawQuery("SELECT status, verified_by, approved_by FROM meter_readings WHERE id = ?", arrayOf(verifiedId.toString())).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("approved", cursor.getString(0))
+            assertEquals(userId, cursor.getLong(1))
+            assertEquals(userId, cursor.getLong(2))
+        }
+
+        val foreignStationId = db.insertOrThrow("stations", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("station_code", "RPT-STATUS-FOREIGN-" + UUID.randomUUID().toString().take(8))
+            put("station_name", "Foreign status station")
+            put("station_name_ar", "محطة أجنبية لاختبار الحالة")
+            put("status", "active")
+            put("is_deleted", 0)
+        })
+        val foreignId = db.insertOrThrow("meter_readings", null, ContentValues().apply {
+            val token = UUID.randomUUID().toString()
+            put("uuid", token)
+            put("reading_code", "RPT-STATUS-FOREIGN-$token")
+            put("pump_id", pumpId)
+            put("nozzle_id", nozzleId)
+            put("station_id", foreignStationId)
+            put("reading_date", "2026-11-05")
+            put("period", "morning")
+            put("opening_reading", 100.0)
+            put("closing_reading", 112.0)
+            put("sold_liters", 12.0)
+            put("status", "draft")
+            put("is_deleted", 0)
+        })
+        assertEquals(0, helper.setMeterReadingStatus(foreignId, stationId, userId, "verified"))
+        db.rawQuery("SELECT status, verified_by FROM meter_readings WHERE id = ?", arrayOf(foreignId.toString())).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("draft", cursor.getString(0))
+            assertTrue(cursor.isNull(1))
+        }
+    }
+
     private fun insertReading(
         date: String,
         period: String,
