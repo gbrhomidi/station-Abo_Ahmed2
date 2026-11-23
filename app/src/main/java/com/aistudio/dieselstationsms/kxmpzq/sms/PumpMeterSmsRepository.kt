@@ -143,7 +143,7 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
             }
             val inserted=database.insertWithOnConflict("pump_sms_receipts",null,receipt,SQLiteDatabase.CONFLICT_IGNORE)
             if(inserted==-1L){
-                database.execSQL("INSERT INTO pump_sms_replay_events(receipt_id,dedupe_key,sender_phone,message_id,received_at,reason) SELECT id,?,?,?,?,? FROM pump_sms_receipts WHERE dedupe_key=?",arrayOf(normalizePhone(sender),currentMessageId,currentReceivedAt,"DUPLICATE_DELIVERY",currentDedupeKey))
+                database.execSQL("INSERT INTO pump_sms_replay_events(receipt_id,dedupe_key,sender_phone,message_id,received_at,reason) SELECT id,dedupe_key,?,?,?,? FROM pump_sms_receipts WHERE dedupe_key=?",arrayOf(normalizePhone(sender),currentMessageId,currentReceivedAt,"DUPLICATE_DELIVERY",currentDedupeKey))
                 database.setTransactionSuccessful()
                 return true
             }
