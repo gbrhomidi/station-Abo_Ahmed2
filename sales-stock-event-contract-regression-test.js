@@ -40,7 +40,9 @@ assert.ok(db.includes('ensureColumn(db, "fuel_sales", "tank_id", "INTEGER REFERE
     'Add tank_id without guessing historical values');
 const replay = part(fuelNative, 'val existingSaleId = findFinancialIdempotency', 'require(reserveFinancialIdempotency');
 assert.ok(replay.includes('SELECT tank_id, shift_id, pump_id, fuel_type_id, quantity'), 'Replay reads the original sale row');
-assert.ok(!replay.includes('FROM pumps'), 'Replay cannot infer a historical tank from mutable pump mapping');
+const replayBranch = replay.slice(0, replay.indexOf('// Resolve the authoritative tank only for a new sale'));
+assert.ok(replayBranch.length > 0, 'Replay branch must be isolated before new-sale tank resolution');
+assert.ok(!replayBranch.includes('FROM pumps'), 'Replay cannot infer a historical tank from mutable pump mapping');
 assert.ok(fuelNative.indexOf('insertEventOutbox(') < fuelNative.indexOf('db.setTransactionSuccessful()'),
     'Fuel event must be persisted before the sale transaction commits');
 
