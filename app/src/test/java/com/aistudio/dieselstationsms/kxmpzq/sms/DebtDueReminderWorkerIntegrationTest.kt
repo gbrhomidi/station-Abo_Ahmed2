@@ -75,15 +75,20 @@ class DebtDueReminderWorkerIntegrationTest {
     }
 
     @Test
-    fun closeInstanceDetachesClosedHelperBeforeNextAccess() {
-        val retired = database
+    fun closeInstanceKeepsTheProcessHelperAndReopensItsConnection() {
+        val retained = database
         DatabaseHelper.closeInstance()
 
-        val replacement = DatabaseHelper.getInstance(context)
-        assertTrue("A closed singleton must never be returned again", retired !== replacement)
-        assertTrue("The replacement helper must expose an open SQLite connection",
-            replacement.readableDatabase.isOpen)
-        database = replacement
+        val reopened = DatabaseHelper.getInstance(context)
+        assertTrue(
+            "closeInstance must preserve the process helper identity for the same context",
+            retained === reopened
+        )
+        assertTrue(
+            "the retained helper must reopen a live SQLite connection",
+            reopened.readableDatabase.isOpen
+        )
+        database = reopened
     }
 
     @Test

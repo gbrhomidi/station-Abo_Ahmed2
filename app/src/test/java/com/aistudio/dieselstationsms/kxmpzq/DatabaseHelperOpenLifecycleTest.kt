@@ -95,10 +95,15 @@ class DatabaseHelperOpenLifecycleTest {
         assertSame(secondHelper, DatabaseHelper.getInstance(secondContext))
 
         DatabaseHelper.closeInstance()
+        val retainedAfterClose = DatabaseHelper.getInstance(secondContext)
         assertSame(
             "closing connections must not replace the process helper for the same context",
             secondHelper,
-            DatabaseHelper.getInstance(secondContext)
+            retainedAfterClose
+        )
+        assertTrue(
+            "the retained helper must reopen its SQLite connection after closeInstance",
+            retainedAfterClose.readableDatabase.isOpen
         )
     }
 
