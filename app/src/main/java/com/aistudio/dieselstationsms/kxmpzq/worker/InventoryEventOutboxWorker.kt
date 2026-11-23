@@ -14,20 +14,22 @@ import java.util.concurrent.TimeUnit
 
 /** Reconciles committed inventory events without changing stock or tank balances. */
 class InventoryEventOutboxWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result = try {
-        val helper = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
-        var acknowledged = 0
-        for (stationId in helper.pendingInventoryOutboxStationIds()) {
-            if (isStopped) return Result.retry()
-            acknowledged += helper.processPendingInventoryOutbox(stationId, 50)
+    override suspend fun doWork(): Result {
+        return try {
+            val helper = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
+            var acknowledged = 0
+            for (stationId in helper.pendingInventoryOutboxStationIds()) {
+                if (isStopped) return Result.retry()
+                acknowledged += helper.processPendingInventoryOutbox(stationId, 50)
+            }
+            Log.i(TAG, "Inventory outbox pass completed; acknowledged=$acknowledged")
+            Result.success()
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.e(TAG, "Inventory outbox processing failed", error)
+            Result.retry()
         }
-        Log.i(TAG, "Inventory outbox pass completed; acknowledged=$acknowledged")
-        Result.success()
-    } catch (error: kotlinx.coroutines.CancellationException) {
-        throw error
-    } catch (error: Exception) {
-        Log.e(TAG, "Inventory outbox processing failed", error)
-        Result.retry()
     }
 
     companion object {
