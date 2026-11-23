@@ -13,6 +13,6 @@
   },
   "dependencies": {
     "express": "^5.1.0",
-    "firebase-admin": "^13.5.0"
+    "firebase-admin": "^14.5.1"
   }
 }
