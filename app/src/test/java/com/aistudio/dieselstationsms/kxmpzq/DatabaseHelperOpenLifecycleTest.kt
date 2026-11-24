@@ -95,15 +95,15 @@ class DatabaseHelperOpenLifecycleTest {
         assertSame(secondHelper, DatabaseHelper.getInstance(secondContext))
 
         DatabaseHelper.closeInstance()
-        val retainedAfterClose = DatabaseHelper.getInstance(secondContext)
-        assertSame(
-            "closing connections must not replace the process helper for the same context",
+        val reopenedAfterClose = DatabaseHelper.getInstance(secondContext)
+        assertNotSame(
+            "closeInstance must retire the helper instead of caching a closed SQLite pool",
             secondHelper,
-            retainedAfterClose
+            reopenedAfterClose
         )
         assertTrue(
-            "the retained helper must reopen its SQLite connection after closeInstance",
-            retainedAfterClose.readableDatabase.isOpen
+            "a newly acquired helper must expose a live SQLite connection after closeInstance",
+            reopenedAfterClose.readableDatabase.isOpen
         )
     }
 
@@ -115,7 +115,7 @@ class DatabaseHelperOpenLifecycleTest {
 
         DatabaseHelper.closeInstance()
         val reopened = DatabaseInitializationCoordinator.awaitDatabase(applicationContext)
-        assertSame("closing SQLite must not leave a stale cached coordinator result", first, reopened)
+        assertNotSame("closing SQLite must not leave a stale cached coordinator result", first, reopened)
         assertTrue(reopened.writableDatabase.isOpen)
 
         val isolatedContext = object : ContextWrapper(applicationContext) {

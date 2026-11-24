@@ -75,17 +75,17 @@ class DebtDueReminderWorkerIntegrationTest {
     }
 
     @Test
-    fun closeInstanceKeepsTheProcessHelperAndReopensItsConnection() {
-        val retained = database
+    fun closeInstanceRetiresTheProcessHelperAndReopensWithANewConnection() {
+        val retired = database
         DatabaseHelper.closeInstance()
 
         val reopened = DatabaseHelper.getInstance(context)
         assertTrue(
-            "closeInstance must preserve the process helper identity for the same context",
-            retained === reopened
+            "closeInstance must retire the cached helper instead of preserving a closed pool",
+            retired !== reopened
         )
         assertTrue(
-            "the retained helper must reopen a live SQLite connection",
+            "the replacement helper must expose a live SQLite connection",
             reopened.readableDatabase.isOpen
         )
         database = reopened
