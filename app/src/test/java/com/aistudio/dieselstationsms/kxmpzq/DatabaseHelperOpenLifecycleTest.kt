@@ -20,6 +20,9 @@ import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordi
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -79,6 +82,36 @@ class DatabaseHelperOpenLifecycleTest {
     fun tearDown() {
         helper.close()
         testRoot.deleteRecursively()
+    }
+
+    @Test
+    fun singletonRetirementWaitsForAnInFlightDatabaseLifecycleOperation() {
+        val enteredLifecycle = CountDownLatch(1)
+        val releaseLifecycle = CountDownLatch(1)
+        val closeCompleted = CountDownLatch(1)
+
+        val openingThread = thread(name = "sqlite-lifecycle-open-test") {
+            DatabaseInitializationCoordinator.withLifecycleLock {
+                enteredLifecycle.countDown()
+                check(releaseLifecycle.await(5, TimeUnit.SECONDS))
+            }
+        }
+        assertTrue(enteredLifecycle.await(5, TimeUnit.SECONDS))
+
+        val closingThread = thread(name = "sqlite-lifecycle-close-test") {
+            DatabaseHelper.closeInstance()
+            closeCompleted.countDown()
+        }
+
+        val closeWasBlocked = !closeCompleted.await(100, TimeUnit.MILLISECONDS)
+        releaseLifecycle.countDown()
+
+        assertTrue("closeInstance must wait until the in-flight SQLite lifecycle section exits", closeWasBlocked)
+        assertTrue("closeInstance did not complete after the lifecycle section exited",
+            closeCompleted.await(5, TimeUnit.SECONDS))
+        openingThread.join(5_000)
+        closingThread.join(5_000)
+        assertFalse("the lifecycle test threads must terminate", openingThread.isAlive || closingThread.isAlive)
     }
 
     @Test

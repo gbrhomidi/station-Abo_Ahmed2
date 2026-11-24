@@ -165,38 +165,42 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private var instance: DatabaseHelper? = null
 
         @JvmStatic
-        fun getInstance(context: Context): DatabaseHelper = synchronized(this) {
-            val applicationContext = context.applicationContext
-            val current = instance
+        fun getInstance(context: Context): DatabaseHelper =
+            DatabaseInitializationCoordinator.withLifecycleLock {
+                synchronized(this) {
+                    val applicationContext = context.applicationContext
+                    val current = instance
 
-            when {
-                current == null -> DatabaseHelper(applicationContext).also {
-                    instance = it
-                }
-                current.contextRef === applicationContext &&
-                    current.databasePath == applicationContext.getDatabasePath(DB_NAME).absolutePath -> current
-                else -> {
-                    // Robolectric can keep the application Context identity while changing
-                    // the per-test database directory. Reusing the old helper in that case
-                    // leaves callers attached to a closed SQLite connection pool.
-                    // Invalidate the startup single-flight cache before retiring its helper.
-                    DatabaseInitializationCoordinator.invalidate()
-                    current.close()
-                    DatabaseHelper(applicationContext).also {
-                        instance = it
+                    when {
+                        current == null -> DatabaseHelper(applicationContext).also {
+                            instance = it
+                        }
+                        current.contextRef === applicationContext &&
+                            current.databasePath == applicationContext.getDatabasePath(DB_NAME).absolutePath -> current
+                        else -> {
+                            // Context/database-path rebinding is serialized with startup opens.
+                            // Retire the previous helper only after no coordinator initialization
+                            // can still be opening or publishing it.
+                            DatabaseInitializationCoordinator.invalidate()
+                            current.close()
+                            DatabaseHelper(applicationContext).also {
+                                instance = it
+                            }
+                        }
                     }
                 }
             }
-        }
 
         @JvmStatic
         fun closeInstance() {
-            // Retire and close the helper atomically. A closed helper must never remain in
-            // the singleton slot, otherwise the next caller can receive its closed pool.
-            synchronized(this) {
-                DatabaseInitializationCoordinator.invalidate()
-                instance?.close()
-                instance = null
+            DatabaseInitializationCoordinator.withLifecycleLock {
+                synchronized(this) {
+                    // Invalidation and close are one lifecycle boundary: a startup open cannot
+                    // race this close and publish a helper backed by a retired connection pool.
+                    DatabaseInitializationCoordinator.invalidate()
+                    instance?.close()
+                    instance = null
+                }
             }
         }
     }
