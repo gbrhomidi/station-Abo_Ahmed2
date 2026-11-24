@@ -191,14 +191,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         @JvmStatic
         fun closeInstance() {
-            // Retire the helper from the process singleton without force-closing its SQLite
-            // pool. Robolectric may still own references to the same pool while a test is
-            // deleting/replacing the database file; calling SQLiteOpenHelper.close() here can
-            // make the next helper receive a pool that Robolectric has already marked closed.
-            // The singleton is never closed by production code; callers that need a live
-            // helper obtain a fresh one through getInstance().
+            // Retire and close the helper atomically. A closed helper must never remain in
+            // the singleton slot, otherwise the next caller can receive its closed pool.
             synchronized(this) {
                 DatabaseInitializationCoordinator.invalidate()
+                instance?.close()
                 instance = null
             }
         }
