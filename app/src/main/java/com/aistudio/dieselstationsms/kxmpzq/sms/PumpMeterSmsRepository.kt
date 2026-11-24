@@ -11,6 +11,7 @@ import java.util.Locale
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.WeakHashMap
 
 /** Deterministic pump-meter SMS reconciliation; financial decisions never use AI. */
 class PumpMeterSmsRepository(private val context: Context, private val db: DatabaseHelper) {
@@ -19,7 +20,9 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
         private const val WARNING = "معذرة - القراءة التي ارسلتها لا تتطابق مع القراءة للترات المباعة، لذلك قم بمراجعة الامر مالم سيتم احتساب الفارق على حسابك"
         private val FORMAT = Regex("^\\s*(\\d+)\\s*[-–—]\\s*(\\d+(?:[.,]\\d+)?)\\s*[-–—]\\s*([فخFKfk])\\s*[-–—]\\s*(\\d+)\\s*$")
         private val schemaLock = Any()
-        private val initializedSchemaKeys = mutableSetOf<String>()
+        // Key by the live SQLiteDatabase handle, not path/version: a deleted and
+        // recreated database can reuse both while representing a new schema instance.
+        private val initializedSchemas = WeakHashMap<SQLiteDatabase, Boolean>()
     }
     data class Parsed(val pumpNumber:Int,val reading:Double,val kind:Char,val nozzleNumber:Int)
     private data class Employee(val id:Long,val code:String,val stationId:Int,val phone:String)
@@ -34,11 +37,10 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
     private var pendingWarning: String? = null
 
     fun ensureSchema(database: SQLiteDatabase = db.writableDatabase) {
-        val schemaKey = "${database.path}:${database.version}"
         synchronized(schemaLock) {
-            if (schemaKey !in initializedSchemaKeys) {
+            if (initializedSchemas[database] != true) {
                 ensureSchemaTables(database)
-                initializedSchemaKeys += schemaKey
+                initializedSchemas[database] = true
             }
         }
     }
@@ -78,7 +80,27 @@ class PumpMeterSmsRepository(private val context: Context, private val db: Datab
         database.execSQL("CREATE INDEX IF NOT EXISTS idx_pump_sms_audit_station_decision ON pump_sms_audit(station_id,decision,id)")
         database.execSQL("CREATE INDEX IF NOT EXISTS idx_employee_deductions_station_status ON employee_deductions(station_id,status,id)")
     }
-    private fun addColumn(database:SQLiteDatabase,table:String,definition:String){try{database.execSQL("ALTER TABLE "+table+" ADD COLUMN "+definition)}catch(_:Exception){}}
+    private fun addColumn(database: SQLiteDatabase, table: String, definition: String) {
+        require(table.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) { "Invalid SQLite table name: $table" }
+        val columnName = definition.substringBefore(' ').trim()
+        require(columnName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) {
+            "Invalid SQLite column definition: $definition"
+        }
+        val exists = database.rawQuery("PRAGMA table_info(`$table`)", null).use { cursor ->
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            var found = false
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameIndex).equals(columnName, ignoreCase = true)) {
+                    found = true
+                    break
+                }
+            }
+            found
+        }
+        if (!exists) {
+            database.execSQL("ALTER TABLE `$table` ADD COLUMN $definition")
+        }
+    }
     private fun ensureTwoNozzles(database: SQLiteDatabase) {
         val ownTransaction = !database.inTransaction()
         if (ownTransaction) database.beginTransaction()
