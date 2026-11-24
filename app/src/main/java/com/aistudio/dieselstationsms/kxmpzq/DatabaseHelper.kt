@@ -173,11 +173,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 current == null -> DatabaseHelper(applicationContext).also {
                     instance = it
                 }
-                current.contextRef === applicationContext -> current
+                current.contextRef === applicationContext &&
+                    current.databasePath == applicationContext.getDatabasePath(DB_NAME).absolutePath -> current
                 else -> {
-                    // Invalidate the startup single-flight cache before retiring its
-                    // helper. Otherwise workers can keep receiving a helper whose SQLite
-                    // connection pool was closed during a context/database transition.
+                    // Robolectric can keep the application Context identity while changing
+                    // the per-test database directory. Reusing the old helper in that case
+                    // leaves callers attached to a closed SQLite connection pool.
+                    // Invalidate the startup single-flight cache before retiring its helper.
                     DatabaseInitializationCoordinator.invalidate()
                     current.close()
                     DatabaseHelper(applicationContext).also {
@@ -202,6 +204,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     private val dbLock = ReentrantLock()
     private val contextRef = context.applicationContext
+    private val databasePath = contextRef.getDatabasePath(DB_NAME).absolutePath
 
     private data class BalanceAccountAccumulator(
         val id: Long,
