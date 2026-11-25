@@ -1738,7 +1738,7 @@
             catch (e) { console.warn('fetchPumps failed', e); return []; }
         }
         async function fetchNozzles() {
-            try { return rowsFrom(await invoke('getPumpNozzleRecords', [])); }
+            try { return rowsFrom(await invoke('getPumpNozzleRecords', [JSON.stringify({})])); }
             catch (e) { console.warn('fetchNozzles failed', e); return []; }
         }
 

@@ -30,6 +30,12 @@ CASES = {
     'cash-deposits.html': ['getCashDepositRecords', 'saveCashDepositRecord', 'تنبيه محاسبي'],
     'maintenance-requests.html': ['saveMaintenanceRequestRecord', 'getMaintenanceRequestRecords', 'configureMaintenanceRequestForm'],
     'maintenance-schedule.html': ['saveMaintenanceScheduleRecord', 'getMaintenanceScheduleRecords', 'configureMaintenanceScheduleForm'],
+    'tanks.html': ['getTankRecords', 'saveTankRecord', 'updateTankRecord', 'generateTankReport', 'populateFormSelects'],
+    'pumps.html': ['getPumpRecords', 'savePumpRecord', 'updatePumpRecord', 'generatePumpReport', 'refreshDynamicSelects'],
+    'meter-readings.html': ['getMeterReadingRecords', 'saveMeterReadingRecord', 'generateMeterReadingReport', 'getPumpNozzleRecords', 'populateFormSelects'],
+    'tank-filling.html': ['getTankLevelRecords', 'saveTankLevelRecord', 'generateTankLevelReport', 'getTankRecords', 'populateFormSelects'],
+    'quality-checks.html': ['getFuelQualityRecords', 'saveFuelQualityRecord', 'generateFuelQualityReport', 'getTankRefillRecords', 'populateFormSelects'],
+    'equipment-calibration.html': ['getCalibrationRecords', 'saveCalibrationRecord', 'generateCalibrationReport', 'getPumpNozzleRecords', 'loadEntityOptions'],
 }
 
 class DOMAudit(HTMLParser):
@@ -135,6 +141,27 @@ for name, required in CASES.items():
             (bool(field_labels) and all(re.search(r'[\u0600-\u06FF]', label) for label in field_labels), 'all configured form labels are Arabic'),
             (bool(field_types) and all(kind in {'text', 'number', 'date', 'select', 'textarea'} for kind in field_types), 'configured form controls use supported input types'),
             ('id="operational-stat-card-alignment"' in html, 'statistical cards and their values are centered'),
+        ]
+    if name == 'pumps.html':
+        checks += [
+            ("invoke(m, m === CFG.listMethod ? [JSON.stringify({ limit: 500, search: $('searchInput').value || '' })] : [])" in html, 'pump operational list bridge receives its JSON payload'),
+            ('await refreshDynamicSelects(form, row)' in html, 'pump form resolves station/tank/employee foreign keys'),
+            ('async function loadLookups()' in html or 'loadLookupData()' in html, 'pump reference data has a dedicated loader'),
+        ]
+    if name == 'meter-readings.html':
+        checks += [
+            ("invoke('getPumpNozzleRecords', [JSON.stringify({})])" in html, 'nozzle lookup calls the JSON-argument bridge correctly'),
+            ("invoke('getStations', [])" in html and "invoke('getPumps', [])" in html and "invoke('getShifts', [])" in html, 'station, pump and shift lookups use zero-argument bridges'),
+        ]
+    if name == 'equipment-calibration.html':
+        checks += [
+            ("invoke('getPumpNozzleRecords', [JSON.stringify({})])" in html, 'calibration nozzle lookup calls the JSON-argument bridge correctly'),
+            ('loadEntityOptions(entityType' in html, 'calibration entity selector loads station-scoped equipment'),
+        ]
+    if name in {'tanks.html', 'tank-filling.html', 'quality-checks.html'}:
+        checks += [
+            ('async function populateFormSelects(row)' in html, 'foreign-key selectors are populated from SQLite before form display'),
+            ('data-needs-options="true"' in html, 'database-backed foreign-key fields are rendered as selectors'),
         ]
     if name == 'cash-deposits.html':
         checks += [

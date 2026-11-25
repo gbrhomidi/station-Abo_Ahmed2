@@ -2464,7 +2464,7 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
             for (const m of methods) {
                 if (!hasBridgeMethod(m)) continue;
                 try {
-                    result = await invoke(m, []);
+                    result = await invoke(m, m === CFG.listMethod ? [JSON.stringify({ limit: 500, search: $('searchInput').value || '' })] : []);
                     break;
                 } catch (e) { lastError = e; }
             }
