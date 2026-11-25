@@ -157,6 +157,13 @@ for name, required in CASES.items():
         ]
     if name == 'equipment-calibration.html':
         checks += [
+            ("['completed', 'مكتملة']" in html and "['scheduled', 'مجدولة']" in html, 'calibration completed/scheduled status choices'),
+            ("['in_progress', 'قيد التنفيذ']" in html and "['failed', 'فاشلة']" in html, 'calibration in-progress/failed status choices'),
+            ("'قيد التنفيذ': 'in_progress'" in html and "'فاشلة': 'failed'" in html, 'calibration status label normalization'),
+            ("if (def.key === 'entity_id')" in html and "data-needs-options=\"true\"" in html, 'calibration entity selector is SQLite-backed'),
+            ("loadEntityOptions(currentType, row.entity_id)" in html, 'calibration edit restores selected SQLite entity'),
+        ]
+        checks += [
             ("invoke('getPumpNozzleRecords', [JSON.stringify({})])" in html, 'calibration nozzle lookup calls the JSON-argument bridge correctly'),
             ('loadEntityOptions(entityType' in html, 'calibration entity selector loads station-scoped equipment'),
         ]

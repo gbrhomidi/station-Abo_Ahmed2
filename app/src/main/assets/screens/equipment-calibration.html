@@ -1454,9 +1454,16 @@
             return v || '—';
         }
         function statusCode(label) {
-            if (label === 'نشطة' || label === 'مكتملة') return 'completed';
-            if (label === 'غير نشطة' || label === 'مجدولة') return 'scheduled';
-            return label;
+            const normalized = String(label || '').trim();
+            const labels = {
+                'نشطة': 'completed',
+                'مكتملة': 'completed',
+                'غير نشطة': 'scheduled',
+                'مجدولة': 'scheduled',
+                'قيد التنفيذ': 'in_progress',
+                'فاشلة': 'failed'
+            };
+            return labels[normalized] || normalized;
         }
 
         // ============================================================
@@ -1695,13 +1702,16 @@
             // ===== الحالة =====
             if (def.key === 'status') {
                 const v = String(value || '').toLowerCase();
-                const isActive = v === 'completed';
-                const isInactive = v === 'scheduled';
-                return `<div class="${groupClass}"><label class="form-label">${esc(def.label)}</label>
-                    <select class="form-input" data-key="${esc(def.key)}">
-                        <option value="">اختر...</option>
-                        <option value="completed" ${isActive?'selected':''}>نشطة</option>
-                        <option value="scheduled" ${isInactive?'selected':''}>غير نشطة</option>
+                const statuses = [
+                    ['completed', 'مكتملة'],
+                    ['scheduled', 'مجدولة'],
+                    ['in_progress', 'قيد التنفيذ'],
+                    ['failed', 'فاشلة']
+                ];
+                return `<div class="${groupClass}"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label>
+                    <select class="form-input" data-key="${esc(def.key)}" ${req}>
+                        <option value="">اختر الحالة...</option>
+                        ${statuses.map(([code, label]) => `<option value="${code}" ${v === code ? 'selected' : ''}>${label}</option>`).join('')}
                     </select></div>`;
             }
 
