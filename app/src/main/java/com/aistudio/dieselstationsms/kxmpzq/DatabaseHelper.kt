@@ -170,19 +170,21 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 synchronized(this) {
                     val applicationContext = context.applicationContext
                     val current = instance
+                    val requestedDatabasePath =
+                        applicationContext.getDatabasePath(DB_NAME).absolutePath
 
                     when {
                         current == null -> DatabaseHelper(applicationContext).also {
                             instance = it
                         }
-                        current.contextRef === applicationContext &&
-                            current.databasePath == applicationContext.getDatabasePath(DB_NAME).absolutePath -> current
+                        current.databasePath == requestedDatabasePath -> current
                         else -> {
-                            // Context/database-path rebinding is serialized with startup opens.
-                            // Retire the previous helper only after no coordinator initialization
-                            // can still be opening or publishing it.
+                            // The absolute database path, not Context object identity, defines
+                            // the SQLite store. Android components and test wrappers may expose
+                            // distinct Application Context objects for the same physical file.
+                            // Retire the old helper only when the actual store path changes.
                             DatabaseInitializationCoordinator.invalidate()
-                            current.close()
+                            current.closeForLifecycle()
                             DatabaseHelper(applicationContext).also {
                                 instance = it
                             }
@@ -198,7 +200,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     // Invalidation and close are one lifecycle boundary: a startup open cannot
                     // race this close and publish a helper backed by a retired connection pool.
                     DatabaseInitializationCoordinator.invalidate()
-                    instance?.close()
+                    instance?.closeForLifecycle()
                     instance = null
                 }
             }
@@ -206,6 +208,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     private val dbLock = ReentrantLock()
+    /**
+     * SQLiteOpenHelper.close() retires the whole connection pool. Wait for helper operations
+     * serialized by dbLock to finish before retiring that pool.
+     */
+    private fun closeForLifecycle() {
+        dbLock.lock()
+        try {
+            super.close()
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
     private val contextRef = context.applicationContext
     private val databasePath = contextRef.getDatabasePath(DB_NAME).absolutePath
 

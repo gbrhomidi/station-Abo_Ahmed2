@@ -22,6 +22,8 @@ import java.io.File
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.thread
 
 @RunWith(RobolectricTestRunner::class)
@@ -80,6 +82,7 @@ class DatabaseHelperOpenLifecycleTest {
 
     @After
     fun tearDown() {
+        DatabaseHelper.closeInstance()
         helper.close()
         testRoot.deleteRecursively()
     }
@@ -115,23 +118,30 @@ class DatabaseHelperOpenLifecycleTest {
     }
 
     @Test
-    fun singletonIsStableForOneApplicationContextAndReboundForAnother() {
+    fun singletonUsesDatabasePathIdentityAndRebindsOnlyForADifferentStore() {
         val firstContext = ApplicationProvider.getApplicationContext<Context>()
         val firstHelper = DatabaseHelper.getInstance(firstContext)
 
-        val secondContext = object : ContextWrapper(firstContext) {
+        // Another Context wrapper over the same file must not retire a pool that
+        // can still be used by workers holding the existing helper.
+        val sameStoreContext = object : ContextWrapper(firstContext) {
             override fun getApplicationContext(): Context = this
         }
-        val secondHelper = DatabaseHelper.getInstance(secondContext)
+        assertSame(firstHelper, DatabaseHelper.getInstance(sameStoreContext))
+        assertTrue("same-path Context wrappers must keep the shared SQLite pool open",
+            firstHelper.readableDatabase.isOpen)
 
-        assertNotSame("a helper must not retain a different app context's database path", firstHelper, secondHelper)
-        assertSame(secondHelper, DatabaseHelper.getInstance(secondContext))
+        // The setUp fixture resolves to a genuinely different database file.
+        val differentStoreHelper = DatabaseHelper.getInstance(context)
+        assertNotSame("a different physical database path requires a new helper",
+            firstHelper, differentStoreHelper)
+        assertSame(differentStoreHelper, DatabaseHelper.getInstance(context))
 
         DatabaseHelper.closeInstance()
-        val reopenedAfterClose = DatabaseHelper.getInstance(secondContext)
+        val reopenedAfterClose = DatabaseHelper.getInstance(context)
         assertNotSame(
             "closeInstance must retire the helper instead of caching a closed SQLite pool",
-            secondHelper,
+            differentStoreHelper,
             reopenedAfterClose
         )
         assertTrue(
@@ -141,7 +151,29 @@ class DatabaseHelperOpenLifecycleTest {
     }
 
     @Test
-    fun closingOrRebindingSingletonInvalidatesTheStartupDatabaseCache() = runBlocking {
+    fun samePathContextLookupDoesNotRetireAnOpenCursor() {
+        val firstContext = ApplicationProvider.getApplicationContext<Context>()
+        val helper = DatabaseHelper.getInstance(firstContext)
+        val database = helper.readableDatabase
+        val cursor = database.rawQuery("SELECT COUNT(*) FROM sqlite_master", null)
+        try {
+            val sameStoreContext = object : ContextWrapper(firstContext) {
+                override fun getApplicationContext(): Context = this
+            }
+            assertSame("same physical database path must preserve the process helper",
+                helper, DatabaseHelper.getInstance(sameStoreContext))
+            assertTrue("same-path helper lookup must keep the original connection pool open",
+                database.isOpen)
+            assertTrue("a cursor opened before equivalent-context lookup must remain usable",
+                cursor.moveToFirst())
+        } finally {
+            cursor.close()
+            DatabaseHelper.closeInstance()
+        }
+    }
+
+    @Test
+    fun closingAndRealDatabasePathRebindingInvalidateTheStartupDatabaseCache() = runBlocking {
         val applicationContext = ApplicationProvider.getApplicationContext<Context>()
         val first = DatabaseHelper.getInstance(applicationContext)
         assertSame(first, DatabaseInitializationCoordinator.awaitDatabase(applicationContext))
@@ -151,17 +183,135 @@ class DatabaseHelperOpenLifecycleTest {
         assertNotSame("closing SQLite must not leave a stale cached coordinator result", first, reopened)
         assertTrue(reopened.writableDatabase.isOpen)
 
-        val isolatedContext = object : ContextWrapper(applicationContext) {
+        val samePathContext = object : ContextWrapper(applicationContext) {
             override fun getApplicationContext(): Context = this
         }
-        val rebound = DatabaseHelper.getInstance(isolatedContext)
-        assertNotSame(first, rebound)
+        assertSame(reopened, DatabaseHelper.getInstance(samePathContext))
         assertSame(
-            "context rebinding must invalidate the old coordinator helper",
+            "the startup cache must remain valid for another Context wrapper over the same file",
+            reopened,
+            DatabaseInitializationCoordinator.awaitDatabase(samePathContext)
+        )
+
+        // The setUp fixture has another on-disk path, so this is a true rebind.
+        val rebound = DatabaseHelper.getInstance(context)
+        assertNotSame(reopened, rebound)
+        assertSame(
+            "a real database-path change must invalidate the old coordinator helper",
             rebound,
-            DatabaseInitializationCoordinator.awaitDatabase(isolatedContext)
+            DatabaseInitializationCoordinator.awaitDatabase(context)
         )
         assertTrue(rebound.writableDatabase.isOpen)
+        DatabaseHelper.closeInstance()
+    }
+
+    @Test
+    fun closeInstanceWaitsForAnInFlightSqliteTransactionAndPreservesItsCommit() {
+        val applicationContext = ApplicationProvider.getApplicationContext<Context>()
+        val managedHelper = DatabaseHelper.getInstance(applicationContext)
+        val database = managedHelper.writableDatabase
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS sqlite_lifecycle_close_barrier (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL UNIQUE)"
+        )
+        val token = "close-barrier-${UUID.randomUUID()}"
+        val lockField = DatabaseHelper::class.java.getDeclaredField("dbLock").apply {
+            isAccessible = true
+        }
+        val databaseLock = lockField.get(managedHelper) as ReentrantLock
+        val operationEntered = CountDownLatch(1)
+        val releaseOperation = CountDownLatch(1)
+        val operationCompleted = CountDownLatch(1)
+        val closeStarted = CountDownLatch(1)
+        val closeCompleted = CountDownLatch(1)
+        val operationFailure = AtomicReference<Throwable?>(null)
+        var closeThread: Thread? = null
+
+        val operationThread = thread(name = "sqlite-active-transaction-test") {
+            try {
+                databaseLock.lock()
+                try {
+                    database.beginTransaction()
+                    try {
+                        database.execSQL(
+                            "INSERT INTO sqlite_lifecycle_close_barrier(token) VALUES (?)",
+                            arrayOf(token)
+                        )
+                        operationEntered.countDown()
+                        check(releaseOperation.await(5, TimeUnit.SECONDS)) {
+                            "Timed out waiting to finish the active SQLite transaction"
+                        }
+                        database.setTransactionSuccessful()
+                    } finally {
+                        database.endTransaction()
+                    }
+                } finally {
+                    databaseLock.unlock()
+                }
+            } catch (failure: Throwable) {
+                operationFailure.set(failure)
+                operationEntered.countDown()
+            } finally {
+                operationCompleted.countDown()
+            }
+        }
+
+        try {
+            assertTrue("the SQLite transaction did not enter its critical section",
+                operationEntered.await(5, TimeUnit.SECONDS))
+            closeThread = thread(name = "sqlite-helper-retirement-test") {
+                closeStarted.countDown()
+                try {
+                    DatabaseHelper.closeInstance()
+                } finally {
+                    closeCompleted.countDown()
+                }
+            }
+            assertTrue("the helper retirement thread did not start",
+                closeStarted.await(5, TimeUnit.SECONDS))
+            val closeWasBlocked = !closeCompleted.await(150, TimeUnit.MILLISECONDS)
+            assertTrue(
+                "closeInstance must not close the SQLite pool while a transaction owns dbLock",
+                closeWasBlocked
+            )
+
+            releaseOperation.countDown()
+            assertTrue("the in-flight SQLite transaction did not finish",
+                operationCompleted.await(5, TimeUnit.SECONDS))
+            assertTrue("closeInstance did not finish after the transaction released dbLock",
+                closeCompleted.await(5, TimeUnit.SECONDS))
+            operationFailure.get()?.let { throw AssertionError("SQLite transaction failed", it) }
+
+            val reopened = DatabaseHelper.getInstance(applicationContext)
+            val persisted = reopened.readableDatabase.rawQuery(
+                "SELECT COUNT(*) FROM sqlite_lifecycle_close_barrier WHERE token=?",
+                arrayOf(token)
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getInt(0)
+            }
+            assertEquals("the committed write must survive helper retirement and reopening", 1, persisted)
+            assertEquals("ok", reopened.readableDatabase.rawQuery("PRAGMA integrity_check", null).use {
+                assertTrue(it.moveToFirst())
+                it.getString(0).lowercase()
+            })
+            assertFalse(
+                "helper retirement must not leave foreign-key violations",
+                reopened.readableDatabase.rawQuery("PRAGMA foreign_key_check", null).use {
+                    it.moveToFirst()
+                }
+            )
+            reopened.writableDatabase.delete(
+                "sqlite_lifecycle_close_barrier", "token=?", arrayOf(token)
+            )
+        } finally {
+            releaseOperation.countDown()
+            operationThread.join(5_000)
+            closeThread?.join(5_000)
+            DatabaseHelper.closeInstance()
+        }
+        assertFalse("the SQLite transaction thread must terminate", operationThread.isAlive)
+        assertFalse("the helper retirement thread must terminate", closeThread?.isAlive == true)
     }
 
     @Test
