@@ -534,7 +534,7 @@ else:
         if not ok: failed += 1
 
 module006_screens = {
-    'tanks.html': ['fuel_type_id:', 'generateTankReport'],
+    'tanks.html': ['fuel_type_id:', 'operational:Tank'],
     'pumps.html': ['tank_id: filters.tank', 'manufacturer: filters.manufacturer', 'business_date: businessDayDate()'],
     'tank-filling.html': ['tank_id:', 'reading_type:', 'level_status:', 'alert_status:', 'difference_status:'],
     'quality-checks.html': ['refill_id:', 'result:', 'density_min:', 'density_max:', 'temperature_min:', 'temperature_max:', 'quality_filter:'],
