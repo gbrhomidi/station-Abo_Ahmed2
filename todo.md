@@ -55,7 +55,7 @@
 - [x] Run regression and CI verification for the customer-screen changes before final delivery.
 - [x] Inspect available Crashlytics/crash records for the current APK and distinguish absent telemetry from clean runtime evidence.
 - [x] Profile SQLite query plans and resource lifetime risks in POS flows without using production customer data as test fixtures.
-- [ ] Audit local WebView bridge APIs and sensitive customer-data storage protections, then remediate verified gaps.
+- [x] Audit local WebView bridge APIs and sensitive customer-data storage protections; restrict generic SQLite browser reads/writes to debug builds with developer mode enabled and add regression coverage.
 - [x] Add targeted regression/security tests and push only verified corrective changes.
 - [x] Prevent overlapping POS scanner start-stop sessions, release camera resources on reset/pagehide, and exercise start-stop-start plus stop-during-start behavior in jsdom.
 - [x] Harden the local WebView policy by blocking content URIs, enabling Safe Browsing, and retaining asset-only navigation, mixed-content, and universal-file restrictions.

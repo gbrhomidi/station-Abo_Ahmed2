@@ -15747,11 +15747,21 @@ fun getDashboardStats(jsonData: String = "{}"): String {
   }
         }
         // ============================================================
-        // Database Browser Bridge — dev-mode، بلا فحص صلاحيات
+        // Database Browser Bridge — debug-build and developer-mode only.
+        // The bridge exposes generic table reads and writes, so it must never exist
+        // as an available operation in a production APK.
+        private fun databaseBrowserAccessError(): String? {
+            if (!BuildConfig.DEBUG || !DebugLogger.isDeveloperModeEnabled()) {
+                return errorResponse("واجهة تصفح قاعدة البيانات متاحة في وضع التطوير فقط")
+            }
+            return null
+        }
+
         // ============================================================
 
         @JavascriptInterface
         fun getDatabaseTables(): String {
+            databaseBrowserAccessError()?.let { return it }
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 dataResponse(db.getBrowserTableList())
@@ -15763,6 +15773,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getDatabaseTableSchema(tableName: String): String {
+            databaseBrowserAccessError()?.let { return it }
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 dataResponse(db.getBrowserTableSchema(tableName))
@@ -15774,6 +15785,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getDatabaseTableData(tableName: String, jsonParams: String = "{}"): String {
+            databaseBrowserAccessError()?.let { return it }
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val p = JSONObject(jsonParams.ifBlank { "{}" })
@@ -15795,6 +15807,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getDatabaseRecord(tableName: String, id: Long): String {
+            databaseBrowserAccessError()?.let { return it }
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val row = db.getBrowserRow(tableName, id)
@@ -15808,6 +15821,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun insertBrowserRecord(tableName: String, jsonData: String): String {
+            databaseBrowserAccessError()?.let { return it }
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val obj = JSONObject(jsonData.ifBlank { "{}" })
@@ -15821,6 +15835,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun updateBrowserRecord(tableName: String, id: Long, jsonData: String): String {
+            databaseBrowserAccessError()?.let { return it }
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val obj = JSONObject(jsonData.ifBlank { "{}" })
@@ -15838,6 +15853,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun deleteBrowserRecord(tableName: String, id: Long): String {
+            databaseBrowserAccessError()?.let { return it }
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val result = db.deleteBrowserRow(tableName, id)
@@ -15865,6 +15881,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             fkValue: String,
             limit: Int = 100
         ): String {
+            databaseBrowserAccessError()?.let { return it }
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 dataResponse(db.getBrowserRelatedRows(relatedTable, fkColumn, fkValue, limit))

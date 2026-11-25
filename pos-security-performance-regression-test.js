@@ -30,6 +30,15 @@ mustContain(activity, 'allowUniversalAccessFromFileURLs = false', 'لا يجوز
 mustContain(activity, 'mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW', 'يجب منع المحتوى المختلط');
 mustContain(activity, 'safeBrowsingEnabled = true', 'يجب تفعيل التصفح الآمن صراحةً');
 mustContain(activity, 'if (!isTrustedAssetUrl(url))', 'التنقل غير الموثوق يجب أن يُحجب');
+const browserBridge = activity.slice(activity.indexOf('// Database Browser Bridge — debug-build and developer-mode only.'));
+mustContain(browserBridge, 'if (!BuildConfig.DEBUG || !DebugLogger.isDeveloperModeEnabled())', 'يجب قصر متصفح SQLite العام على APK التطوير مع وضع المطور');
+for (const method of ['getDatabaseTables', 'getDatabaseTableSchema', 'getDatabaseTableData', 'getDatabaseRecord', 'insertBrowserRecord', 'updateBrowserRecord', 'deleteBrowserRecord', 'getDatabaseRelatedRows']) {
+  const start = browserBridge.indexOf('fun ' + method + '(');
+  assert(start >= 0, 'يجب أن تبقى دالة متصفح SQLite المتوقعة موجودة: ' + method);
+  const next = browserBridge.indexOf('@JavascriptInterface', start + 1);
+  const body = browserBridge.slice(start, next < 0 ? undefined : next);
+  assert(body.includes('databaseBrowserAccessError()?.let { return it }'), method + ': يجب رفض استدعاءات متصفح SQLite قبل الوصول إلى قاعدة البيانات');
+}
 mustContain(manifest, 'android:allowBackup="false"', 'لا يجوز تضمين قاعدة بيانات العملاء في نسخ Android الاحتياطية');
 mustContain(manifest, 'android:usesCleartextTraffic="false"', 'يجب منع الاتصال النصي غير المشفر');
 assert(!activity.includes('DebugLogger.info("Whitelist", "Added $phone")'), 'لا يجوز تسجيل رقم العميل كاملاً عند إضافته للقائمة البيضاء');
