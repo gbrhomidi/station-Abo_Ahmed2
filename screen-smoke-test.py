@@ -28,6 +28,8 @@ CASES = {
     'bank-reconciliation.html': ['runFinancialIntegrityAudit', 'bank_account_reconciliation', 'expected_balance_from_ledger'],
     'reports-reconciliation.html': ['runHistoricalFinancialReconciliation', 'runFinancialIntegrityAudit'],
     'cash-deposits.html': ['getCashDepositRecords', 'saveCashDepositRecord', 'تنبيه محاسبي'],
+    'maintenance-requests.html': ['saveMaintenanceRequestRecord', 'getMaintenanceRequestRecords', 'configureMaintenanceRequestForm'],
+    'maintenance-schedule.html': ['saveMaintenanceScheduleRecord', 'getMaintenanceScheduleRecords', 'configureMaintenanceScheduleForm'],
 }
 
 class DOMAudit(HTMLParser):
@@ -109,6 +111,18 @@ for name, required in CASES.items():
         checks += [
             ('getReportExceptions' not in html, 'no stale/unavailable reconciliation bridge method'),
             ('runHistoricalFinancialReconciliation' in html and 'runFinancialIntegrityAudit' in html, 'actual financial audit bridge contracts'),
+        ]
+    if name == 'maintenance-requests.html':
+        checks += [
+            ("choose('asset_type',[['tank','خزان'],['pump','مضخة'],['nozzle','فوهة'],['generator','مولد'],['building','مبنى'],['other','أصل آخر']],'other')" in html, 'maintenance request asset type values match fixed_assets'),
+            ("if(code){code.required=false;code.readOnly=true;" in html and "if(!state.editing)delete payload.request_code;" in html, 'request code is generated internally and not required from the user'),
+            ("station_id:'المحطة'" in html and "before_photos:'صور ما قبل الصيانة'" in html and "after_photos:'صور ما بعد الصيانة'" in html, 'maintenance request field labels are Arabic'),
+        ]
+    if name == 'maintenance-schedule.html':
+        checks += [
+            ("assetType.innerHTML='<option value=\"tank\">خزان</option><option value=\"pump\">مضخة</option>" in html, 'schedule asset type values include pump and tank'),
+            ("if(code){code.required=false;code.readOnly=true;" in html and "if(!state.editing)delete payload.schedule_code;" in html, 'schedule code is generated internally and not required from the user'),
+            ("frequency.innerHTML='<option value=\"daily\">يومي</option>" in html, 'schedule frequency values remain constrained to supported values'),
         ]
     if name == 'cash-deposits.html':
         checks += [
@@ -192,7 +206,7 @@ for name, required in CASES.items():
             (not any(x in html for x in ('Math.random(', 'Mock Data', 'Fake Data')), 'no fake/mock delivery data'),
         ]
 
-    if name in {"receipts.html", "cash-movements.html", "expenses.html", "cash-deposits.html"}:
+    if name in {"receipts.html", "cash-movements.html", "expenses.html", "cash-deposits.html", "maintenance-requests.html", "maintenance-schedule.html"}:
         # Parse each inline JavaScript block with Node's parser; Android WebView
         # must never ship an HTML screen with a syntax error.
         script_tags = re.finditer(r'<script\b([^>]*)>(.*?)</script\s*>', html, re.I | re.S)
