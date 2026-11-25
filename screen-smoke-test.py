@@ -124,6 +124,18 @@ for name, required in CASES.items():
             ("if(code){code.required=false;code.readOnly=true;" in html and "if(!state.editing)delete payload.schedule_code;" in html, 'schedule code is generated internally and not required from the user'),
             ("frequency.innerHTML='<option value=\"daily\">يومي</option>" in html, 'schedule frequency values remain constrained to supported values'),
         ]
+    if name in {'quality-checks.html', 'equipment-calibration.html', 'tank-filling.html', 'meter-readings.html'}:
+        cfg_start = html.find('"fields": [', html.find('const CFG'))
+        cfg_end = html.find('],', cfg_start)
+        cfg_fields = html[cfg_start:cfg_end] if cfg_start >= 0 and cfg_end > cfg_start else ''
+        field_labels = re.findall(r'"label"\\s*:\\s*"([^"]+)"', cfg_fields)
+        field_types = re.findall(r'"type"\\s*:\\s*"([^"]+)"', cfg_fields)
+        checks += [
+            (bool(cfg_fields) and bool(field_labels), 'operational form has explicit field definitions and labels'),
+            (bool(field_labels) and all(re.search(r'[\\u0600-\\u06FF]', label) for label in field_labels), 'all configured form labels are Arabic'),
+            (bool(field_types) and all(kind in {'text', 'number', 'date', 'select', 'textarea'} for kind in field_types), 'configured form controls use supported input types'),
+            ('id="operational-stat-card-alignment"' in html, 'statistical cards and their values are centered'),
+        ]
     if name == 'cash-deposits.html':
         checks += [
             ('"updateMethod": ""' in html, 'posted cash deposits cannot be edited'),
