@@ -61,11 +61,20 @@ class SmsAiProviderStore(context: Context) {
         val index = existing.indexOfFirst { it.id == id }
         if (index < 0) return false
         val current = resetIfNewDay(existing[index])
+        val now = System.currentTimeMillis()
+        val consecutiveFailures = if (success) 0 else current.consecutiveFailureCount + 1
+        val cooldownUntil = when {
+            success -> 0L
+            consecutiveFailures >= COOLDOWN_FAILURE_THRESHOLD -> now + COOLDOWN_DURATION_MS
+            else -> current.cooldownUntil
+        }
         existing[index] = current.copy(
             usedToday = current.usedToday + 1,
             successCount = current.successCount + if (success) 1 else 0,
             failureCount = current.failureCount + if (success) 0 else 1,
-            lastUsedAt = System.currentTimeMillis(),
+            consecutiveFailureCount = consecutiveFailures,
+            cooldownUntil = cooldownUntil,
+            lastUsedAt = now,
             lastError = if (success) "" else error.orEmpty().take(180)
         )
         writeProfiles(existing)
@@ -115,5 +124,7 @@ class SmsAiProviderStore(context: Context) {
     companion object {
         private const val PREFS_NAME = "sms_ai_provider_profiles_secure"
         private const val KEY_PROFILES = "profiles_json"
+        private const val COOLDOWN_FAILURE_THRESHOLD = 4
+        private const val COOLDOWN_DURATION_MS = 5L * 60L * 1000L
     }
 }

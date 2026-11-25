@@ -16,6 +16,8 @@ data class SmsAiProviderProfile(
     val usedToday: Int = 0,
     val successCount: Long = 0L,
     val failureCount: Long = 0L,
+    val consecutiveFailureCount: Int = 0,
+    val cooldownUntil: Long = 0L,
     val lastUsedAt: Long = 0L,
     val lastError: String = "",
     val minConfidence: Double = 0.65,
@@ -33,8 +35,10 @@ data class SmsAiProviderProfile(
         lastError = lastError.take(180)
     )
 
-    fun eligible(): Boolean {
-        return enabled && apiKey.isNotBlank() && endpoint.startsWith("https://") && model.isNotBlank() && usedToday < dailyLimit
+    fun isCoolingDown(now: Long = System.currentTimeMillis()): Boolean = cooldownUntil > now
+
+    fun eligible(now: Long = System.currentTimeMillis()): Boolean {
+        return enabled && !isCoolingDown(now) && apiKey.isNotBlank() && endpoint.startsWith("https://") && model.isNotBlank() && usedToday < dailyLimit
     }
 
     fun publicJson(): JSONObject = JSONObject().apply {
@@ -49,6 +53,9 @@ data class SmsAiProviderProfile(
         put("used_today", usedToday)
         put("success_count", successCount)
         put("failure_count", failureCount)
+        put("consecutive_failure_count", consecutiveFailureCount)
+        put("cooldown_until", cooldownUntil)
+        put("is_cooldown", isCoolingDown())
         put("last_used_at", lastUsedAt)
         put("last_error", lastError)
         put("min_confidence", minConfidence)
@@ -67,6 +74,8 @@ data class SmsAiProviderProfile(
         put("used_today", usedToday)
         put("success_count", successCount)
         put("failure_count", failureCount)
+        put("consecutive_failure_count", consecutiveFailureCount)
+        put("cooldown_until", cooldownUntil)
         put("last_used_at", lastUsedAt)
         put("last_error", lastError)
         put("min_confidence", minConfidence)
@@ -86,6 +95,8 @@ data class SmsAiProviderProfile(
             usedToday = json.optInt("used_today", 0),
             successCount = json.optLong("success_count", 0L),
             failureCount = json.optLong("failure_count", 0L),
+            consecutiveFailureCount = json.optInt("consecutive_failure_count", 0).coerceAtLeast(0),
+            cooldownUntil = json.optLong("cooldown_until", 0L).coerceAtLeast(0L),
             lastUsedAt = json.optLong("last_used_at", 0L),
             lastError = json.optString("last_error", ""),
             minConfidence = json.optDouble("min_confidence", 0.65),

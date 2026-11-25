@@ -146,7 +146,7 @@ class SmsAiResourceOrchestrator(context: Context) {
         var totalCooldowns = 0
 
         for (profile in allProfiles) {
-            val isCooldown = profile.failureCount > 3 && profile.successCount == 0L // مبسط للـ Circuit Breaker
+            val isCooldown = profile.isCoolingDown()
             if (!isCooldown && profile.enabled) availableCount++
             if (isCooldown) totalCooldowns++
 
@@ -172,7 +172,7 @@ class SmsAiResourceOrchestrator(context: Context) {
     private fun buildCandidates(): List<Candidate> {
         val profileCandidates = profiles?.list()
             .orEmpty()
-            .filter { it.enabled && it.apiKey.isNotBlank() && it.endpoint.startsWith("https://") && it.model.isNotBlank() && it.usedToday < it.dailyLimit }
+            .filter { it.eligible() }
             .sortedWith(compareBy<SmsAiProviderProfile> { it.priority }.thenByDescending { healthScore(it) })
             .map { profile -> Candidate(profile.id, profile.toRuntimeConfig(), providerFor(profile.provider)) }
         val legacy = runCatching { SmsAiConfigStore(appContext).get() }.getOrNull()
