@@ -30,12 +30,12 @@ CASES = {
     'cash-deposits.html': ['getCashDepositRecords', 'saveCashDepositRecord', 'تنبيه محاسبي'],
     'maintenance-requests.html': ['saveMaintenanceRequestRecord', 'getMaintenanceRequestRecords', 'configureMaintenanceRequestForm'],
     'maintenance-schedule.html': ['saveMaintenanceScheduleRecord', 'getMaintenanceScheduleRecords', 'configureMaintenanceScheduleForm'],
-    'tanks.html': ['getTankRecords', 'saveTankRecord', 'updateTankRecord', 'generateTankReport', 'populateFormSelects'],
-    'pumps.html': ['getPumpRecords', 'savePumpRecord', 'updatePumpRecord', 'generatePumpReport', 'refreshDynamicSelects'],
-    'meter-readings.html': ['getMeterReadingRecords', 'saveMeterReadingRecord', 'generateMeterReadingReport', 'getPumpNozzleRecords', 'populateFormSelects'],
-    'tank-filling.html': ['getTankLevelRecords', 'saveTankLevelRecord', 'generateTankLevelReport', 'getTankRecords', 'populateFormSelects'],
-    'quality-checks.html': ['getFuelQualityRecords', 'saveFuelQualityRecord', 'generateFuelQualityReport', 'getTankRefillRecords', 'populateFormSelects'],
-    'equipment-calibration.html': ['getCalibrationRecords', 'saveCalibrationRecord', 'generateCalibrationReport', 'getPumpNozzleRecords', 'loadEntityOptions'],
+    'tanks.html': ['getTankRecords', 'saveTankRecord', 'updateTankRecord', 'operational:Tank', 'populateFormSelects'],
+    'pumps.html': ['getPumpRecords', 'savePumpRecord', 'updatePumpRecord', 'refreshDynamicSelects'],
+    'meter-readings.html': ['getMeterReadingRecords', 'saveMeterReadingRecord', 'operational:MeterReading', 'getPumpNozzleRecords', 'populateFormSelects'],
+    'tank-filling.html': ['getTankLevelRecords', 'saveTankLevelRecord', 'operational:TankLevel', 'getTankRecords', 'populateFormSelects'],
+    'quality-checks.html': ['getFuelQualityRecords', 'saveFuelQualityRecord', 'operational:FuelQuality', 'getTankRefillRecords', 'populateFormSelects'],
+    'equipment-calibration.html': ['getCalibrationRecords', 'saveCalibrationRecord', 'operational:Calibration', 'getPumpNozzleRecords', 'loadEntityOptions']
 }
 
 class DOMAudit(HTMLParser):
