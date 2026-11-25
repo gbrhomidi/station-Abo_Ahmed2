@@ -2519,9 +2519,9 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
         };
     }
 
-    function applyReportFilters() {
+    function applyReportFilters(sourceRows = state.rows) {
         const f = getReportFilters();
-        let list = state.rows.slice();
+        let list = (Array.isArray(sourceRows) ? sourceRows : []).slice();
         if (f.status) list = list.filter(r => statusOf(r) === f.status);
         if (f.station) list = list.filter(r => String(r.station_id) === String(f.station));
         if (f.tank) list = list.filter(r => String(r.tank_id) === String(f.tank));
@@ -2594,14 +2594,34 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
         $('reportResults').innerHTML = summaryHtml + tableHtml;
     }
 
-    function generateReport() {
+    async function generateReport() {
+        setLoading(true);
+        $('reportResults').innerHTML = '<div class="empty-state">جارٍ استخراج التقرير من SQLite...</div>';
         try {
-            setLoading(true);
-            const list = applyReportFilters();
+            const filters = getReportFilters();
+            const payload = {
+                from_date: filters.from,
+                to_date: filters.to,
+                status: filters.status,
+                station_id: filters.station,
+                tank_id: filters.tank,
+                manufacturer: filters.manufacturer,
+                maintenance: filters.maint,
+                sort: filters.sort,
+                search: $('searchInput').value || '',
+                include_archived: true,
+                limit: 500
+            };
+            const result = await invoke('generatePumpReport', [JSON.stringify(payload)]);
+            const sourceRows = rowsFrom(result);
+            const list = applyReportFilters(sourceRows);
+            state.reportRows = list;
             renderReportResults(list);
             state.reportGenerated = true;
-            toast('تم توليد التقرير من ' + list.length + ' سجل', 'success');
+            toast('تم استخراج التقرير من SQLite: ' + list.length + ' سجل', 'success');
         } catch (e) {
+            state.reportRows = [];
+            $('reportResults').innerHTML = '<div class="empty-state">تعذر استخراج التقرير من SQLite: ' + esc(e.message || 'خطأ غير معروف') + '</div>';
             toast(e.message || 'فشل توليد التقرير', 'error');
         } finally {
             setLoading(false);
@@ -2613,7 +2633,7 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
        ============================================================ */
     function exportReportCSV() {
         try {
-            const list = state.reportGenerated ? applyReportFilters() : state.filtered;
+            const list = state.reportGenerated ? (state.reportRows || []) : state.filtered;
             if (!list.length) { toast('لا توجد بيانات للتصدير', 'warning'); return; }
 
             const keys = [
@@ -2738,6 +2758,7 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
         $('reportResults').innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i>' +
             '<p>اختر الفلاتر ثم اضغط على "توليد التقرير"</p></div>';
         state.reportGenerated = false;
+        state.reportRows = [];
         openModal(null, 'reportModal');
     }
 

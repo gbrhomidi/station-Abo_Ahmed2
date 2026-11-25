@@ -144,6 +144,8 @@ for name, required in CASES.items():
         ]
     if name == 'pumps.html':
         checks += [
+            ("async function generateReport()" in html and "invoke('generatePumpReport', [JSON.stringify(payload)])" in html, 'pump reports are queried from the SQLite report bridge'),
+            ('state.reportRows = list' in html and 'state.reportGenerated ? (state.reportRows || []) : state.filtered' in html, 'pump report export and print use the exact generated report result'),
             ("invoke(m, m === CFG.listMethod ? [JSON.stringify({ limit: 500, search: $('searchInput').value || '' })] : [])" in html, 'pump operational list bridge receives its JSON payload'),
             ('await refreshDynamicSelects(form, row)' in html, 'pump form resolves station/tank/employee foreign keys'),
             ('async function loadLookups()' in html or 'loadLookupData()' in html, 'pump reference data has a dedicated loader'),
