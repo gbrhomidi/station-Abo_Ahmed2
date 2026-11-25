@@ -61,6 +61,34 @@ class SmsAiProviderProfileTest {
         assertTrue(restored.cooldownUntil == 123_456L)
     }
 
+
+    @Test
+    fun configuredFallbackChainPrecedesUnrelatedProfiles() {
+        val primary = profile("primary", 10, fallback = "fallback")
+        val fallback = profile("fallback", 90)
+        val unrelated = profile("unrelated", 20)
+        val ordered = orderSmsAiProviderProfiles(listOf(primary, fallback, unrelated))
+        assertTrue(ordered.map { it.id } == listOf("primary", "fallback", "unrelated"))
+    }
+
+    @Test
+    fun disabledFallbackCanLeadToEnabledFallbackAndCyclesTerminate() {
+        val primary = profile("primary", 1, fallback = "disabled")
+        val disabled = profile("disabled", 2, enabled = false, fallback = "third")
+        val third = profile("third", 80, fallback = "primary")
+        val unrelated = profile("unrelated", 50)
+        val ordered = orderSmsAiProviderProfiles(listOf(primary, disabled, third, unrelated))
+        assertTrue(ordered.map { it.id } == listOf("primary", "third", "unrelated"))
+        assertTrue(ordered.map { it.id }.distinct().size == ordered.size)
+    }
+
+    private fun profile(id: String, priority: Int, enabled: Boolean = true, fallback: String? = null) =
+        SmsAiProviderProfile(
+            id = id, provider = "openai_compatible", endpoint = "https://api.example.test",
+            model = "model", apiKey = "secret", enabled = enabled, priority = priority,
+            fallbackProviderId = fallback
+        )
+
     @Test
     fun normalizationBoundsProviderValues() {
         val profile = SmsAiProviderProfile(

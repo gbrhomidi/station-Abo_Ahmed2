@@ -9,6 +9,27 @@ import org.json.JSONObject
  * يختار مورداً واحداً لكل مهمة وفق routing/priority/health/quota.
  * fallback هنا بين موارد مهيأة شرعياً، وليس تدويراً لإخفاء الاستهلاك أو تجاوز limits.
  */
+/**
+ * Orders eligible profiles by their configured fallback chain, then by priority.
+ * Disabled links may point to another fallback; visited IDs prevent cycles.
+ */
+internal fun orderSmsAiProviderProfiles(profiles: List<SmsAiProviderProfile>): List<SmsAiProviderProfile> {
+    val byId = profiles.associateBy { it.id }
+    val eligible = profiles.filter { it.eligible() }
+        .sortedWith(compareBy<SmsAiProviderProfile> { it.priority }.thenBy { it.provider }.thenBy { it.id })
+    if (eligible.isEmpty()) return emptyList()
+    val ordered = linkedMapOf<String, SmsAiProviderProfile>()
+    val visited = mutableSetOf<String>()
+    var nextId: String? = eligible.first().id
+    while (nextId != null && visited.add(nextId)) {
+        val current = byId[nextId] ?: break
+        if (current.eligible()) ordered[current.id] = current
+        nextId = current.fallbackProviderId
+    }
+    eligible.forEach { if (!ordered.containsKey(it.id)) ordered[it.id] = it }
+    return ordered.values.toList()
+}
+
 class SmsAiResourceOrchestrator(context: Context) {
     private val maxAttemptsPerCandidate = 2
     private val baseBackoffMs = 250L
@@ -170,10 +191,7 @@ class SmsAiResourceOrchestrator(context: Context) {
     }
 
     private fun buildCandidates(): List<Candidate> {
-        val profileCandidates = profiles?.list()
-            .orEmpty()
-            .filter { it.eligible() }
-            .sortedWith(compareBy<SmsAiProviderProfile> { it.priority }.thenByDescending { healthScore(it) })
+        val profileCandidates = orderSmsAiProviderProfiles(profiles?.list().orEmpty())
             .map { profile -> Candidate(profile.id, profile.toRuntimeConfig(), providerFor(profile.provider)) }
         val legacy = runCatching { SmsAiConfigStore(appContext).get() }.getOrNull()
             ?.takeIf { it.usable() }
