@@ -4,6 +4,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteConstraintException
 import androidx.test.core.app.ApplicationProvider
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.DatabaseLifecycleTestApplication
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -15,7 +16,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], application = DatabaseLifecycleTestApplication::class)
 class PumpMeterSmsRepositorySqliteTest {
     private lateinit var context: Context
     private lateinit var database: DatabaseHelper
@@ -24,7 +25,7 @@ class PumpMeterSmsRepositorySqliteTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
         database = DatabaseHelper.getInstance(context)
         repository = PumpMeterSmsRepository(context, database)
         repository.ensureSchema()
@@ -37,7 +38,7 @@ class PumpMeterSmsRepositorySqliteTest {
 
     @After
     fun tearDown() {
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
     }
 
     @Test

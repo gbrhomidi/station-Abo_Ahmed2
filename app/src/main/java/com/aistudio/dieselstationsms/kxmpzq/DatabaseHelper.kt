@@ -161,47 +161,43 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return closingCash - calculateExpectedClosingCash(openingCash, cashSales)
         }
 
-        @Volatile
-        private var instance: DatabaseHelper? = null
+        // A process may host isolated Contexts with distinct SQLite paths. Keep one helper
+        // per physical file so acquiring or retiring one store cannot close another store.
+        private val instances = mutableMapOf<String, DatabaseHelper>()
 
         @JvmStatic
         fun getInstance(context: Context): DatabaseHelper =
             DatabaseInitializationCoordinator.withLifecycleLock {
                 synchronized(this) {
                     val applicationContext = context.applicationContext
-                    val current = instance
-                    val requestedDatabasePath =
-                        applicationContext.getDatabasePath(DB_NAME).absolutePath
-
-                    when {
-                        current == null -> DatabaseHelper(applicationContext).also {
-                            instance = it
-                        }
-                        current.databasePath == requestedDatabasePath -> current
-                        else -> {
-                            // The absolute database path, not Context object identity, defines
-                            // the SQLite store. Android components and test wrappers may expose
-                            // distinct Application Context objects for the same physical file.
-                            // Retire the old helper only when the actual store path changes.
-                            DatabaseInitializationCoordinator.invalidate()
-                            current.closeForLifecycle()
-                            DatabaseHelper(applicationContext).also {
-                                instance = it
-                            }
-                        }
+                    val databasePath = applicationContext.getDatabasePath(DB_NAME).absolutePath
+                    instances[databasePath] ?: DatabaseHelper(applicationContext).also {
+                        instances[databasePath] = it
                     }
                 }
             }
 
+        /** Retire only the helper for the supplied Context's physical database path. */
+        @JvmStatic
+        fun closeInstance(context: Context) {
+            val databasePath = context.applicationContext.getDatabasePath(DB_NAME).absolutePath
+            DatabaseInitializationCoordinator.withLifecycleLock {
+                synchronized(this) {
+                    DatabaseInitializationCoordinator.invalidate(databasePath)
+                    instances.remove(databasePath)?.closeForLifecycle()
+                }
+            }
+        }
+
+        /** Explicit process-wide retirement. Ordinary scoped cleanup must use closeInstance(context). */
         @JvmStatic
         fun closeInstance() {
             DatabaseInitializationCoordinator.withLifecycleLock {
                 synchronized(this) {
-                    // Invalidation and close are one lifecycle boundary: a startup open cannot
-                    // race this close and publish a helper backed by a retired connection pool.
                     DatabaseInitializationCoordinator.invalidate()
-                    instance?.closeForLifecycle()
-                    instance = null
+                    val retiring = instances.values.toList()
+                    instances.clear()
+                    retiring.forEach { it.closeForLifecycle() }
                 }
             }
         }

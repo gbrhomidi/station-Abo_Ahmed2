@@ -11,6 +11,7 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.aistudio.dieselstationsms.kxmpzq.BusinessDay
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.DatabaseLifecycleTestApplication
 import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -32,7 +33,7 @@ import org.robolectric.annotation.Config
  * repository. Only the carrier-facing sender is replaced; no real SMS is transmitted.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], application = DatabaseLifecycleTestApplication::class)
 class SmsOutboxWorkerIntegrationTest {
     private lateinit var context: Context
     private lateinit var database: DatabaseHelper
@@ -40,11 +41,11 @@ class SmsOutboxWorkerIntegrationTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        DatabaseInitializationCoordinator.resetForTests()
+        DatabaseInitializationCoordinator.resetForTests(context)
         WorkManagerTestInitHelper.initializeTestWorkManager(context)
         shadowOf(context.applicationContext as android.app.Application)
             .grantPermissions(Manifest.permission.SEND_SMS)
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
         database = DatabaseHelper.getInstance(context)
         database.setSetting("sms_send_enabled", "1")
         database.writableDatabase.delete("sms_outbox_attempt_parts", null, null)
@@ -57,8 +58,8 @@ class SmsOutboxWorkerIntegrationTest {
 
     @After
     fun tearDown() {
-        DatabaseInitializationCoordinator.resetForTests()
-        DatabaseHelper.closeInstance()
+        DatabaseInitializationCoordinator.resetForTests(context)
+        DatabaseHelper.closeInstance(context)
     }
 
     @Test

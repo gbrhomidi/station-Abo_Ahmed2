@@ -3,6 +3,7 @@ package com.aistudio.dieselstationsms.kxmpzq.sms
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.DatabaseLifecycleTestApplication
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -14,7 +15,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], application = DatabaseLifecycleTestApplication::class)
 class SmsConversationDurabilityForensicTest {
     private lateinit var context: Context
     private val phone = "967771234567"
@@ -22,7 +23,7 @@ class SmsConversationDurabilityForensicTest {
     @Before
     fun resetDatabase() {
         context = ApplicationProvider.getApplicationContext()
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
         val db = DatabaseHelper.getInstance(context)
         db.writableDatabase.delete("sms_conversation_context", "phone = ?", arrayOf(phone))
     }
@@ -52,7 +53,7 @@ class SmsConversationDurabilityForensicTest {
         assertTrue(contextAfterTenMinutes.awaitingResponse)
         assertEquals("awaiting_quantity", contextAfterTenMinutes.pendingAction)
 
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
     }
 
     @Test
@@ -71,7 +72,7 @@ class SmsConversationDurabilityForensicTest {
         }
         firstManager.saveContext(phone, firstContext)
 
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
         val secondDb = DatabaseHelper.getInstance(context)
         val secondManager = SmsConversationManager(secondDb)
         assertNotNull(secondManager.getOrderDraft(phone))

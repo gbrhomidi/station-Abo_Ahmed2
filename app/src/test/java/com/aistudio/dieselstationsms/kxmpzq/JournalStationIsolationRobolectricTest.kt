@@ -17,7 +17,7 @@ import org.robolectric.annotation.Config
 import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], application = DatabaseLifecycleTestApplication::class)
 class JournalStationIsolationRobolectricTest {
     private lateinit var context: Context
     private lateinit var helper: DatabaseHelper
@@ -25,7 +25,7 @@ class JournalStationIsolationRobolectricTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
         helper = DatabaseHelper.getInstance(context)
         helper.writableDatabase
@@ -33,7 +33,7 @@ class JournalStationIsolationRobolectricTest {
 
     @After
     fun tearDown() {
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
     }
 
@@ -106,7 +106,7 @@ class JournalStationIsolationRobolectricTest {
         db.update("journal_entries", ContentValues().apply { put("station_id", 0) }, "id = ?", arrayOf(entryId.toString()))
         db.execSQL("PRAGMA user_version = 27")
 
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
         helper = DatabaseHelper.getInstance(context)
         assertEquals(1, helper.getJournalEntries(JSONObject(), 11).getInt("total"))
         assertEquals(0, helper.getJournalEntries(JSONObject(), 12).getInt("total"))

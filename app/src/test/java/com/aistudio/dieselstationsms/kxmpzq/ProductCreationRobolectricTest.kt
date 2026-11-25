@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config
 import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], application = DatabaseLifecycleTestApplication::class)
 class ProductCreationRobolectricTest {
     private lateinit var context: Context
     private lateinit var helper: DatabaseHelper
@@ -23,7 +23,7 @@ class ProductCreationRobolectricTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
         helper = DatabaseHelper.getInstance(context)
         helper.writableDatabase
@@ -31,7 +31,7 @@ class ProductCreationRobolectricTest {
 
     @After
     fun tearDown() {
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
     }
 

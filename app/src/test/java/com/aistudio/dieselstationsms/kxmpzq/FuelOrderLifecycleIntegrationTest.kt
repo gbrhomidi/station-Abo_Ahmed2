@@ -18,18 +18,18 @@ import org.robolectric.annotation.Config
 import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], application = DatabaseLifecycleTestApplication::class)
 class FuelOrderLifecycleIntegrationTest {
     private lateinit var context: Context
     private lateinit var helper: DatabaseHelper
 
     @Before fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        DatabaseHelper.closeInstance(); context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
+        DatabaseHelper.closeInstance(context); context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
         helper = DatabaseHelper.getInstance(context); helper.writableDatabase
     }
 
-    @After fun tearDown() { DatabaseHelper.closeInstance(); context.deleteDatabase(DatabaseHelper.DATABASE_NAME) }
+    @After fun tearDown() { DatabaseHelper.closeInstance(context); context.deleteDatabase(DatabaseHelper.DATABASE_NAME) }
 
     @Test fun refusalIsRecordedAsPayrollPenaltyWithoutCancellingTask() {
         val db = helper.writableDatabase

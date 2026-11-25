@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config
 import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], application = DatabaseLifecycleTestApplication::class)
 class MaintenanceScheduleStationIsolationRobolectricTest {
     private lateinit var context: Context
     private lateinit var helper: DatabaseHelper
@@ -23,7 +23,7 @@ class MaintenanceScheduleStationIsolationRobolectricTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
         helper = DatabaseHelper.getInstance(context)
         helper.writableDatabase
@@ -31,7 +31,7 @@ class MaintenanceScheduleStationIsolationRobolectricTest {
 
     @After
     fun tearDown() {
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
     }
 
@@ -92,7 +92,7 @@ class MaintenanceScheduleStationIsolationRobolectricTest {
         db.update("maintenance_schedule", ContentValues().apply { put("station_id", 0) }, "id = ?", arrayOf(scheduleId.toString()))
         db.execSQL("PRAGMA user_version = 28")
 
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
         helper = DatabaseHelper.getInstance(context)
         assertEquals(1, helper.getOperationalRows("maintenance_schedule", JSONObject().put("station_id", 41)).length())
         assertEquals(0, helper.getOperationalRows("maintenance_schedule", JSONObject().put("station_id", 42)).length())

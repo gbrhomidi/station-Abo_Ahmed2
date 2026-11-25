@@ -14,35 +14,59 @@ object DatabaseInitializationCoordinator {
  private const val MAX_ATTEMPTS = 3
  private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineName("DatabaseInitialization"))
  private val lifecycleLock = ReentrantLock()
- private val initializer = SingleFlightInitializer<com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper>(scope, MAX_ATTEMPTS, { a -> if (a == 1) 250L else 700L }, ::isTransient)
+ private val initializerMapLock = Any()
+ private val initializers = mutableMapOf<String, SingleFlightInitializer<DatabaseHelper>>()
 
- /**
-  * Serializes startup database opens with singleton retirement/rebinding. SQLite open/close
-  * calls are blocking and do not cooperatively observe coroutine cancellation, so cancelling
-  * the single-flight job alone is not a sufficient lifecycle barrier.
-  */
+ private fun initializerFor(databasePath: String): SingleFlightInitializer<DatabaseHelper> =
+  synchronized(initializerMapLock) {
+   initializers.getOrPut(databasePath) {
+    SingleFlightInitializer<DatabaseHelper>(
+     scope, MAX_ATTEMPTS, { attempt -> if (attempt == 1) 250L else 700L }, ::isTransient
+    )
+   }
+  }
+
+ /** Serializes database opens with scoped helper retirement. Each SQLite file has its own initializer. */
  internal fun <T> withLifecycleLock(block: () -> T): T = lifecycleLock.withLock(block)
 
- internal fun invalidate() {
-  withLifecycleLock { initializer.resetForTests() }
+ /** Invalidate one database path, or every path only for an explicit process-wide reset. */
+ internal fun invalidate(databasePath: String? = null) {
+  withLifecycleLock {
+   val retired = synchronized(initializerMapLock) {
+    if (databasePath == null) {
+     initializers.values.toList().also { initializers.clear() }
+    } else {
+     listOfNotNull(initializers.remove(databasePath))
+    }
+   }
+   retired.forEach { it.resetForTests() }
+  }
  }
 
  internal fun resetForTests() = invalidate()
+
+ internal fun resetForTests(context: Context) {
+  val appContext = context.applicationContext
+  invalidate(appContext.getDatabasePath(DatabaseHelper.DATABASE_NAME).absolutePath)
+ }
 
  suspend fun awaitDatabase(context: Context): DatabaseHelper {
   StartupPerformanceMonitor.increment("database.await_requests")
   val awaitSpan = StartupPerformanceMonitor.beginSpan("database.await")
   var awaitSucceeded = false
   try {
-   val helper = initializer.get {
+   val appContext = context.applicationContext
+   val databasePath = appContext.getDatabasePath(DatabaseHelper.DATABASE_NAME).absolutePath
+   val pathInitializer = initializerFor(databasePath)
+   val helper = pathInitializer.get {
     withLifecycleLock {
      StartupPerformanceMonitor.increment("database.open_attempts")
      val attemptSpan = StartupPerformanceMonitor.beginSpan("database.open_attempt")
      try {
-      val helper = DatabaseHelper.getInstance(context.applicationContext)
+      val helper = DatabaseHelper.getInstance(appContext)
       val database = helper.writableDatabase
       check(database.isOpen) { "SQLite database is not open" }
-      android.util.Log.i("DatabaseInitCoordinator", "SQLite ready")
+      android.util.Log.i("DatabaseInitCoordinator", "SQLite ready: $databasePath")
       StartupPerformanceMonitor.mark("database.sqlite_open_ready")
       StartupPerformanceMonitor.endSpan(attemptSpan)
       helper

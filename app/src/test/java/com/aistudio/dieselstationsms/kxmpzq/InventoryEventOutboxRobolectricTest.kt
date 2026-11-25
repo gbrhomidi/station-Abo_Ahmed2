@@ -15,7 +15,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], application = DatabaseLifecycleTestApplication::class)
 class InventoryEventOutboxRobolectricTest {
     private lateinit var context: Context
     private lateinit var helper: DatabaseHelper
@@ -24,7 +24,7 @@ class InventoryEventOutboxRobolectricTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
         helper = DatabaseHelper.getInstance(context)
         db = helper.writableDatabase
@@ -32,7 +32,7 @@ class InventoryEventOutboxRobolectricTest {
 
     @After
     fun tearDown() {
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
     }
 

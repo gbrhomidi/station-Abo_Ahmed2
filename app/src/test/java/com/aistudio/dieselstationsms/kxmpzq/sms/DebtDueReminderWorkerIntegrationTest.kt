@@ -21,6 +21,7 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.aistudio.dieselstationsms.kxmpzq.BusinessDay
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.DatabaseLifecycleTestApplication
 import com.aistudio.dieselstationsms.kxmpzq.startup.DatabaseInitializationCoordinator
 import java.time.LocalDate
 import java.util.UUID
@@ -38,7 +39,7 @@ import org.robolectric.annotation.Config
 
 /** Runs the production debt reminder worker and its actual SQLite/outbox path without carrier I/O. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], application = DatabaseLifecycleTestApplication::class)
 class DebtDueReminderWorkerIntegrationTest {
     private lateinit var context: Context
     private lateinit var database: DatabaseHelper
@@ -47,8 +48,8 @@ class DebtDueReminderWorkerIntegrationTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        DatabaseInitializationCoordinator.resetForTests()
-        DatabaseHelper.closeInstance()
+        DatabaseInitializationCoordinator.resetForTests(context)
+        DatabaseHelper.closeInstance(context)
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
         database = DatabaseHelper.getInstance(context)
         stationId = database.readableDatabase.rawQuery(
@@ -69,15 +70,15 @@ class DebtDueReminderWorkerIntegrationTest {
         runCatching {
             WorkManager.getInstance(context).cancelAllWork().result.get(10, TimeUnit.SECONDS)
         }
-        DatabaseInitializationCoordinator.resetForTests()
-        DatabaseHelper.closeInstance()
+        DatabaseInitializationCoordinator.resetForTests(context)
+        DatabaseHelper.closeInstance(context)
         context.deleteDatabase(DatabaseHelper.DATABASE_NAME)
     }
 
     @Test
     fun closeInstanceRetiresTheProcessHelperAndReopensWithANewConnection() {
         val retired = database
-        DatabaseHelper.closeInstance()
+        DatabaseHelper.closeInstance(context)
 
         val reopened = DatabaseHelper.getInstance(context)
         assertTrue(
