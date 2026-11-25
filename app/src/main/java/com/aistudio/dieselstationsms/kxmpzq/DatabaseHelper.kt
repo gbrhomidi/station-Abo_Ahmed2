@@ -189,6 +189,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
         }
 
+        private fun forgetClosedInstance(helper: DatabaseHelper, databasePath: String): Boolean =
+            synchronized(this) {
+                if (instances[databasePath] === helper) {
+                    instances.remove(databasePath)
+                    true
+                } else {
+                    false
+                }
+            }
+
         /** Explicit process-wide retirement. Ordinary scoped cleanup must use closeInstance(context). */
         @JvmStatic
         fun closeInstance() {
@@ -214,6 +224,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             super.close()
         } finally {
             dbLock.unlock()
+        }
+    }
+
+    /**
+     * Keep the companion registry coherent when a caller closes a helper directly.
+     * SQLiteOpenHelper.close() retires the pool; leaving this instance cached would
+     * make the next getInstance() return a permanently closed helper.
+     */
+    override fun close() {
+        DatabaseInitializationCoordinator.withLifecycleLock {
+            if (forgetClosedInstance(this, databasePath)) {
+                DatabaseInitializationCoordinator.invalidate(databasePath)
+            }
+            closeForLifecycle()
         }
     }
 

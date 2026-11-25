@@ -159,6 +159,32 @@ class DatabaseHelperOpenLifecycleTest {
     }
 
     @Test
+    fun directHelperCloseEvictsTheCachedInstanceBeforeTheNextLookup() {
+        val applicationContext = ApplicationProvider.getApplicationContext<Context>()
+        val retired = DatabaseHelper.getInstance(applicationContext)
+        val retiredDatabase = retired.writableDatabase
+        assertTrue(retiredDatabase.isOpen)
+
+        retired.close()
+
+        assertFalse("direct close must retire the original SQLite connection pool", retiredDatabase.isOpen)
+        val reopened = DatabaseHelper.getInstance(applicationContext)
+        assertNotSame("getInstance must never return a helper that was directly closed", retired, reopened)
+        assertTrue("the replacement helper must open a live SQLite database", reopened.writableDatabase.isOpen)
+        assertEquals(
+            "ok",
+            reopened.readableDatabase.rawQuery("PRAGMA integrity_check", null).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getString(0).lowercase()
+            }
+        )
+        assertFalse(
+            "the reopened database must not contain foreign-key violations",
+            reopened.readableDatabase.rawQuery("PRAGMA foreign_key_check", null).use { it.moveToFirst() }
+        )
+    }
+
+    @Test
     fun samePathContextLookupDoesNotRetireAnOpenCursor() {
         val firstContext = ApplicationProvider.getApplicationContext<Context>()
         val helper = DatabaseHelper.getInstance(firstContext)
