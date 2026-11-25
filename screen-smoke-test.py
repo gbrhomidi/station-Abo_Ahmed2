@@ -510,6 +510,49 @@ else:
         print(f'FAIL {acceptance_name}: runner exited {acceptance.returncode}')
         failed += 1
 
+
+# Module 006 report predicates must be enforced by SQLite before paging.
+module006_db_path = PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt'
+if not module006_db_path.exists():
+    print('FAIL module-006-report-filters: DatabaseHelper.kt missing')
+    failed += 1
+else:
+    module006_db = module006_db_path.read_text(encoding='utf-8', errors='replace')
+    module006_contracts = [
+        ('private fun appendModule006OperationalFilters' in module006_db, 'shared SQLite report-filter builder exists'),
+        (module006_db.count('appendModule006OperationalFilters(screenKey, params, where, args)') == 2, 'list and count queries apply identical report predicates'),
+        ('positiveId("fuel_type_id")' in module006_db, 'tank reports filter by fuel type'),
+        ('positiveId("tank_id")' in module006_db and 'manufacturer' in module006_db and 'business_date' in module006_db, 'pump reports filter tank, manufacturer and Aden business-day maintenance'),
+        ('"level_status"' in module006_db and '"alert_status"' in module006_db and '"difference_status"' in module006_db, 'tank-level reports apply level, alert and variance filters'),
+        ('"density_min"' in module006_db and '"density_max"' in module006_db and '"temperature_min"' in module006_db and '"temperature_max"' in module006_db, 'quality reports apply numeric ranges in SQLite'),
+        ('"quality_filter"' in module006_db and 'params.optString("result", params.optString("status", ""))' in module006_db, 'quality result filters accept the screen payload contract'),
+        ('"correction_min"' in module006_db and '"correction_max"' in module006_db and '"error_status"' in module006_db, 'calibration reports apply correction and error filters'),
+        ('"tanks", "pumps" -> "installation_date"' in module006_db, 'tank and pump date filters use installation_date'),
+    ]
+    for ok, label in module006_contracts:
+        print(f'{"PASS" if ok else "FAIL"} module-006-report-filters: {label}')
+        if not ok: failed += 1
+
+module006_screens = {
+    'tanks.html': ['fuel_type_id:', 'generateTankReport'],
+    'pumps.html': ['tank_id: filters.tank', 'manufacturer: filters.manufacturer', 'business_date: businessDayDate()'],
+    'tank-filling.html': ['tank_id:', 'reading_type:', 'level_status:', 'alert_status:', 'difference_status:'],
+    'quality-checks.html': ['refill_id:', 'result:', 'density_min:', 'density_max:', 'temperature_min:', 'temperature_max:', 'quality_filter:'],
+    'equipment-calibration.html': ['entity_type:', 'technician:', 'certificate_number:', 'correction_min:', 'correction_max:', 'error_status:'],
+}
+for screen_name, tokens in module006_screens.items():
+    screen_path = PROJECT_ROOT / 'app/src/main/assets/screens' / screen_name
+    if not screen_path.exists():
+        print(f'FAIL module-006-screen-contract: {screen_name} missing')
+        failed += 1
+        continue
+    screen_source = screen_path.read_text(encoding='utf-8', errors='replace')
+    for token in tokens:
+        ok = token in screen_source
+        print(f'{"PASS" if ok else "FAIL"} module-006-screen-contract: {screen_name} contains {token}')
+        if not ok: failed += 1
+
+
 if failed:
     raise SystemExit(f'{failed} screen/security smoke checks failed')
 print(f'All screen and security smoke checks passed: {len(CASES)} screens, {len(SECURITY_CASES)} security contracts. Acceptance preflight status is reported separately above.')

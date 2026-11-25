@@ -21790,6 +21790,119 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+
+    /** Apply station-operation report predicates in SQLite before LIMIT/OFFSET. */
+    private fun appendModule006OperationalFilters(
+        screenKey: String, params: JSONObject, where: MutableList<String>, args: MutableList<String>
+    ) {
+        fun positiveId(key: String): Long? {
+            val raw = params.optString(key, "").trim()
+            if (raw.isBlank()) return null
+            val value = raw.toLongOrNull() ?: throw IllegalArgumentException("معرف المرشح غير صالح: $key")
+            require(value > 0L) { "معرف المرشح غير صالح: $key" }
+            return value
+        }
+        fun bound(key: String): Double? {
+            val raw = params.optString(key, "").trim()
+            if (raw.isBlank()) return null
+            return raw.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
+                ?: throw IllegalArgumentException("قيمة المرشح غير صالحة: $key")
+        }
+        when (screenKey) {
+            "tanks" -> positiveId("fuel_type_id")?.let { where += "fuel_type_id = ?"; args += it.toString() }
+            "pumps" -> {
+                positiveId("tank_id")?.let { where += "tank_id = ?"; args += it.toString() }
+                val manufacturer = params.optString("manufacturer", "").trim()
+                if (manufacturer.isNotBlank()) { where += "LOWER(COALESCE(manufacturer, '')) = LOWER(?)"; args += manufacturer }
+                when (params.optString("maintenance", "").trim().lowercase(Locale.US)) {
+                    "" -> Unit
+                    "overdue", "soon", "ok" -> {
+                        val businessDate = params.optString("business_date", "").trim()
+                        require(parseAttendanceDate(businessDate) != null) { "تاريخ العمل مطلوب لمرشح الصيانة" }
+                        when (params.optString("maintenance").trim().lowercase(Locale.US)) {
+                            "overdue" -> { where += "next_maintenance IS NOT NULL AND date(next_maintenance) < date(?)"; args += businessDate }
+                            "soon" -> { where += "next_maintenance IS NOT NULL AND date(next_maintenance) >= date(?) AND date(next_maintenance) <= date(?, '+30 days')"; args += businessDate; args += businessDate }
+                            "ok" -> { where += "(next_maintenance IS NULL OR date(next_maintenance) > date(?, '+30 days'))"; args += businessDate }
+                        }
+                    }
+                    else -> throw IllegalArgumentException("مرشح الصيانة غير مدعوم")
+                }
+            }
+            "tank_level_log" -> {
+                positiveId("tank_id")?.let { where += "tank_id = ?"; args += it.toString() }
+                val readingType = params.optString("reading_type", "").trim()
+                if (readingType.isNotBlank()) {
+                    require(readingType in setOf("auto", "manual", "inspection")) { "نوع قراءة الخزان غير صالح" }
+                    where += "reading_type = ?"; args += readingType
+                }
+                when (params.optString("level_status", "").trim().lowercase(Locale.US)) {
+                    "" -> Unit
+                    "low" -> where += "COALESCE(is_below_minimum, 0) = 1"
+                    "high" -> where += "COALESCE(is_near_maximum, 0) = 1"
+                    "normal" -> where += "COALESCE(is_below_minimum, 0) = 0 AND COALESCE(is_near_maximum, 0) = 0 AND COALESCE(alert_triggered, 0) = 0"
+                    else -> throw IllegalArgumentException("مرشح مستوى الخزان غير صالح")
+                }
+                when (params.optString("alert_status", "").trim().lowercase(Locale.US)) {
+                    "" -> Unit
+                    "triggered" -> where += "COALESCE(alert_triggered, 0) = 1"
+                    "clear" -> where += "COALESCE(alert_triggered, 0) = 0"
+                    else -> throw IllegalArgumentException("مرشح تنبيه الخزان غير صالح")
+                }
+                when (params.optString("difference_status", "").trim().lowercase(Locale.US)) {
+                    "" -> Unit
+                    "within" -> where += "ABS(COALESCE(difference, 0)) <= 0.5"
+                    "exceeds" -> where += "ABS(COALESCE(difference, 0)) > 0.5"
+                    else -> throw IllegalArgumentException("مرشح فرق القياس غير صالح")
+                }
+            }
+            "fuel_quality_tests" -> {
+                positiveId("refill_id")?.let { where += "refill_id = ?"; args += it.toString() }
+                val result = params.optString("result", params.optString("status", "")).trim().lowercase(Locale.US)
+                if (result.isNotBlank()) {
+                    require(result in setOf("pass", "fail", "warning")) { "نتيجة فحص الجودة غير صالحة" }
+                    where += "result = ?"; args += result
+                }
+                val densityMin = bound("density_min"); val densityMax = bound("density_max")
+                val temperatureMin = bound("temperature_min"); val temperatureMax = bound("temperature_max")
+                require(densityMin == null || densityMax == null || densityMin <= densityMax) { "الحد الأدنى للكثافة يتجاوز الحد الأعلى" }
+                require(temperatureMin == null || temperatureMax == null || temperatureMin <= temperatureMax) { "الحد الأدنى للحرارة يتجاوز الحد الأعلى" }
+                densityMin?.let { where += "density >= ?"; args += it.toString() }
+                densityMax?.let { where += "density <= ?"; args += it.toString() }
+                temperatureMin?.let { where += "temperature >= ?"; args += it.toString() }
+                temperatureMax?.let { where += "temperature <= ?"; args += it.toString() }
+                when (params.optString("quality_filter", "").trim().lowercase(Locale.US)) {
+                    "" -> Unit
+                    "pure" -> where += "result = 'pass'"
+                    "warning" -> where += "result = 'warning'"
+                    "critical" -> where += "result = 'fail'"
+                    else -> throw IllegalArgumentException("مرشح جودة الوقود غير صالح")
+                }
+            }
+            "calibration_records" -> {
+                val entityType = params.optString("entity_type", "").trim().lowercase(Locale.US)
+                if (entityType.isNotBlank()) {
+                    require(entityType in setOf("tank", "pump", "nozzle")) { "نوع كيان المعايرة غير صالح" }
+                    where += "LOWER(entity_type) = ?"; args += entityType
+                }
+                val technician = params.optString("technician", "").trim()
+                if (technician.isNotBlank()) { where += "LOWER(COALESCE(technician, '')) LIKE LOWER(?)"; args += "%$technician%" }
+                val certificate = params.optString("certificate_number", "").trim()
+                if (certificate.isNotBlank()) { where += "LOWER(COALESCE(certificate_number, '')) LIKE LOWER(?)"; args += "%$certificate%" }
+                val correctionMin = bound("correction_min"); val correctionMax = bound("correction_max")
+                require(correctionMin == null || correctionMax == null || correctionMin <= correctionMax) { "نطاق نسبة التصحيح غير صالح" }
+                correctionMin?.let { where += "correction_percent >= ?"; args += it.toString() }
+                correctionMax?.let { where += "correction_percent <= ?"; args += it.toString() }
+                when (params.optString("error_status", "").trim().lowercase(Locale.US)) {
+                    "" -> Unit
+                    "zero" -> where += "ABS(COALESCE(error_value, 0)) <= 0.01"
+                    "within" -> where += "ABS(COALESCE(error_value, 0)) <= 1"
+                    "exceeds" -> where += "ABS(COALESCE(error_value, 0)) > 1"
+                    else -> throw IllegalArgumentException("مرشح خطأ المعايرة غير صالح")
+                }
+            }
+        }
+    }
+
     fun getOperationalRows(screenKey: String, params: JSONObject = JSONObject()): JSONArray {
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         dbLock.lock()
@@ -21877,6 +21990,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
             }
             if (screenKey == "meter_readings") appendMeterReadingFilters(params, where, args)
+            appendModule006OperationalFilters(screenKey, params, where, args)
             if (screenKey in setOf("vehicles", "drivers")) {
                 val partyId = params.optLong("party_id", 0L)
                 val vehicleId = params.optLong("vehicle_id", 0L)
@@ -21898,6 +22012,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "fuel_sales" -> "sale_date"
                 "deliveries" -> "delivery_date"
                 "cash_deposits", "employee_payments" -> "date"
+                "tanks", "pumps" -> "installation_date"
                 "meter_readings" -> "reading_date"
                 "tank_refills" -> "arrival_date"
                 "tank_level_log" -> "reading_date"
@@ -22018,6 +22133,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
             }
             if (screenKey == "meter_readings") appendMeterReadingFilters(params, where, args)
+            appendModule006OperationalFilters(screenKey, params, where, args)
             if (screenKey in setOf("vehicles", "drivers")) {
                 val partyId = params.optLong("party_id", 0L)
                 val vehicleId = params.optLong("vehicle_id", 0L)
@@ -22039,6 +22155,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "fuel_sales" -> "sale_date"
                 "deliveries" -> "delivery_date"
                 "cash_deposits", "employee_payments" -> "date"
+                "tanks", "pumps" -> "installation_date"
                 "meter_readings" -> "reading_date"
                 "tank_refills" -> "arrival_date"
                 "tank_level_log" -> "reading_date"
