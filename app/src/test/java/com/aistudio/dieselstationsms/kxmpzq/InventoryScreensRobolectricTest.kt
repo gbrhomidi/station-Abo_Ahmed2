@@ -1582,9 +1582,13 @@ class InventoryScreensRobolectricTest {
             dryStock.getJSONArray("products").getJSONObject(it).optLong("product_id") == productId
         })
         val wetStock = helper.getWetStockPage(1)
-        assertTrue((0 until wetStock.getJSONArray("tanks").length()).any {
-            wetStock.getJSONArray("tanks").getJSONObject(it).optLong("tank_id") == tankId
-        })
+        val wetTank = (0 until wetStock.getJSONArray("tanks").length())
+            .map { wetStock.getJSONArray("tanks").getJSONObject(it) }
+            .first { it.optLong("tank_id") == tankId }
+        assertTrue(wetStock.getJSONObject("kpis").has("current_shift_id"))
+        assertEquals(0, wetTank.optInt("has_reading"))
+        assertTrue(wetTank.isNull("water_level_mm"))
+        assertTrue(wetTank.isNull("standard_liters_15c"))
 
         // These are the exact read paths that previously failed with SQLITE_ERROR.
         helper.runInventoryAnomalyDetection(1)

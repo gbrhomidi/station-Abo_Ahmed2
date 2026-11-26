@@ -58,7 +58,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 73
+        const val VERSION = 74
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -281,6 +281,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.beginTransaction()
         try {
             createAllTables(db)
+            ensureAuditLogsAppendOnly(db)
             ensureFleetSchema(db)
             ensureFleetPermissions(db)
             ensureProductReferenceData(db)
@@ -427,6 +428,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             // Apply the idempotent SMS attempt schema for every upgraded database,
             // including installations previously opened at V57 before the Stage 6 schema repair completed.
             SmsOutboxSchema.ensureSchema(db)
+            ensureAuditLogsAppendOnly(db)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -6383,6 +6385,27 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 archived INTEGER DEFAULT 0,
                 FOREIGN KEY (changed_by) REFERENCES users(id)
             )
+        """)
+    }
+
+    /** Make the central audit trail append-only; corrective actions must be new events. */
+    private fun ensureAuditLogsAppendOnly(db: SQLiteDatabase) {
+        val exists = db.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='audit_logs' LIMIT 1",
+            null
+        ).use { it.moveToFirst() }
+        if (!exists) return
+        db.execSQL("""
+            CREATE TRIGGER IF NOT EXISTS trg_audit_logs_no_update
+            BEFORE UPDATE ON audit_logs BEGIN
+                SELECT RAISE(ABORT, 'audit_logs is append-only');
+            END
+        """)
+        db.execSQL("""
+            CREATE TRIGGER IF NOT EXISTS trg_audit_logs_no_delete
+            BEFORE DELETE ON audit_logs BEGIN
+                SELECT RAISE(ABORT, 'audit_logs is append-only');
+            END
         """)
     }
 
@@ -31007,6 +31030,7 @@ private fun postSalesReversalJournal(
                 SELECT t.id AS tank_id, t.tank_code, COALESCE(t.tank_name_ar,t.tank_name) AS tank_name,
                        t.capacity_liters, t.fuel_type_id, COALESCE(r.current_liters,t.current_quantity,0) AS current_liters,
                        r.temperature_c, r.water_level_mm, r.reading_at,
+                       CASE WHEN r.reading_id IS NULL THEN 0 ELSE 1 END AS has_reading,
                        COALESCE((SELECT COUNT(*) FROM pumps p WHERE p.tank_id=t.id AND p.station_id=t.station_id AND p.status='active' AND p.is_deleted=0),0) AS active_pumps,
                        COALESCE((SELECT COUNT(*) FROM pumps p WHERE p.tank_id=t.id AND p.station_id=t.station_id AND p.status IN ('maintenance','offline') AND p.is_deleted=0),0) AS inactive_pumps
                 FROM tanks t
@@ -31016,16 +31040,22 @@ private fun postSalesReversalJournal(
             """.trimIndent(), arrayOf(stationScopeId.toString())).use { cursorToJsonArray(it) }
             for (i in 0 until tanks.length()) {
                 val tank = tanks.getJSONObject(i)
-                val temperature = if (tank.isNull("temperature_c")) 15.0 else tank.optDouble("temperature_c", 15.0)
-                val alpha = db.rawQuery("SELECT coefficient_exp FROM fuel_temperature_coefficients WHERE fuel_type_id=?", arrayOf(tank.optLong("fuel_type_id").toString())).use { c -> require(c.moveToFirst()) { "لا يوجد معامل تمدد معاير لنوع الوقود ${tank.optLong("fuel_type_id")}" }; c.getDouble(0) }
-                val delta = temperature - 15.0
-                val vcf = kotlin.math.exp(-alpha * delta - 0.8 * alpha * alpha * delta * delta)
-                tank.put("vcf", vcf).put("standard_liters_15c", tank.optDouble("current_liters", 0.0) * vcf)
+                if (!tank.isNull("temperature_c")) {
+                    val temperature = tank.optDouble("temperature_c")
+                    val alpha = db.rawQuery("SELECT coefficient_exp FROM fuel_temperature_coefficients WHERE fuel_type_id=?", arrayOf(tank.optLong("fuel_type_id").toString())).use { c -> require(c.moveToFirst()) { "لا يوجد معامل تمدد معاير لنوع الوقود ${tank.optLong("fuel_type_id")}" }; c.getDouble(0) }
+                    val delta = temperature - 15.0
+                    val vcf = kotlin.math.exp(-alpha * delta - 0.8 * alpha * alpha * delta * delta)
+                    tank.put("vcf", vcf).put("standard_liters_15c", tank.optDouble("current_liters", 0.0) * vcf)
+                } else {
+                    // Do not imply a 15°C measurement when no temperature was recorded.
+                    tank.put("vcf", JSONObject.NULL).put("standard_liters_15c", JSONObject.NULL)
+                }
             }
             val kpis = JSONObject()
             db.rawQuery("SELECT COALESCE(SUM(COALESCE(r.current_liters,t.current_quantity)),0), COALESCE(SUM(t.capacity_liters-COALESCE(r.current_liters,t.current_quantity)),0) FROM tanks t LEFT JOIN tank_readings r ON r.reading_id=(SELECT r2.reading_id FROM tank_readings r2 WHERE r2.tank_id=t.id ORDER BY r2.reading_at DESC,r2.reading_id DESC LIMIT 1) WHERE t.station_id=? AND t.is_deleted=0 AND t.status<>'retired'", arrayOf(stationScopeId.toString())).use { c -> if (c.moveToFirst()) { kpis.put("total_liters", c.getDouble(0)); kpis.put("ullage_liters", c.getDouble(1)) } }
             val shift = getOpenShift(stationScopeId)
             val shiftId = shift?.optLong("shift_id", shift.optLong("id", 0L)) ?: 0L
+            kpis.put("current_shift_id", shiftId)
             db.rawQuery("SELECT COALESCE(SUM(quantity),0), COALESCE(SUM(total_amount),0) FROM fuel_sales WHERE station_id=? AND shift_id=? AND is_deleted=0 AND status NOT IN ('cancelled','reversed')", arrayOf(stationScopeId.toString(), shiftId.toString())).use { c -> if (c.moveToFirst()) { kpis.put("current_shift_liters", c.getDouble(0)); kpis.put("current_shift_amount", c.getDouble(1)) } }
             val recons = db.rawQuery("SELECT sr.*, t.tank_code, COALESCE(t.tank_name_ar,t.tank_name) tank_name FROM shift_reconciliations sr JOIN tanks t ON t.id=sr.tank_id WHERE t.station_id=? ORDER BY sr.recon_id DESC LIMIT 10", arrayOf(stationScopeId.toString())).use { cursorToJsonArray(it) }
             JSONObject().put("tanks", tanks).put("kpis", kpis).put("last_reconciliations", recons)

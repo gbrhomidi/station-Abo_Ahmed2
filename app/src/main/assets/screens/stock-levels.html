@@ -2064,14 +2064,18 @@ async function loadWetStock() {
         const result = await apiCall('getWetStockPage', {});
         if (!result || result.success !== true) throw new Error(result?.message || result?.error || 'تعذر تحميل مخزون الوقود');
         const data = result.data || {}, kpis = data.kpis || {};
+        window.currentWetShiftId = Number(kpis.current_shift_id || 0);
         document.getElementById('wetTotalLiters').textContent = Number(kpis.total_liters || 0).toLocaleString('en') + ' لتر';
         document.getElementById('wetUllage').textContent = Number(kpis.ullage_liters || 0).toLocaleString('en') + ' لتر';
         document.getElementById('wetShiftSales').textContent = Number(kpis.current_shift_liters || 0).toLocaleString('en') + ' لتر';
         document.getElementById('wetShiftAmount').textContent = Number(kpis.current_shift_amount || 0).toLocaleString('en') + ' ريال';
         const rows = data.tanks || [];
         document.getElementById('wetTankBoard').innerHTML = rows.length ? rows.map(t => {
-            const ullage = Number(t.capacity_liters || 0) - Number(t.current_liters || 0), water = Number(t.water_level_mm || 0);
-            return `<tr><td>${escapeHtml(t.tank_name || t.tank_code || '')}</td><td>${Number(t.capacity_liters||0).toLocaleString('en')} لتر</td><td>${Number(t.current_liters||0).toLocaleString('en')} لتر</td><td>${Number(t.standard_liters_15c||0).toLocaleString('en')} لتر (VCF ${Number(t.vcf||1).toFixed(5)})</td><td class="${ullage < Number(t.capacity_liters||0)*.2 ? 'risk-critical':''}">${ullage.toLocaleString('en')} لتر</td><td>${t.temperature_c == null ? '—' : Number(t.temperature_c).toFixed(1)+' °م'}</td><td class="${water > 50 ? 'risk-critical':''}">${water.toLocaleString('en')} ملم</td><td>${Number(t.active_pumps||0)} نشطة / ${Number(t.inactive_pumps||0)} متوقفة</td><td><button class="apply-btn" onclick="recordWetDip(${Number(t.tank_id)})">تسجيل غمس</button><button class="apply-btn apply-btn-secondary" onclick="reconcileWetTank(${Number(t.tank_id)})">تسوية</button></td></tr>`;
+            const currentLiters = Number(t.current_liters || 0), capacity = Number(t.capacity_liters || 0);
+            const ullage = capacity - currentLiters, water = t.water_level_mm == null ? null : Number(t.water_level_mm);
+            const actualLabel = Number(t.has_reading) === 1 ? `${currentLiters.toLocaleString('en')} لتر` : `رصيد الدفتر: ${currentLiters.toLocaleString('en')} لتر`;
+            const standardLabel = t.standard_liters_15c == null ? 'غير محسوب (درجة الحرارة غير متاحة)' : `${Number(t.standard_liters_15c).toLocaleString('en')} لتر (VCF ${Number(t.vcf).toFixed(5)})`;
+            return `<tr><td>${escapeHtml(t.tank_name || t.tank_code || '')}</td><td>${capacity.toLocaleString('en')} لتر</td><td>${actualLabel}</td><td>${standardLabel}</td><td class="${ullage < capacity*.2 ? 'risk-critical':''}">${ullage.toLocaleString('en')} لتر</td><td>${t.temperature_c == null ? '—' : Number(t.temperature_c).toFixed(1)+' °م'}</td><td class="${water !== null && water > 50 ? 'risk-critical':''}">${water === null ? 'غير مقاس' : water.toLocaleString('en')+' ملم'}</td><td>${Number(t.active_pumps||0)} نشطة / ${Number(t.inactive_pumps||0)} متوقفة</td><td><button class="apply-btn" onclick="recordWetDip(${Number(t.tank_id)})">تسجيل غمس</button><button class="apply-btn apply-btn-secondary" onclick="reconcileWetTank(${Number(t.tank_id)})">تسوية</button></td></tr>`;
         }).join('') : '<tr><td colspan="9">لا توجد خزانات أو قراءات فعلية للمحطة</td></tr>';
         const recs = data.last_reconciliations || [];
         document.getElementById('wetReconciliationRows').innerHTML = recs.length ? recs.map(r => `<tr><td>${escapeHtml(r.shift_id)}</td><td>${escapeHtml(r.tank_name || r.tank_code || '')}</td><td>${Number(r.expected_liters||0).toLocaleString('en')} لتر</td><td>${Number(r.actual_liters||0).toLocaleString('en')} لتر</td><td>${Number(r.variance_liters||0).toFixed(2)} لتر</td><td>${Number(r.variance_pct||0).toFixed(2)}%</td></tr>`).join('') : '<tr><td colspan="6">لا توجد تسويات ورديات</td></tr>';
@@ -2083,13 +2087,15 @@ async function loadWetStock() {
 }
 
 async function recordWetDip(tankId) {
-    const result = await Swal.fire({ title:'تسجيل غمس', html:'<input id="dipCm" class="swal2-input" type="number" min="0" step="0.01" placeholder="قراءة الغمس (سم)"><input id="dipLiters" class="swal2-input" type="number" min="0" step="0.01" placeholder="الحجم المعاير (لتر)"><input id="dipReason" class="swal2-input" placeholder="سبب الفارق عند الحاجة">', focusConfirm:false, showCancelButton:true, confirmButtonText:'حفظ', cancelButtonText:'إلغاء', preConfirm:() => ({tank_id:tankId,dip_cm:Number(document.getElementById('dipCm').value),dip_liters:Number(document.getElementById('dipLiters').value),reason_code:document.getElementById('dipReason').value}) });
+    const result = await Swal.fire({ title:'تسجيل غمس', html:'<input id="dipCm" class="swal2-input" type="number" min="0" step="0.01" placeholder="قراءة الغمس (سم)"><input id="dipLiters" class="swal2-input" type="number" min="0" step="0.01" placeholder="الحجم المعاير (لتر)"><input id="dipReason" class="swal2-input" placeholder="سبب الفارق عند الحاجة">', focusConfirm:false, showCancelButton:true, confirmButtonText:'حفظ', cancelButtonText:'إلغاء', preConfirm:() => ({tank_id:tankId,shift_id:Number(window.currentWetShiftId || 0),dip_cm:Number(document.getElementById('dipCm').value),dip_liters:Number(document.getElementById('dipLiters').value),reason_code:document.getElementById('dipReason').value}) });
     if (!result.isConfirmed) return;
     try { await apiCall('insertDipReading', result.value); showToast('تم تسجيل قراءة الغمس فعليًا', 'success'); await loadWetStock(); } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function reconcileWetTank(tankId) {
-    const result = await Swal.fire({ title:'تسوية الخزان للوردية الحالية', html:'<input id="reconShift" class="swal2-input" type="number" min="1" placeholder="معرف الوردية"><input id="reconActual" class="swal2-input" type="number" min="0" step="0.01" placeholder="القراءة الختامية (لتر)"><input id="reconCause" class="swal2-input" placeholder="سبب الفارق عند الحاجة"><textarea id="reconNotes" class="swal2-textarea" placeholder="ملاحظات التسوية"></textarea>', focusConfirm:false, showCancelButton:true, confirmButtonText:'حفظ التسوية', cancelButtonText:'إلغاء', preConfirm:() => ({shift_id:Number(document.getElementById('reconShift').value),tank_id:tankId,actual_liters:Number(document.getElementById('reconActual').value),cause:document.getElementById('reconCause').value,notes:document.getElementById('reconNotes').value}) });
+    const activeShiftId = Number(window.currentWetShiftId || 0);
+    if (!activeShiftId) { showToast('لا توجد وردية مفتوحة؛ لا يمكن إجراء التسوية', 'warning'); return; }
+    const result = await Swal.fire({ title:'تسوية الخزان للوردية المفتوحة', html:`<p>سيتم استخدام الوردية ${activeShiftId} وآخر قراءة غمس محفوظة لهذه الوردية والخزان.</p><input id="reconCause" class="swal2-input" placeholder="سبب الفارق عند الحاجة"><textarea id="reconNotes" class="swal2-textarea" placeholder="ملاحظات التسوية"></textarea>`, focusConfirm:false, showCancelButton:true, confirmButtonText:'حفظ التسوية', cancelButtonText:'إلغاء', preConfirm:() => ({shift_id:activeShiftId,tank_id:tankId,cause:document.getElementById('reconCause').value,notes:document.getElementById('reconNotes').value}) });
     if (!result.isConfirmed) return;
     try { await invokeBridge('submitShiftReconciliation', [JSON.stringify(result.value)]); showToast('تم احتساب التسوية وحفظ الفارق', 'success'); await loadWetStock(); } catch (e) { showToast(e.message, 'error'); }
 }

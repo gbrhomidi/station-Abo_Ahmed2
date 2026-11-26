@@ -80,6 +80,25 @@ class DatabaseHelperOpenLifecycleTest {
         helper = constructor.newInstance(context)
     }
 
+    @Test
+    fun auditLogsAreAppendOnly() {
+        val db = helper.writableDatabase
+        val uuid = UUID.randomUUID().toString()
+        db.execSQL(
+            "INSERT INTO audit_logs(uuid, action_type, table_name, record_id) VALUES(?,?,?,?)",
+            arrayOf(uuid, "CREATE", "inventory_movements", 1)
+        )
+        assertTrue(runCatching {
+            db.execSQL("UPDATE audit_logs SET action_type='UPDATE' WHERE uuid=?", arrayOf(uuid))
+        }.isFailure)
+        assertTrue(runCatching {
+            db.execSQL("DELETE FROM audit_logs WHERE uuid=?", arrayOf(uuid))
+        }.isFailure)
+        assertEquals("CREATE", db.rawQuery(
+            "SELECT action_type FROM audit_logs WHERE uuid=?", arrayOf(uuid)
+        ).use { cursor -> check(cursor.moveToFirst()); cursor.getString(0) })
+    }
+
     @After
     fun tearDown() {
         DatabaseHelper.closeInstance(context)

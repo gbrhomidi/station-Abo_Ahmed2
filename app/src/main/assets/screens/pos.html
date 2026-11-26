@@ -5448,10 +5448,9 @@ async function prepareDryStockProducts(products) {
         const product = catalog.find(p => Number(p.product_id) === Number(item.product_id));
         if (!product) continue;
         if (Number(product.track_batch) === 1) {
-            const batches = (await apiCall('getProductBatches', {product_id:Number(item.product_id)})).data || [];
-            const selected = batches.find(b => Number(b.quantity || 0) >= Number(item.quantity || 0));
-            if (!selected) throw new Error('لا توجد دفعة متاحة بالكمية المطلوبة للمنتج');
-            item.batch_id = Number(selected.batch_id);
+            // Let the transactional SQLite sale resolver choose the FEFO batch.
+            // A UI-side choice can disagree with server expiry/ordering rules.
+            delete item.batch_id;
         }
         if (Number(product.track_serial) === 1) {
             if (Number(item.quantity) !== 1) throw new Error('يجب بيع القطع ذات السيريال قطعةً قطعة');
