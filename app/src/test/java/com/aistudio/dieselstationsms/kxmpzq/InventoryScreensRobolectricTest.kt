@@ -1982,6 +1982,45 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun trackedExpiryProductRejectsUndatedBatchDuringResolveAndConsume() {
+        val db = helper.writableDatabase
+        val productId = createProduct(0.0, 0.0)
+        db.update("products", ContentValues().apply {
+            put("track_batch", 1); put("track_expiry", 1)
+        }, "id=?", arrayOf(productId.toString()))
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+        val today = java.time.LocalDate.parse(helper.currentDateForBridge())
+        db.insertOrThrow("product_batches", null, ContentValues().apply {
+            put("product_id", productId); put("lot_number", "UNDATED-" + UUID.randomUUID())
+            putNull("expiry_date"); put("quantity", 5.0); put("received_at", today.toString())
+        })
+        val item = JSONObject().put("product_id", productId).put("quantity", 1.0)
+            .put("track_batch", 1).put("track_expiry", 1)
+        val resolve = DatabaseHelper::class.java.getDeclaredMethod(
+            "resolveDryStockSelection", SQLiteDatabase::class.java, JSONObject::class.java,
+            Long::class.javaPrimitiveType!!
+        ).apply { isAccessible = true }
+        assertTrue("Expiry-tracked products must not consume undated legacy batches",
+            runCatching { resolve.invoke(helper, db, item, warehouseId) }.isFailure)
+        val undatedBatch = db.rawQuery(
+            "SELECT batch_id FROM product_batches WHERE product_id=?",
+            arrayOf(productId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getLong(0) }
+        val consume = DatabaseHelper::class.java.getDeclaredMethod(
+            "consumeDryStockSelection", SQLiteDatabase::class.java, JSONObject::class.java,
+            Long::class.javaPrimitiveType!!, Long::class.javaPrimitiveType!!
+        ).apply { isAccessible = true }
+        val bypass = JSONObject().put("product_id", productId).put("quantity", 1.0)
+            .put("track_expiry", 1).put("batch_id", undatedBatch)
+        assertTrue("Consumption must revalidate expiry tracking, not trust prior selection",
+            runCatching { consume.invoke(helper, db, bypass, 993L, warehouseId) }.isFailure)
+        assertEquals(5.0, db.rawQuery(
+            "SELECT quantity FROM product_batches WHERE batch_id=?",
+            arrayOf(undatedBatch.toString())
+        ).use { c -> check(c.moveToFirst()); c.getDouble(0) }, 0.0001)
+    }
+
+    @Test
     fun inventoryThresholdCreatesOneStationScopedDraftPurchaseOrderImmediately() {
         val db = helper.writableDatabase
         val productId = createProduct(10.0, 0.0)

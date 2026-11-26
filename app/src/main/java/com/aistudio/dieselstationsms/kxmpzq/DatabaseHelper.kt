@@ -13147,6 +13147,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 """SELECT batch_id FROM product_batches
                    WHERE product_id=? AND quantity>=?
                      AND (expiry_date IS NULL OR date(expiry_date)>=date(?))
+                     AND (?=0 OR expiry_date IS NOT NULL)
                      AND (location_id IS NULL OR EXISTS (
                          SELECT 1 FROM stock_locations sl
                          JOIN warehouses bw ON bw.id=sl.warehouse_id
@@ -13156,7 +13157,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    ORDER BY CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END,
                             date(expiry_date) ASC,date(received_at) ASC,batch_id ASC
                    LIMIT 1""",
-                arrayOf(productId.toString(), quantity.toString(), getCurrentDate(), warehouseId.toString())
+                arrayOf(productId.toString(), quantity.toString(), getCurrentDate(), item.optInt("track_expiry", 0).toString(), warehouseId.toString())
             ).use { c ->
                 require(c.moveToFirst()) { "لا توجد دفعة صالحة غير منتهية بالكمية المطلوبة" }
                 c.getLong(0)
@@ -13187,12 +13188,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 """UPDATE product_batches SET quantity=quantity-?
                    WHERE batch_id=? AND product_id=? AND quantity>=?
                      AND (expiry_date IS NULL OR date(expiry_date)>=date(?))
+                     AND (?=0 OR expiry_date IS NOT NULL)
                      AND (location_id IS NULL OR location_id IN (
                          SELECT location_id FROM stock_locations WHERE warehouse_id=? AND is_active=1
                      ))"""
             ).run {
                 bindDouble(1, quantity); bindLong(2, batchId); bindLong(3, productId)
-                bindDouble(4, quantity); bindString(5, getCurrentDate()); bindLong(6, warehouseId)
+                bindDouble(4, quantity); bindString(5, getCurrentDate()); bindLong(6, item.optInt("track_expiry", 0).toLong()); bindLong(7, warehouseId)
                 executeUpdateDelete()
             }
             require(updated == 1) { "تعذر خصم الدفعة: تغير الرصيد أو انتهت الصلاحية أو لم تعد الدفعة تخص المنتج" }
