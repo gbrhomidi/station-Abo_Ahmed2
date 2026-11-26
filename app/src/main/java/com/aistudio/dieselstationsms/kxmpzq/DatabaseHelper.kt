@@ -10376,8 +10376,27 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             val rows = db.update("shifts", cv, "id = ? AND station_id = ? AND is_deleted = 0 AND status = 'open'", arrayOf(shiftId.toString(), stationScopeId.toString()))
             if (rows != 1) return false
-            db.setTransactionSuccessful()
+            db.insertOrThrow("audit_logs", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("user_id", closedBy)
+                put("action_type", "UPDATE")
+                put("table_name", "shifts")
+                put("record_id", shiftId)
+                put("old_row_json", JSONObject()
+                    .put("shift_id", shiftId).put("station_id", stationScopeId)
+                    .put("status", "open").put("opening_cash", openingCash)
+                    .put("start_time", startTime).toString())
+                put("new_row_json", JSONObject()
+                    .put("shift_id", shiftId).put("station_id", stationScopeId)
+                    .put("status", "closed").put("closing_cash", closingCash)
+                    .put("closing_bank", closingBank).put("total_sales", total)
+                    .put("total_cash", cash).put("cash_variance", calculateCashVariance(openingCash, cash, closingCash))
+                    .put("closed_at", closedAt).put("closed_by", closedBy).toString())
+                put("changed_columns", "status,end_time,closing_cash,closing_bank,total_sales,total_cash,cash_variance,closed_at,closed_by")
+                put("created_at", closedAt)
+            })
             logActivity(operator, "shift_close", "إغلاق الوردية $shiftId")
+            db.setTransactionSuccessful()
             return true
         } finally {
             db.endTransaction()
@@ -10438,19 +10457,44 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val db = writableDatabase
         db.beginTransaction()
         try {
+            val before = db.rawQuery(
+                "SELECT id,shift_code,status,start_time,end_time,opening_cash,closing_cash,total_sales FROM shifts WHERE id=? AND station_id=? AND is_deleted=0",
+                arrayOf(shiftId.toString(), stationScopeId.toString())
+            ).use { c ->
+                if (!c.moveToFirst()) null else JSONObject().apply {
+                    put("id", c.getLong(0)); put("shift_code", c.getString(1))
+                    put("status", c.getString(2)); put("start_time", c.getString(3))
+                    put("end_time", if (c.isNull(4)) JSONObject.NULL else c.getString(4))
+                    put("opening_cash", c.getDouble(5)); put("closing_cash", c.getDouble(6))
+                    put("total_sales", c.getDouble(7))
+                }
+            }
+            val deletedAt = getCurrentDateTime()
             val rows = db.update(
                 "shifts",
                 ContentValues().apply {
                     put("is_deleted", 1)
-                    put("deleted_at", getCurrentDateTime())
+                    put("deleted_at", deletedAt)
                     put("deleted_by", deletedBy)
                 },
                 "id = ? AND station_id = ? AND is_deleted = 0",
                 arrayOf(shiftId.toString(), stationScopeId.toString())
             )
             if (rows == 1) {
-                db.setTransactionSuccessful()
+                db.insertOrThrow("audit_logs", null, ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("user_id", deletedBy)
+                    put("action_type", "DELETE")
+                    put("table_name", "shifts")
+                    put("record_id", shiftId)
+                    put("old_row_json", before?.toString() ?: "{}")
+                    put("new_row_json", JSONObject().put("is_deleted", 1)
+                        .put("deleted_at", deletedAt).put("deleted_by", deletedBy).toString())
+                    put("changed_columns", "is_deleted,deleted_at,deleted_by")
+                    put("created_at", deletedAt)
+                })
                 logActivity(operator, "delete_shift", "حذف وردية $shiftId")
+                db.setTransactionSuccessful()
             }
             return rows
         } finally {
@@ -31280,49 +31324,80 @@ private fun postSalesReversalJournal(
     }
 
     fun insertDipReading(data: JSONObject, stationScopeId: Int, actorId: Long): JSONObject {
-        val tankId=data.optLong("tank_id",0L)
-        val dipCm=data.optDouble("dip_cm",-1.0)
-        val dipLiters=data.optDouble("dip_liters",-1.0)
-        val shiftId=data.optLong("shift_id",0L)
-        require(stationScopeId>0 && tankId>0 && dipCm.isFinite() && dipCm>=0.0 &&
-            dipLiters.isFinite() && dipLiters>=0.0) { "قراءة الغمس بالسنتيمتر واللتر مطلوبة" }
+        val tankId = data.optLong("tank_id", 0L)
+        val dipCm = data.optDouble("dip_cm", -1.0)
+        val dipLiters = data.optDouble("dip_liters", -1.0)
+        val shiftId = data.optLong("shift_id", 0L)
+        require(stationScopeId > 0 && tankId > 0 && dipCm.isFinite() && dipCm >= 0.0 &&
+            dipLiters.isFinite() && dipLiters >= 0.0) { "قراءة الغمس بالسنتيمتر واللتر مطلوبة" }
         dbLock.lock()
         return try {
-            val db=writableDatabase
-            var book=0.0
-            db.rawQuery(
-                """SELECT COALESCE((SELECT current_liters FROM tank_readings
-                    WHERE tank_id=? ORDER BY reading_at DESC,reading_id DESC LIMIT 1),t.current_quantity,0)
-                    FROM tanks t WHERE t.id=? AND t.station_id=? AND t.is_deleted=0""",
-                arrayOf(tankId.toString(),tankId.toString(),stationScopeId.toString())
-            ).use { c -> require(c.moveToFirst()){"الخزان غير موجود أو خارج نطاق المحطة"}; book=c.getDouble(0) }
-            if(shiftId>0) db.rawQuery(
-                """SELECT 1 FROM shifts WHERE id=? AND station_id=? AND status='open' AND is_deleted=0
-                    AND start_time<=? AND (end_time IS NULL OR end_time>=?)""",
-                arrayOf(shiftId.toString(),stationScopeId.toString(),getCurrentDateTime(),getCurrentDateTime())
-            ).use { c -> require(c.moveToFirst()){"الوردية غير مفتوحة أو خارج نطاق المحطة/الزمن"} }
-            val variance=dipLiters-book
-            val pct=if(book==0.0) if(variance==0.0) 0.0 else 100.0 else variance/book*100.0
-            val exceeded=kotlin.math.abs(pct)>data.optDouble("tolerance_threshold",0.5)
-            val reason=data.optString("reason_code","").takeIf{it.isNotBlank()}
-            if(exceeded) require(reason!=null){"سبب الفارق مطلوب عند تجاوز التسامح"}
-            if(reason!=null) db.rawQuery(
-                "SELECT 1 FROM inventory_reason_codes WHERE code=? AND applies_to IN ('FUEL','BOTH')",
-                arrayOf(reason)
-            ).use { c -> require(c.moveToFirst()){"سبب الفارق غير معتمد"} }
-            val cv=ContentValues().apply {
-                put("tank_id",tankId); put("dip_cm",dipCm); put("dip_liters",dipLiters)
-                put("book_liters",book); put("variance_liters",variance); put("variance_percent",pct)
-                put("tolerance_exceeded",if(exceeded)1 else 0)
-                if(reason!=null) put("reason_code",reason)
-                if(shiftId>0) put("shift_id",shiftId)
-                put("notes",data.optString("notes")); if(actorId>0) put("created_by",actorId)
-                put("created_at",getCurrentDateTime())
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                var book = 0.0
+                db.rawQuery(
+                    """SELECT COALESCE((SELECT current_liters FROM tank_readings
+                        WHERE tank_id=? ORDER BY reading_at DESC,reading_id DESC LIMIT 1),t.current_quantity,0)
+                        FROM tanks t WHERE t.id=? AND t.station_id=? AND t.is_deleted=0""",
+                    arrayOf(tankId.toString(), tankId.toString(), stationScopeId.toString())
+                ).use { c -> require(c.moveToFirst()) { "الخزان غير موجود أو خارج نطاق المحطة" }; book = c.getDouble(0) }
+                if (shiftId > 0) db.rawQuery(
+                    """SELECT 1 FROM shifts WHERE id=? AND station_id=? AND status='open' AND is_deleted=0
+                        AND start_time<=? AND (end_time IS NULL OR end_time>=?)""",
+                    arrayOf(shiftId.toString(), stationScopeId.toString(), getCurrentDateTime(), getCurrentDateTime())
+                ).use { c -> require(c.moveToFirst()) { "الوردية غير مفتوحة أو خارج نطاق المحطة/الزمن" } }
+                val variance = dipLiters - book
+                val pct = if (book == 0.0) if (variance == 0.0) 0.0 else 100.0 else variance / book * 100.0
+                val tolerance = data.optDouble("tolerance_threshold", 0.5)
+                require(tolerance.isFinite() && tolerance >= 0.0) { "حد التسامح غير صالح" }
+                val exceeded = kotlin.math.abs(pct) > tolerance
+                val reason = data.optString("reason_code", "").takeIf { it.isNotBlank() }
+                if (exceeded) require(reason != null) { "سبب الفارق مطلوب عند تجاوز التسامح" }
+                if (reason != null) db.rawQuery(
+                    "SELECT 1 FROM inventory_reason_codes WHERE code=? AND applies_to IN ('FUEL','BOTH')",
+                    arrayOf(reason)
+                ).use { c -> require(c.moveToFirst()) { "سبب الفارق غير معتمد" } }
+                val createdAt = getCurrentDateTime()
+                val cv = ContentValues().apply {
+                    put("tank_id", tankId); put("dip_cm", dipCm); put("dip_liters", dipLiters)
+                    put("book_liters", book); put("variance_liters", variance); put("variance_percent", pct)
+                    put("tolerance_exceeded", if (exceeded) 1 else 0)
+                    if (reason != null) put("reason_code", reason)
+                    if (shiftId > 0) put("shift_id", shiftId)
+                    put("notes", data.optString("notes"))
+                    if (actorId > 0) put("created_by", actorId)
+                    put("created_at", createdAt)
+                }
+                val id = db.insertOrThrow("tank_dip_readings", null, cv)
+                db.insertOrThrow("audit_logs", null, ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    if (actorId > 0) put("user_id", actorId) else putNull("user_id")
+                    put("action_type", "CREATE")
+                    put("table_name", "tank_dip_readings")
+                    put("record_id", id)
+                    put("old_row_json", JSONObject.NULL.toString())
+                    put("new_row_json", JSONObject()
+                        .put("dip_id", id).put("station_id", stationScopeId).put("tank_id", tankId)
+                        .put("shift_id", if (shiftId > 0) shiftId else JSONObject.NULL)
+                        .put("dip_cm", dipCm).put("dip_liters", dipLiters)
+                        .put("book_liters", book).put("variance_liters", variance)
+                        .put("variance_percent", pct).put("tolerance_exceeded", exceeded)
+                        .put("reason_code", reason ?: JSONObject.NULL).put("notes", data.optString("notes"))
+                        .put("created_by", if (actorId > 0) actorId else JSONObject.NULL)
+                        .put("created_at", createdAt).toString())
+                    put("changed_columns", "tank_dip_readings")
+                    put("created_at", createdAt)
+                })
+                db.setTransactionSuccessful()
+                JSONObject().put("dip_id", id).put("variance_liters", variance)
+                    .put("variance_percent", pct).put("tolerance_exceeded", exceeded)
+            } finally {
+                db.endTransaction()
             }
-            val id=db.insertOrThrow("tank_dip_readings",null,cv)
-            JSONObject().put("dip_id",id).put("variance_liters",variance)
-                .put("variance_percent",pct).put("tolerance_exceeded",exceeded)
-        } finally { dbLock.unlock() }
+        } finally {
+            dbLock.unlock()
+        }
     }
 
     // ========================================================================

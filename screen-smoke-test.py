@@ -572,6 +572,17 @@ else:
         print(f'{"PASS" if ok else "FAIL"} inventory-movement-audit: {label}')
         if not ok: failed += 1
 
+# Shift lifecycle and dip-reading changes must have atomic, immutable audit records.
+shift_audit_contracts = [
+    ('fun closeShift(' in inventory_db and 'put("table_name", "shifts")' in inventory_db and 'put("action_type", "UPDATE")' in inventory_db, 'shift closure records before/after snapshots'),
+    ('fun deleteShift(' in inventory_db and 'put("action_type", "DELETE")' in inventory_db and 'put("deleted_by", deletedBy)' in inventory_db, 'shift soft deletion records actor and prior state'),
+    ('fun insertDipReading(' in inventory_db and 'db.beginTransaction()' in inventory_db[inventory_db.find('fun insertDipReading('):inventory_db.find('// دوال البنوك')], 'put("table_name", "tank_dip_readings")' in inventory_db, 'dip reading and its audit event share one SQLite transaction'),
+    ('db.insertOrThrow("audit_logs"' in inventory_db, 'audit insert failure aborts source operation'),
+]
+for ok, label in shift_audit_contracts:
+    print(f'{"PASS" if ok else "FAIL"} shift-audit: {label}')
+    if not ok: failed += 1
+
 if failed:
     raise SystemExit(f'{failed} screen/security smoke checks failed')
 print(f'All screen and security smoke checks passed: {len(CASES)} screens, {len(SECURITY_CASES)} security contracts. Acceptance preflight status is reported separately above.')
