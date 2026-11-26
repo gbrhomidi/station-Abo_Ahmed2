@@ -37754,9 +37754,21 @@ private fun postSalesReversalJournal(
     // ========================================================================
     fun getProductBatches(productId: Long, stationScopeId: Int): JSONArray {
         require(productId > 0 && stationScopeId > 0)
+        val today = getCurrentDate()
         return readableDatabase.rawQuery(
-            "SELECT b.*, p.product_name FROM product_batches b JOIN products p ON p.id=b.product_id WHERE b.product_id=? AND p.station_id=? ORDER BY CASE WHEN b.expiry_date IS NULL THEN 1 ELSE 0 END,b.expiry_date,b.received_at,b.batch_id",
-            arrayOf(productId.toString(), stationScopeId.toString())
+            """SELECT b.*, p.product_name,
+                      CASE WHEN b.expiry_date IS NULL THEN 'UNDATED'
+                           WHEN date(b.expiry_date)<date(?) THEN 'EXPIRED'
+                           WHEN date(b.expiry_date)<=date(?, '+30 days') THEN 'EXPIRING_SOON'
+                           ELSE 'VALID' END expiry_status,
+                      CASE WHEN b.expiry_date IS NULL THEN NULL
+                           ELSE CAST(julianday(date(b.expiry_date))-julianday(date(?)) AS INTEGER) END days_to_expiry
+               FROM product_batches b JOIN products p ON p.id=b.product_id
+               WHERE b.product_id=? AND p.station_id=?
+               ORDER BY CASE WHEN b.expiry_date IS NULL THEN 1 ELSE 0 END,
+                        CASE WHEN date(b.expiry_date)<date(?) THEN 1 ELSE 0 END,
+                        b.expiry_date,b.received_at,b.batch_id""",
+            arrayOf(today, today, today, productId.toString(), stationScopeId.toString(), today)
         ).use { cursorToJsonArray(it) }
     }
 
@@ -38130,6 +38142,10 @@ private fun postSalesReversalJournal(
         val products = db.rawQuery(
             """SELECT p.id product_id,p.product_code,p.product_name,p.product_name_ar,p.quantity,p.minimum_stock,p.reorder_point,p.safety_stock,p.track_serial,p.track_batch,p.track_expiry,p.track_warranty,
                       COALESCE((SELECT SUM(b.quantity) FROM product_batches b WHERE b.product_id=p.id AND b.quantity>0$batchLocationScope),0) batch_quantity,
+                      COALESCE((SELECT SUM(b.quantity) FROM product_batches b WHERE b.product_id=p.id AND b.quantity>0 AND (b.expiry_date IS NULL OR date(b.expiry_date)>=date('$dateText'))$batchLocationScope),0) valid_batch_quantity,
+                      COALESCE((SELECT SUM(b.quantity) FROM product_batches b WHERE b.product_id=p.id AND b.quantity>0 AND b.expiry_date IS NOT NULL AND date(b.expiry_date)<date('$dateText')$batchLocationScope),0) expired_batch_quantity,
+                      COALESCE((SELECT MIN(b.expiry_date) FROM product_batches b WHERE b.product_id=p.id AND b.quantity>0 AND b.expiry_date IS NOT NULL AND date(b.expiry_date)>=date('$dateText')$batchLocationScope),NULL) nearest_valid_expiry,
+                      COALESCE((SELECT MIN(b.expiry_date) FROM product_batches b WHERE b.product_id=p.id AND b.quantity>0 AND b.expiry_date IS NOT NULL AND date(b.expiry_date)<date('$dateText')$batchLocationScope),NULL) nearest_expired_expiry,
                       $nearestExpiry nearest_expiry,
                       COALESCE((SELECT COUNT(*) FROM product_serials s WHERE s.product_id=p.id AND s.status='AVAILABLE'$serialLocationScope),0) available_serials
                FROM products p WHERE $whereSql ORDER BY p.product_name,p.id""",

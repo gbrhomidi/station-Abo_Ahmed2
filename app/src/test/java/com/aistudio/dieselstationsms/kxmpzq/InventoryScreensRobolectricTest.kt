@@ -240,6 +240,21 @@ class InventoryScreensRobolectricTest {
             .single { it.getLong("product_id") == productId }
         assertEquals(3.0, row.getDouble("batch_quantity"), 0.0001)
         assertEquals(today.plusDays(12).toString(), row.getString("nearest_expiry"))
+        batch(selectedLocation, 2.0, today.minusDays(1).toString())
+        val refreshed = helper.getDryStockPage(JSONObject().put("location_id", selectedLocation), 1)
+            .getJSONArray("products")
+        val refreshedRow = (0 until refreshed.length()).map { refreshed.getJSONObject(it) }
+            .single { it.getLong("product_id") == productId }
+        assertEquals(5.0, refreshedRow.getDouble("batch_quantity"), 0.0001)
+        assertEquals(3.0, refreshedRow.getDouble("valid_batch_quantity"), 0.0001)
+        assertEquals(2.0, refreshedRow.getDouble("expired_batch_quantity"), 0.0001)
+        assertEquals(today.plusDays(12).toString(), refreshedRow.getString("nearest_valid_expiry"))
+        assertEquals(today.minusDays(1).toString(), refreshedRow.getString("nearest_expired_expiry"))
+        val batches = helper.getProductBatches(productId, 1)
+        val expiredBatch = (0 until batches.length()).map { batches.getJSONObject(it) }
+            .single { it.getString("expiry_date") == today.minusDays(1).toString() }
+        assertEquals("EXPIRED", expiredBatch.getString("expiry_status"))
+        assertEquals(-1, expiredBatch.getInt("days_to_expiry"))
     }
 
     @Test
