@@ -13554,6 +13554,36 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     completeFinancialIdempotency(db, "product_purchase", stationScopeId, purchaseIdempotencyKey, id)
                 }
                 logActivity("system", "stock_movement", "$movementType: $quantity للمنتج $productId")
+                // Keep the stock movement audit event atomic with inventory, supplier and cash updates.
+                db.insertOrThrow("audit_logs", null, ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("user_id", userId)
+                    put("action_type", "CREATE")
+                    put("table_name", "inventory_movements")
+                    put("record_id", id)
+                    put("old_row_json", JSONObject()
+                        .put("product_id", productId)
+                        .put("warehouse_id", warehouseId)
+                        .put("quantity_on_hand", quantityBefore)
+                        .toString())
+                    put("new_row_json", JSONObject()
+                        .put("movement_id", id)
+                        .put("station_id", stationScopeId)
+                        .put("movement_code", movementCode)
+                        .put("product_id", productId)
+                        .put("warehouse_id", warehouseId)
+                        .put("movement_type", movementType)
+                        .put("movement_subtype", subtype)
+                        .put("quantity_change", if (movementType == "adjustment") signedAdjustment else if (movementType == "in" || movementType == "return") quantity else -quantity)
+                        .put("quantity_before", quantityBefore)
+                        .put("quantity_after", quantityAfter)
+                        .put("unit_cost", unitCost)
+                        .put("total_cost", totalCost)
+                        .put("performed_by", userId)
+                        .toString())
+                    put("changed_columns", "inventory_movements,inventory_levels,products")
+                    put("created_at", getCurrentDateTime())
+                })
                 if (ownsTransaction) db.setTransactionSuccessful()
                 id
             } finally {
@@ -14063,6 +14093,28 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     bindDouble(1, after.coerceAtLeast(0.0)); bindString(2, now); bindLong(3, tankId); bindLong(4, stationScopeId.toLong())
                 }.executeUpdateDelete()
                 require(changed == 1) { "تعذر تحديث رصيد الخزان" }
+                // Every manual fuel-ledger mutation is recorded in the append-only audit log
+                // within the same SQLite transaction as the ledger and tank balance update.
+                db.insertOrThrow("audit_logs", null, ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("user_id", userId)
+                    put("action_type", "CREATE")
+                    put("table_name", "tank_ledger")
+                    put("record_id", id)
+                    put("old_row_json", JSONObject().put("tank_id", tankId).put("current_quantity", before).toString())
+                    put("new_row_json", JSONObject()
+                        .put("tank_id", tankId)
+                        .put("station_id", stationScopeId)
+                        .put("fuel_type_id", fuelTypeId)
+                        .put("movement_type", movementType)
+                        .put("quantity", quantity)
+                        .put("current_quantity", after)
+                        .put("reference_code", reference)
+                        .put("reason", reason)
+                        .toString())
+                    put("changed_columns", "current_quantity")
+                    put("created_at", now)
+                })
                 db.setTransactionSuccessful()
                 id
             }

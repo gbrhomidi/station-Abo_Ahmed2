@@ -553,6 +553,25 @@ for screen_name, tokens in module006_screens.items():
         if not ok: failed += 1
 
 
+# Inventory movement audit events must be written to the immutable SQLite audit log
+# in the same transaction as the underlying product/fuel stock mutation.
+inventory_db_path = PROJECT_ROOT / 'app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt'
+if not inventory_db_path.exists():
+    print('FAIL inventory-movement-audit: DatabaseHelper.kt missing')
+    failed += 1
+else:
+    inventory_db = inventory_db_path.read_text(encoding='utf-8', errors='replace')
+    inventory_audit_contracts = [
+        ('put("table_name", "inventory_movements")' in inventory_db and 'put("record_id", id)' in inventory_db, 'product movements emit a linked audit event'),
+        ('put("table_name", "tank_ledger")' in inventory_db and 'put("current_quantity", after)' in inventory_db, 'manual fuel movements emit before/after tank balances'),
+        ('put("old_row_json"' in inventory_db and 'put("new_row_json"' in inventory_db, 'audit events preserve before/after snapshots'),
+        ('db.insertOrThrow("audit_logs"' in inventory_db, 'audit persistence failure aborts the stock transaction'),
+        ('CREATE TRIGGER IF NOT EXISTS trg_audit_logs_no_update' in inventory_db and 'CREATE TRIGGER IF NOT EXISTS trg_audit_logs_no_delete' in inventory_db, 'audit log remains append-only'),
+    ]
+    for ok, label in inventory_audit_contracts:
+        print(f'{"PASS" if ok else "FAIL"} inventory-movement-audit: {label}')
+        if not ok: failed += 1
+
 if failed:
     raise SystemExit(f'{failed} screen/security smoke checks failed')
 print(f'All screen and security smoke checks passed: {len(CASES)} screens, {len(SECURITY_CASES)} security contracts. Acceptance preflight status is reported separately above.')
