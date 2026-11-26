@@ -39186,10 +39186,16 @@ private fun postSalesReversalJournal(
             ).use { c ->
                 while (c.moveToNext()) {
                     val tankId = c.getLong(0)
-                    if (!c.isNull(2) && c.getDouble(2) > 50.0) {
-                        upsert("WATER_LEVEL", "FUEL", tankId, "critical", c.getDouble(2), 50.0,
-                            "مستوى الماء يتجاوز الحد؛ مصدر القياس tank_readings")
-                    } else resolve("WATER_LEVEL", "FUEL", tankId)
+                    if (!c.isNull(2)) {
+                        if (c.getDouble(2) > 50.0) {
+                            upsert("WATER_LEVEL", "FUEL", tankId, "critical", c.getDouble(2), 50.0,
+                                "مستوى الماء يتجاوز الحد؛ مصدر القياس tank_readings")
+                        } else {
+                            // A reading without a water measurement is unavailable, not zero.
+                            // Keep any prior alert active until a measured safe value clears it.
+                            resolve("WATER_LEVEL", "FUEL", tankId)
+                        }
+                    }
                     val capacity = c.getDouble(4)
                     val quantity = c.getDouble(3)
                     if (capacity > 0.0 && quantity >= 0.0 && quantity / capacity < 0.15) {

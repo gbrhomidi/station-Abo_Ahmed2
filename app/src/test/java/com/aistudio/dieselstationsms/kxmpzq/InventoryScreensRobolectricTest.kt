@@ -1717,6 +1717,37 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun waterLevelAnomalySurvivesUnavailableMeasurementAndResolvesOnMeasuredSafeValue() {
+        val db = helper.writableDatabase
+        val tankId = createLowFuelTank(1, "WATER-STATE")
+        val date = helper.currentDateForBridge()
+        fun reading(time: String, waterMm: Double?) {
+            db.insertOrThrow("tank_readings", null, ContentValues().apply {
+                put("tank_id", tankId)
+                put("reading_at", "$date $time")
+                put("current_liters", 500.0)
+                if (waterMm != null) put("water_level_mm", waterMm) else putNull("water_level_mm")
+                put("source", "manual")
+            })
+        }
+        reading("10:00:00", 65.0)
+        helper.runInventoryAnomalyDetection(1)
+        fun status(): String = db.rawQuery(
+            "SELECT status FROM inventory_anomalies WHERE station_id=1 AND item_type='FUEL' AND item_id=? AND anomaly_type='WATER_LEVEL' ORDER BY anomaly_id DESC LIMIT 1",
+            arrayOf(tankId.toString())
+        ).use { c -> check(c.moveToFirst()); c.getString(0) }
+        assertEquals("OPEN", status())
+
+        reading("11:00:00", null)
+        helper.runInventoryAnomalyDetection(1)
+        assertEquals("OPEN", status())
+
+        reading("12:00:00", 20.0)
+        helper.runInventoryAnomalyDetection(1)
+        assertEquals("RESOLVED", status())
+    }
+
+    @Test
     fun verifiedPumpMeterVarianceIsDetectedAndDeduplicated() {
         val db = helper.writableDatabase
         val tankId = createLowFuelTank(1, "PUMP-VARIANCE")
