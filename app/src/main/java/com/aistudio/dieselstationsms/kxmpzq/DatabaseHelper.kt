@@ -12985,7 +12985,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 return result
             }
             require(reserveFinancialIdempotency(db, "product_sale", stationScopeId, idempotencyKey)) { "مفتاح العملية مستخدم مسبقاً" }
-            prepared.forEach { resolveDryStockSelection(db, it) }
+            prepared.forEach { resolveDryStockSelection(db, it, warehouseId) }
             prepared.forEach { item ->
                 val itemId = item.optLong("price_list_item_id", 0L).takeIf { it > 0L }
                 val cap = item.optDouble("quantity_limit", 0.0)
@@ -13071,7 +13071,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("line_total", quantity * unitPrice)
                 }
                 db.insertOrThrow("sale_items", null, cv)
-                consumeDryStockSelection(db, item, saleId)
+                consumeDryStockSelection(db, item, saleId, warehouseId)
                 ensureInventoryBaselineForProduct(db, productId, warehouseId, stationScopeId)
                 addStockMovementInternal(db,
                     JSONObject().apply {
@@ -13135,7 +13135,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return result
     }
 
-    private fun resolveDryStockSelection(db: SQLiteDatabase, item: JSONObject) {
+    private fun resolveDryStockSelection(db: SQLiteDatabase, item: JSONObject, warehouseId: Long) {
         val productId = item.getLong("product_id")
         val quantity = item.getDouble("quantity")
         if (item.optInt("track_batch", 0) == 1) {
@@ -13147,10 +13147,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 """SELECT batch_id FROM product_batches
                    WHERE product_id=? AND quantity>=?
                      AND (expiry_date IS NULL OR date(expiry_date)>=date(?))
+                     AND (location_id IS NULL OR EXISTS (
+                         SELECT 1 FROM stock_locations sl
+                         JOIN warehouses bw ON bw.id=sl.warehouse_id
+                         WHERE sl.location_id=product_batches.location_id
+                           AND sl.warehouse_id=? AND sl.is_active=1 AND bw.is_active=1
+                     ))
                    ORDER BY CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END,
                             date(expiry_date) ASC,date(received_at) ASC,batch_id ASC
                    LIMIT 1""",
-                arrayOf(productId.toString(), quantity.toString(), getCurrentDate())
+                arrayOf(productId.toString(), quantity.toString(), getCurrentDate(), warehouseId.toString())
             ).use { c ->
                 require(c.moveToFirst()) { "لا توجد دفعة صالحة غير منتهية بالكمية المطلوبة" }
                 c.getLong(0)
@@ -13172,7 +13178,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    private fun consumeDryStockSelection(db: SQLiteDatabase, item: JSONObject, saleId: Long) {
+    private fun consumeDryStockSelection(db: SQLiteDatabase, item: JSONObject, saleId: Long, warehouseId: Long) {
         val batchId = item.optLong("batch_id", 0L)
         if (batchId > 0) {
             val quantity = item.getDouble("quantity")
@@ -13180,10 +13186,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val updated = db.compileStatement(
                 """UPDATE product_batches SET quantity=quantity-?
                    WHERE batch_id=? AND product_id=? AND quantity>=?
-                     AND (expiry_date IS NULL OR date(expiry_date)>=date(?))"""
+                     AND (expiry_date IS NULL OR date(expiry_date)>=date(?))
+                     AND (location_id IS NULL OR location_id IN (
+                         SELECT location_id FROM stock_locations WHERE warehouse_id=? AND is_active=1
+                     ))"""
             ).run {
                 bindDouble(1, quantity); bindLong(2, batchId); bindLong(3, productId)
-                bindDouble(4, quantity); bindString(5, getCurrentDate())
+                bindDouble(4, quantity); bindString(5, getCurrentDate()); bindLong(6, warehouseId)
                 executeUpdateDelete()
             }
             require(updated == 1) { "تعذر خصم الدفعة: تغير الرصيد أو انتهت الصلاحية أو لم تعد الدفعة تخص المنتج" }

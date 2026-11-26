@@ -1938,33 +1938,47 @@ class InventoryScreensRobolectricTest {
 
 
     @Test
-    fun trackedBatchSaleEnforcesFEFOAndNeverSelectsExpiredStock() {
+    fun trackedBatchSaleEnforcesFEFOWithinSaleWarehouseAndNeverSelectsExpiredOrRemoteStock() {
         val db = helper.writableDatabase
         val productId = createProduct(0.0, 0.0)
         db.update("products", ContentValues().apply { put("track_batch", 1) }, "id=?", arrayOf(productId.toString()))
+        val saleWarehouseId = helper.ensureOperationalWarehouse(1)
+        val remoteWarehouseId = db.insertOrThrow("warehouses", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("station_id", 1)
+            put("warehouse_name", "مستودع اختبار منفصل"); put("location_details", "FEFO scope test")
+            put("is_default", 0); put("is_active", 1)
+        })
+        fun location(warehouseId: Long, name: String): Long = db.insertOrThrow("stock_locations", null, ContentValues().apply {
+            put("warehouse_id", warehouseId); put("name", name); put("type", "warehouse"); put("is_active", 1)
+        })
+        val saleLocationId = location(saleWarehouseId, "موقع البيع")
+        val remoteLocationId = location(remoteWarehouseId, "موقع آخر")
         val today = java.time.LocalDate.parse(helper.currentDateForBridge())
-        fun batch(expiry: String, quantity: Double): Long = db.insertOrThrow("product_batches", null, ContentValues().apply {
+        fun batch(expiry: String, quantity: Double, locationId: Long?): Long = db.insertOrThrow("product_batches", null, ContentValues().apply {
             put("product_id", productId); put("lot_number", "FEFO-" + UUID.randomUUID())
             put("expiry_date", expiry); put("quantity", quantity); put("received_at", today.toString())
+            if (locationId != null) put("location_id", locationId)
         })
-        batch(today.minusDays(1).toString(), 10.0) // expired stock must be skipped
-        val earliestValid = batch(today.plusDays(3).toString(), 5.0)
-        val laterValid = batch(today.plusDays(12).toString(), 8.0)
+        batch(today.minusDays(1).toString(), 10.0, saleLocationId) // expired stock must be skipped
+        val remoteEarlier = batch(today.plusDays(2).toString(), 5.0, remoteLocationId)
+        val saleWarehouseBatch = batch(today.plusDays(12).toString(), 8.0, saleLocationId)
         val resolve = DatabaseHelper::class.java.getDeclaredMethod(
-            "resolveDryStockSelection", SQLiteDatabase::class.java, JSONObject::class.java
+            "resolveDryStockSelection", SQLiteDatabase::class.java, JSONObject::class.java, Long::class.javaPrimitiveType!!
         ).apply { isAccessible = true }
         val item = JSONObject().put("product_id", productId).put("quantity", 2.0).put("track_batch", 1)
-        resolve.invoke(helper, db, item)
-        assertEquals(earliestValid, item.getLong("batch_id"))
+        resolve.invoke(helper, db, item, saleWarehouseId)
+        assertEquals(saleWarehouseBatch, item.getLong("batch_id"))
         val consume = DatabaseHelper::class.java.getDeclaredMethod(
-            "consumeDryStockSelection", SQLiteDatabase::class.java, JSONObject::class.java, Long::class.javaPrimitiveType!!
+            "consumeDryStockSelection", SQLiteDatabase::class.java, JSONObject::class.java,
+            Long::class.javaPrimitiveType!!, Long::class.javaPrimitiveType!!
         ).apply { isAccessible = true }
-        consume.invoke(helper, db, item, 991L)
-        assertEquals(3.0, db.rawQuery("SELECT quantity FROM product_batches WHERE batch_id=?", arrayOf(earliestValid.toString())).use { it.moveToFirst(); it.getDouble(0) }, 0.0001)
-        assertEquals(8.0, db.rawQuery("SELECT quantity FROM product_batches WHERE batch_id=?", arrayOf(laterValid.toString())).use { it.moveToFirst(); it.getDouble(0) }, 0.0001)
-        val bypass = JSONObject().put("product_id", productId).put("quantity", 1.0)
-            .put("track_batch", 1).put("batch_id", laterValid)
-        assertTrue(runCatching { resolve.invoke(helper, db, bypass) }.isFailure)
+        consume.invoke(helper, db, item, 991L, saleWarehouseId)
+        assertEquals(6.0, db.rawQuery("SELECT quantity FROM product_batches WHERE batch_id=?", arrayOf(saleWarehouseBatch.toString())).use { it.moveToFirst(); it.getDouble(0) }, 0.0001)
+        assertEquals(5.0, db.rawQuery("SELECT quantity FROM product_batches WHERE batch_id=?", arrayOf(remoteEarlier.toString())).use { it.moveToFirst(); it.getDouble(0) }, 0.0001)
+        val remoteBypass = JSONObject().put("product_id", productId).put("quantity", 1.0)
+            .put("track_batch", 1).put("batch_id", remoteEarlier)
+        assertTrue(runCatching { resolve.invoke(helper, db, remoteBypass, saleWarehouseId) }.isFailure)
+        assertTrue(runCatching { consume.invoke(helper, db, remoteBypass, 992L, saleWarehouseId) }.isFailure)
     }
 
     @Test
