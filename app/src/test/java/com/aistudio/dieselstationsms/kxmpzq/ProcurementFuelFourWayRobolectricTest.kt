@@ -211,7 +211,7 @@ class ProcurementFuelFourWayRobolectricTest {
         helper = DatabaseHelper.getInstance(context)
         db = helper.writableDatabase
 
-        assertEquals(74L, scalar("PRAGMA user_version"))
+        assertEquals(75L, scalar("PRAGMA user_version"))
         assertEquals(1L, scalar("SELECT COUNT(*) FROM permissions WHERE permission_code='supplier_invoice.approve' AND is_active=1 AND is_deleted=0"))
         assertEquals(savedTotal, scalarDouble("SELECT total_amount FROM supplier_invoices WHERE id=?", arrayOf(invoiceId.toString())), 0.0001)
         assertEquals(1L, scalar("""SELECT COUNT(*) FROM role_permissions rp

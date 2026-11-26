@@ -315,7 +315,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensurePhase1WetStockSchema(db)
             ensurePhase2DryStockSchema(db)
             ensureMovementInfrastructureSchema(db)
-            ensureMovementInfrastructureSchema(db)
             ensurePhase3Phase4Schema(db)
             ensurePhase3ReceiptSchema(db)
             // SupplierPayablesRepository owns the base supplier_invoices table.
@@ -421,6 +420,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureOpenCompatibilitySchema(db)
             ensurePhase1WetStockSchema(db)
             ensurePhase2DryStockSchema(db)
+            // V75 movement infrastructure must be installed for upgraded V74 databases.
+            ensureMovementInfrastructureSchema(db)
             ensurePhase3Phase4Schema(db)
             ensurePhase3ReceiptSchema(db)
             // The V72 extension must run after the payable owner creates its base table.
