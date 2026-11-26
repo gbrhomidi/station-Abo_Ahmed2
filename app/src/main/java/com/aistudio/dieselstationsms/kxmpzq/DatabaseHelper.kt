@@ -31348,12 +31348,22 @@ private fun postSalesReversalJournal(
             db.beginTransaction()
             try {
                 var book = 0.0
+                var capacity = 0.0
                 db.rawQuery(
                     """SELECT COALESCE((SELECT current_liters FROM tank_readings
-                        WHERE tank_id=? ORDER BY reading_at DESC,reading_id DESC LIMIT 1),t.current_quantity,0)
+                        WHERE tank_id=? ORDER BY reading_at DESC,reading_id DESC LIMIT 1),t.current_quantity,0),
+                              t.capacity_liters
                         FROM tanks t WHERE t.id=? AND t.station_id=? AND t.is_deleted=0""",
                     arrayOf(tankId.toString(), tankId.toString(), stationScopeId.toString())
-                ).use { c -> require(c.moveToFirst()) { "الخزان غير موجود أو خارج نطاق المحطة" }; book = c.getDouble(0) }
+                ).use { c ->
+                    require(c.moveToFirst()) { "الخزان غير موجود أو خارج نطاق المحطة" }
+                    book = c.getDouble(0)
+                    capacity = c.getDouble(1)
+                }
+                require(capacity.isFinite() && capacity > 0.0) { "سعة الخزان غير معرفة أو غير صالحة" }
+                require(dipLiters <= capacity + 0.000001) {
+                    "كمية الغمس تتجاوز السعة القصوى للخزان ($capacity لتر)"
+                }
                 val shiftValidationAt = getCurrentDateTime()
                 db.rawQuery(
                     """SELECT 1 FROM shifts WHERE id=? AND station_id=? AND status='open' AND is_deleted=0
