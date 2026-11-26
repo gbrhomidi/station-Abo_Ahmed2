@@ -31040,8 +31040,8 @@ private fun postSalesReversalJournal(
             """.trimIndent(), arrayOf(stationScopeId.toString())).use { cursorToJsonArray(it) }
             for (i in 0 until tanks.length()) {
                 val tank = tanks.getJSONObject(i)
-                if (!tank.isNull("temperature_c")) {
-                    val temperature = tank.optDouble("temperature_c")
+                val temperature = tank.optString("temperature_c", "").toDoubleOrNull()
+                if (temperature != null && temperature.isFinite()) {
                     val alpha = db.rawQuery("SELECT coefficient_exp FROM fuel_temperature_coefficients WHERE fuel_type_id=?", arrayOf(tank.optLong("fuel_type_id").toString())).use { c -> require(c.moveToFirst()) { "لا يوجد معامل تمدد معاير لنوع الوقود ${tank.optLong("fuel_type_id")}" }; c.getDouble(0) }
                     val delta = temperature - 15.0
                     val vcf = kotlin.math.exp(-alpha * delta - 0.8 * alpha * alpha * delta * delta)
