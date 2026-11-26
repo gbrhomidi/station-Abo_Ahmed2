@@ -214,6 +214,46 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun dipReadingRejectsLitersAboveTankCapacityWithoutPersistingAudit() {
+        val db = helper.writableDatabase
+        val tankId = createLowFuelTank(1, "dip-over-capacity")
+        val shiftId = db.insertOrThrow("shifts", null, ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("shift_code", "DIP-CAP-" + UUID.randomUUID().toString().take(8))
+            put("station_id", 1); put("shift_date", helper.currentDateForBridge())
+            put("shift_type", "morning")
+            put("start_time", helper.currentDateForBridge() + " 00:00:00")
+            put("status", "open")
+        })
+        val beforeDips = db.rawQuery(
+            "SELECT COUNT(*) FROM tank_dip_readings WHERE tank_id=?",
+            arrayOf(tankId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) }
+        val beforeAudit = db.rawQuery(
+            "SELECT COUNT(*) FROM audit_logs WHERE table_name='tank_dip_readings'",
+            null
+        ).use { c -> c.moveToFirst(); c.getInt(0) }
+
+        val rejected = runCatching {
+            helper.insertDipReading(
+                JSONObject().put("tank_id", tankId).put("shift_id", shiftId)
+                    .put("dip_cm", 100.0).put("dip_liters", 10000.01),
+                1, actorId
+            )
+        }
+        assertTrue("A physical reading above tank capacity must be rejected", rejected.isFailure)
+        assertTrue(rejected.exceptionOrNull()?.message.orEmpty().contains("تتجاوز السعة"))
+        assertEquals(beforeDips, db.rawQuery(
+            "SELECT COUNT(*) FROM tank_dip_readings WHERE tank_id=?",
+            arrayOf(tankId.toString())
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+        assertEquals(beforeAudit, db.rawQuery(
+            "SELECT COUNT(*) FROM audit_logs WHERE table_name='tank_dip_readings'",
+            null
+        ).use { c -> c.moveToFirst(); c.getInt(0) })
+    }
+
+    @Test
     fun dryStockLocationScopesBatchQuantityAndNearestExpiry() {
         val db = helper.writableDatabase
         val warehouseId = helper.ensureOperationalWarehouse(1)
