@@ -15150,6 +15150,25 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun getInventoryMovementAuditLog(jsonData: String = "{}"): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val helper = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+                val params = JSONObject(jsonData.ifBlank { "{}" })
+                val stationId = requireCurrentStationId(helper, activity.currentUserId).toLong()
+                val rows = helper.getInventoryMovementAuditLog(
+                    stationId,
+                    params.optInt("limit", 100).coerceIn(1, 500),
+                    params.optInt("offset", 0).coerceAtLeast(0)
+                )
+                dataResponse(rows)
+            } catch (e: Exception) {
+                DebugLogger.logException("InventoryMovementAudit", e)
+                errorResponse(e.message ?: "تعذر تحميل سجل تدقيق الحركات المخزنية")
+            }
+        }
+
+        @JavascriptInterface
         fun getDocumentsPageTyped(jsonData: String): String {
             return try {
                 val obj = JSONObject(jsonData)

@@ -58,7 +58,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 74
+        const val VERSION = 75
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -314,6 +314,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             // These additive, idempotent ensures preserve existing operational rows and IDs.
             ensurePhase1WetStockSchema(db)
             ensurePhase2DryStockSchema(db)
+            ensureMovementInfrastructureSchema(db)
+            ensureMovementInfrastructureSchema(db)
             ensurePhase3Phase4Schema(db)
             ensurePhase3ReceiptSchema(db)
             // SupplierPayablesRepository owns the base supplier_invoices table.
@@ -394,6 +396,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     }
                     67 -> { /* V67 -> V68: re-apply additive inventory schema repair for installed V67 databases. */ }
                     68 -> { /* V68 -> V69: add durable station-scoped outbox metadata. */ }
+                    74 -> { /* V74 -> V75: additive wet/dry stock movement audit infrastructure. */ }
                 }
             }
             // V64 repairs Fleet schema for every legacy database, including installations already at V63.
@@ -2076,6 +2079,253 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             user_id INTEGER NOT NULL, station_id INTEGER NOT NULL, role_code TEXT NOT NULL, can_read INTEGER NOT NULL DEFAULT 1,
             can_approve INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(user_id,station_id,role_code)
         )""".trimIndent())
+    }
+
+
+    /**
+     * V75 movement infrastructure. This is deliberately additive and safe to re-run:
+     * existing wet/dry stock rows, IDs and legacy reason codes are never rewritten.
+     */
+    private fun ensureMovementInfrastructureSchema(db: SQLiteDatabase) {
+        check(db.inTransaction()) { "Movement infrastructure schema requires a transaction" }
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS fuel_shifts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL UNIQUE,
+                station_id INTEGER NOT NULL REFERENCES stations(id),
+                shift_code TEXT NOT NULL,
+                opened_at TEXT NOT NULL,
+                closed_at TEXT,
+                status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed','cancelled')),
+                opened_by INTEGER REFERENCES users(id),
+                closed_by INTEGER REFERENCES users(id),
+                notes TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(station_id, shift_code)
+            )
+        """.trimIndent())
+        db.execSQL("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_fuel_shifts_one_open_per_station
+            ON fuel_shifts(station_id) WHERE status='open'
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS fuel_shift_readings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                shift_id INTEGER NOT NULL REFERENCES fuel_shifts(id) ON DELETE CASCADE,
+                tank_id INTEGER NOT NULL REFERENCES tanks(id),
+                reading_type TEXT NOT NULL CHECK(reading_type IN ('opening','closing')),
+                reading_at TEXT NOT NULL,
+                volume_liters REAL NOT NULL CHECK(volume_liters >= 0),
+                temperature_c REAL,
+                temperature_corrected_volume REAL,
+                water_level_mm REAL,
+                recorded_by INTEGER REFERENCES users(id),
+                UNIQUE(shift_id,tank_id,reading_type)
+            )
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS fuel_dips (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL UNIQUE,
+                station_id INTEGER NOT NULL REFERENCES stations(id),
+                shift_id INTEGER REFERENCES fuel_shifts(id),
+                tank_id INTEGER NOT NULL REFERENCES tanks(id),
+                dip_at TEXT NOT NULL,
+                dip_cm REAL NOT NULL CHECK(dip_cm >= 0),
+                dip_liters REAL NOT NULL CHECK(dip_liters >= 0),
+                book_liters REAL,
+                temperature_c REAL,
+                temperature_corrected_volume REAL,
+                water_level_mm REAL,
+                variance_liters REAL,
+                variance_percent REAL,
+                reason_code_id INTEGER REFERENCES movement_reasons(id),
+                notes TEXT,
+                recorded_by INTEGER REFERENCES users(id),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS fuel_deliveries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL UNIQUE,
+                station_id INTEGER NOT NULL REFERENCES stations(id),
+                shift_id INTEGER REFERENCES fuel_shifts(id),
+                tank_id INTEGER NOT NULL REFERENCES tanks(id),
+                supplier_id INTEGER REFERENCES parties(id),
+                delivery_reference TEXT,
+                delivered_at TEXT NOT NULL,
+                quantity_liters REAL NOT NULL CHECK(quantity_liters > 0),
+                temperature_c REAL,
+                temperature_corrected_volume REAL,
+                water_level_mm REAL,
+                recorded_by INTEGER REFERENCES users(id),
+                notes TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """.trimIndent())
+        // product_batches is already owned by the Phase 2 schema. Extend it in place.
+        val hadReceivedQuantity = tableHasColumn(db, "product_batches", "received_quantity")
+        val hadRemainingQuantity = tableHasColumn(db, "product_batches", "remaining_quantity")
+        ensureColumn(db, "product_batches", "supplier_id", "INTEGER REFERENCES parties(id)")
+        ensureColumn(db, "product_batches", "unit_cost", "REAL NOT NULL DEFAULT 0")
+        ensureColumn(db, "product_batches", "received_quantity", "REAL NOT NULL DEFAULT 0")
+        ensureColumn(db, "product_batches", "remaining_quantity", "REAL NOT NULL DEFAULT 0")
+        ensureColumn(db, "product_batches", "status", "TEXT NOT NULL DEFAULT 'active'")
+        ensureColumn(db, "product_batches", "created_at", "TEXT")
+        ensureColumn(db, "product_batches", "updated_at", "TEXT")
+        // Backfill only columns introduced by this migration. A zero remaining quantity
+        // may represent a genuinely exhausted batch and must never be replenished.
+        if (!hadReceivedQuantity) db.execSQL("UPDATE product_batches SET received_quantity=COALESCE(quantity,0)")
+        if (!hadRemainingQuantity) db.execSQL("UPDATE product_batches SET remaining_quantity=COALESCE(quantity,0)")
+        db.execSQL("""
+            UPDATE product_batches
+               SET created_at=COALESCE(created_at,received_at),
+                   updated_at=COALESCE(updated_at,received_at)
+             WHERE created_at IS NULL OR updated_at IS NULL
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS movement_reasons (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT NOT NULL UNIQUE,
+                label_ar TEXT NOT NULL,
+                label_en TEXT,
+                applies_to TEXT NOT NULL DEFAULT 'BOTH' CHECK(applies_to IN ('PRODUCT','FUEL','BOTH')),
+                requires_note INTEGER NOT NULL DEFAULT 0 CHECK(requires_note IN (0,1)),
+                is_active INTEGER NOT NULL DEFAULT 1
+            )
+        """.trimIndent())
+        val reasons = listOf(
+            arrayOf("DAMAGE", "تالف", "Damaged", "BOTH", 1),
+            arrayOf("RECONCILIATION_LOSS", "فاقد تسوية", "Reconciliation loss", "BOTH", 1),
+            arrayOf("STOCKTAKE_CORRECTION", "تصحيح جرد", "Stocktake correction", "BOTH", 1),
+            arrayOf("SUPPLIER_RETURN", "إرجاع مورد", "Supplier return", "BOTH", 1),
+            arrayOf("SHIFT_RECONCILIATION", "تسوية وردية", "Shift reconciliation", "FUEL", 1),
+            arrayOf("TEMPERATURE_CORRECTION", "تصحيح حرارة", "Temperature correction", "FUEL", 1)
+        )
+        reasons.forEach { db.execSQL(
+            "INSERT OR IGNORE INTO movement_reasons(code,label_ar,label_en,applies_to,requires_note) VALUES(?,?,?,?,?)",
+            it
+        ) }
+        ensureColumn(db, "inventory_movements", "batch_id", "INTEGER REFERENCES product_batches(batch_id)")
+        ensureColumn(db, "inventory_movements", "reason_code_id", "INTEGER REFERENCES movement_reasons(id)")
+        ensureColumn(db, "inventory_movements", "shift_id", "INTEGER REFERENCES fuel_shifts(id)")
+        ensureColumn(db, "inventory_movements", "approved_at", "TEXT")
+        ensureColumn(db, "inventory_movements", "is_locked", "INTEGER NOT NULL DEFAULT 0")
+        // Preserve the legacy reason_code field; map only exact known codes.
+        db.execSQL("""
+            UPDATE inventory_movements
+               SET reason_code_id=(SELECT id FROM movement_reasons mr WHERE mr.code=inventory_movements.reason_code)
+             WHERE reason_code_id IS NULL AND reason_code IS NOT NULL
+        """.trimIndent())
+        ensureColumn(db, "tank_readings", "temperature_corrected_volume", "REAL")
+        ensureColumn(db, "tank_readings", "variance_liters", "REAL")
+        ensureColumn(db, "tank_readings", "variance_percent", "REAL")
+        ensureColumn(db, "tank_dip_readings", "temperature_corrected_volume", "REAL")
+        ensureColumn(db, "tank_dip_readings", "water_level_mm", "REAL")
+        ensureColumn(db, "tank_dip_readings", "temperature_c", "REAL")
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS movement_audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                movement_id INTEGER,
+                station_id INTEGER,
+                source_table TEXT NOT NULL,
+                action TEXT NOT NULL,
+                user_id INTEGER,
+                reason_code_id INTEGER,
+                before_json TEXT,
+                after_json TEXT,
+                success INTEGER NOT NULL DEFAULT 1,
+                failure_reason TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """.trimIndent())
+        ensureColumn(db, "movement_audit_log", "station_id", "INTEGER")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_movement_audit_station ON movement_audit_log(station_id,id DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_inventory_movements_shift ON inventory_movements(shift_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_inventory_movements_batch ON inventory_movements(batch_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_product_batches_expiry ON product_batches(expiry_date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_movement_audit_movement ON movement_audit_log(movement_id, id DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_dips_station_tank_at ON fuel_dips(station_id,tank_id,dip_at DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_deliveries_station_tank_at ON fuel_deliveries(station_id,tank_id,delivered_at DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_shift_readings_shift_tank ON fuel_shift_readings(shift_id,tank_id)")
+        // Database-level guard covers all SQLite writers, not only the WebView bridge.
+        db.execSQL("DROP TRIGGER IF EXISTS trg_inventory_movements_locked_update")
+        db.execSQL("""
+            CREATE TRIGGER trg_inventory_movements_locked_update
+            BEFORE UPDATE ON inventory_movements
+            WHEN COALESCE(OLD.is_locked,0)=1
+            BEGIN SELECT RAISE(ABORT,'inventory_movement_locked'); END
+        """.trimIndent())
+        db.execSQL("DROP TRIGGER IF EXISTS trg_inventory_movements_locked_delete")
+        db.execSQL("""
+            CREATE TRIGGER trg_inventory_movements_locked_delete
+            BEFORE DELETE ON inventory_movements
+            WHEN COALESCE(OLD.is_locked,0)=1
+            BEGIN SELECT RAISE(ABORT,'inventory_movement_locked'); END
+        """.trimIndent())
+        db.execSQL("DROP TRIGGER IF EXISTS trg_inventory_movements_lock_approved")
+        db.execSQL("""
+            CREATE TRIGGER trg_inventory_movements_lock_approved
+            AFTER UPDATE OF approved_by,approved_at ON inventory_movements
+            WHEN NEW.approved_by IS NOT NULL OR NEW.approved_at IS NOT NULL
+            BEGIN
+                UPDATE inventory_movements SET is_locked=1 WHERE id=NEW.id AND COALESCE(is_locked,0)=0;
+            END
+        """.trimIndent())
+        db.execSQL("DROP TRIGGER IF EXISTS trg_movement_audit_no_update")
+        db.execSQL("""
+            CREATE TRIGGER trg_movement_audit_no_update
+            BEFORE UPDATE ON movement_audit_log BEGIN
+                SELECT RAISE(ABORT,'movement_audit_log is append-only');
+            END
+        """.trimIndent())
+        db.execSQL("DROP TRIGGER IF EXISTS trg_movement_audit_no_delete")
+        db.execSQL("""
+            CREATE TRIGGER trg_movement_audit_no_delete
+            BEFORE DELETE ON movement_audit_log BEGIN
+                SELECT RAISE(ABORT,'movement_audit_log is append-only');
+            END
+        """.trimIndent())
+        // Triggers ensure every direct inventory_movements INSERT/UPDATE/DELETE is recorded.
+        db.execSQL("DROP TRIGGER IF EXISTS trg_inventory_movement_audit_insert")
+        db.execSQL("""
+            CREATE TRIGGER trg_inventory_movement_audit_insert
+            AFTER INSERT ON inventory_movements BEGIN
+                INSERT INTO movement_audit_log(movement_id,station_id,source_table,action,user_id,reason_code_id,before_json,after_json)
+                VALUES(NEW.id,NEW.station_id,'inventory_movements','create',NEW.performed_by,NEW.reason_code_id,NULL,
+                       '{"id":'||NEW.id||',"movement_code":"' || replace(COALESCE(NEW.movement_code,''),'"','\\"') || '"}');
+            END
+        """.trimIndent())
+        db.execSQL("DROP TRIGGER IF EXISTS trg_inventory_movement_audit_update")
+        db.execSQL("""
+            CREATE TRIGGER trg_inventory_movement_audit_update
+            AFTER UPDATE ON inventory_movements BEGIN
+                INSERT INTO movement_audit_log(movement_id,station_id,source_table,action,user_id,reason_code_id,before_json,after_json)
+                VALUES(NEW.id,NEW.station_id,'inventory_movements','update',NEW.updated_by,NEW.reason_code_id,
+                       '{"id":'||OLD.id||',"status":"' || replace(COALESCE(OLD.status,''),'"','\\"') || '"}',
+                       '{"id":'||NEW.id||',"status":"' || replace(COALESCE(NEW.status,''),'"','\\"') || '"}');
+            END
+        """.trimIndent())
+        db.execSQL("DROP TRIGGER IF EXISTS trg_inventory_movement_audit_delete")
+        db.execSQL("""
+            CREATE TRIGGER trg_inventory_movement_audit_delete
+            AFTER DELETE ON inventory_movements BEGIN
+                INSERT INTO movement_audit_log(movement_id,station_id,source_table,action,user_id,reason_code_id,before_json,after_json)
+                VALUES(OLD.id,OLD.station_id,'inventory_movements','delete',OLD.deleted_by,OLD.reason_code_id,
+                       '{"id":'||OLD.id||',"status":"' || replace(COALESCE(OLD.status,''),'"','\\"') || '"}',NULL);
+            END
+        """.trimIndent())
+        // Approved legacy rows are locked without changing their business fields.
+        db.execSQL("""
+            UPDATE inventory_movements SET is_locked=1
+             WHERE COALESCE(is_locked,0)=0 AND (approved_by IS NOT NULL OR approved_at IS NOT NULL)
+        """.trimIndent())
+    }
+
+
+    fun getInventoryMovementAuditLog(stationId: Long, limit: Int = 100, offset: Int = 0): JSONArray {
+        return AuditLogger.page(readableDatabase, stationId, limit, offset)
     }
 
     private fun ensurePhase3ReceiptSchema(db: SQLiteDatabase) {
@@ -23471,7 +23721,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         if (screenKey in setOf("tanks", "pumps", "meter_readings", "tank_level_log", "fuel_quality_tests", "calibration_records")) validateModule006Record(screenKey, data)
         dbLock.lock()
         return try {
-            val oldRow = if (screenKey in setOf("attendance", "employees")) operationalRowJson(screenKey, id) else null
+            val oldRow = if (screenKey in setOf("attendance", "employees", "inventory_movements")) operationalRowJson(screenKey, id) else null
+            if (screenKey == "inventory_movements") {
+                val locked = writableDatabase.rawQuery(
+                    "SELECT COALESCE(is_locked,0) FROM inventory_movements WHERE id=?",
+                    arrayOf(id.toString())
+                ).use { c -> c.moveToFirst() && c.getInt(0) == 1 }
+                if (locked) {
+                    AuditLogger.recordFailedAttempt(writableDatabase, id, actorId, "update", "الحركة معتمدة ومقفلة")
+                    throw IllegalStateException("لا يمكن تعديل حركة مخزنية معتمدة ومقفلة")
+                }
+            }
             val values = ContentValues()
             for (key in spec.columns) if (data.has(key) && key != "created_by") putOperationalValue(values, key, data.opt(key))
             if (spec.hasUpdatedAt) values.put("updated_at", getCurrentDateTime())
@@ -23569,7 +23829,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = writableDatabase
-            val oldRow = if (screenKey in setOf("attendance", "employees")) operationalRowJson(screenKey, id) else null
+            val oldRow = if (screenKey in setOf("attendance", "employees", "inventory_movements")) operationalRowJson(screenKey, id) else null
+            if (screenKey == "inventory_movements") {
+                val locked = db.rawQuery(
+                    "SELECT COALESCE(is_locked,0) FROM inventory_movements WHERE id=?",
+                    arrayOf(id.toString())
+                ).use { c -> c.moveToFirst() && c.getInt(0) == 1 }
+                if (locked) {
+                    AuditLogger.recordFailedAttempt(db, id, actorId, "delete", "الحركة معتمدة ومقفلة")
+                    throw IllegalStateException("لا يمكن حذف حركة مخزنية معتمدة ومقفلة")
+                }
+            }
             val fleetScope = if (stationId != null && stationId > 0) fleetStationPredicate(screenKey, stationId) else null
             val deliveryScoped = screenKey == "deliveries" && stationId != null && stationId > 0
             val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id") && screenKey != "calibration_records" && fleetScope == null
@@ -23643,7 +23913,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = writableDatabase
-            val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
+            val oldRow = if (screenKey in setOf("attendance", "inventory_movements")) operationalRowJson(screenKey, id) else null
+            if (screenKey == "inventory_movements") {
+                val locked = db.rawQuery("SELECT COALESCE(is_locked,0) FROM inventory_movements WHERE id=?", arrayOf(id.toString())).use { c -> c.moveToFirst() && c.getInt(0) == 1 }
+                if (locked) {
+                    AuditLogger.recordFailedAttempt(db, id, actorId, "resolve", "الحركة معتمدة ومقفلة")
+                    throw IllegalStateException("لا يمكن اعتماد أو تسوية حركة مخزنية مقفلة")
+                }
+            }
             val values = ContentValues()
             val fleetScope = if (stationId != null && stationId > 0) fleetStationPredicate(screenKey, stationId) else null
             val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id") && screenKey != "calibration_records" && fleetScope == null
