@@ -8,6 +8,7 @@ assert(db.includes('kpis.put("current_shift_id", shiftId)'), 'يجب أن يعي
 assert(db.includes('AS has_reading'), 'يجب تمييز رصيد الدفتر عن قراءة الخزان الفعلية');
 assert(screen.includes('window.currentWetShiftId = Number(kpis.current_shift_id || 0)'), 'يجب أن تحفظ الواجهة معرف الوردية من SQLite');
 assert(screen.includes("shift_id:Number(window.currentWetShiftId || 0)"), 'يجب ربط قراءة الغمس بالوردية المفتوحة عند وجودها');
+assert(db.includes('require(shiftId > 0L) { "يجب ربط قراءة الغمس بورديّة مفتوحة" }'), 'يجب أن يفرض SQLite وجود معرف وردية صريح قبل حفظ قراءة الغمس');
 const reconcile = screen.match(/async function reconcileWetTank\(tankId\) \{([\s\S]*?)\n\}/)?.[1] || '';
 assert(reconcile.includes('لا توجد وردية مفتوحة'), 'يجب منع التسوية عند عدم وجود وردية مفتوحة');
 assert(reconcile.includes('shift_id:activeShiftId'), 'يجب استخدام معرف الوردية المحملة من المصدر الأصلي');

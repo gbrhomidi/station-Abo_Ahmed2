@@ -31330,6 +31330,7 @@ private fun postSalesReversalJournal(
         val shiftId = data.optLong("shift_id", 0L)
         require(stationScopeId > 0 && tankId > 0 && dipCm.isFinite() && dipCm >= 0.0 &&
             dipLiters.isFinite() && dipLiters >= 0.0) { "قراءة الغمس بالسنتيمتر واللتر مطلوبة" }
+        require(shiftId > 0L) { "يجب ربط قراءة الغمس بورديّة مفتوحة" }
         dbLock.lock()
         return try {
             val db = writableDatabase
@@ -31342,10 +31343,11 @@ private fun postSalesReversalJournal(
                         FROM tanks t WHERE t.id=? AND t.station_id=? AND t.is_deleted=0""",
                     arrayOf(tankId.toString(), tankId.toString(), stationScopeId.toString())
                 ).use { c -> require(c.moveToFirst()) { "الخزان غير موجود أو خارج نطاق المحطة" }; book = c.getDouble(0) }
-                if (shiftId > 0) db.rawQuery(
+                val shiftValidationAt = getCurrentDateTime()
+                db.rawQuery(
                     """SELECT 1 FROM shifts WHERE id=? AND station_id=? AND status='open' AND is_deleted=0
                         AND start_time<=? AND (end_time IS NULL OR end_time>=?)""",
-                    arrayOf(shiftId.toString(), stationScopeId.toString(), getCurrentDateTime(), getCurrentDateTime())
+                    arrayOf(shiftId.toString(), stationScopeId.toString(), shiftValidationAt, shiftValidationAt)
                 ).use { c -> require(c.moveToFirst()) { "الوردية غير مفتوحة أو خارج نطاق المحطة/الزمن" } }
                 val variance = dipLiters - book
                 val pct = if (book == 0.0) if (variance == 0.0) 0.0 else 100.0 else variance / book * 100.0

@@ -187,6 +187,33 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun dipReadingRequiresAnExplicitOpenShift() {
+        val tankId = createLowFuelTank(1, "dip-missing-shift")
+        val result = runCatching {
+            helper.insertDipReading(
+                JSONObject().put("tank_id", tankId)
+                    .put("dip_cm", 100.0)
+                    .put("dip_liters", 500.0),
+                1,
+                actorId
+            )
+        }
+        assertTrue("A dip reading without an explicit shift must be rejected", result.isFailure)
+        assertTrue(
+            "The rejection must explain the missing open shift",
+            result.exceptionOrNull()?.message.orEmpty().contains("ورديّة مفتوحة")
+        )
+        assertEquals(
+            "Rejected readings must not be persisted",
+            0,
+            helper.writableDatabase.rawQuery(
+                "SELECT COUNT(*) FROM tank_dip_readings WHERE tank_id=?",
+                arrayOf(tankId.toString())
+            ).use { it.moveToFirst(); it.getInt(0) }
+        )
+    }
+
+    @Test
     fun dryStockLocationScopesBatchQuantityAndNearestExpiry() {
         val db = helper.writableDatabase
         val warehouseId = helper.ensureOperationalWarehouse(1)
