@@ -31040,6 +31040,11 @@ private fun postSalesReversalJournal(
             """.trimIndent(), arrayOf(stationScopeId.toString())).use { cursorToJsonArray(it) }
             for (i in 0 until tanks.length()) {
                 val tank = tanks.getJSONObject(i)
+                // cursorToJsonArray represents SQL NULL as an empty string; restore
+                // explicit JSON nulls for sensor fields so clients never treat them as zero.
+                for (field in listOf("temperature_c", "water_level_mm", "reading_at")) {
+                    if (tank.optString(field, "").isBlank()) tank.put(field, JSONObject.NULL)
+                }
                 val temperature = tank.optString("temperature_c", "").toDoubleOrNull()
                 if (temperature != null && temperature.isFinite()) {
                     val alpha = db.rawQuery("SELECT coefficient_exp FROM fuel_temperature_coefficients WHERE fuel_type_id=?", arrayOf(tank.optLong("fuel_type_id").toString())).use { c -> require(c.moveToFirst()) { "لا يوجد معامل تمدد معاير لنوع الوقود ${tank.optLong("fuel_type_id")}" }; c.getDouble(0) }

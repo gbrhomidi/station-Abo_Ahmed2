@@ -1588,6 +1588,7 @@ class InventoryScreensRobolectricTest {
         assertTrue(wetStock.getJSONObject("kpis").has("current_shift_id"))
         assertEquals(0, wetTank.optInt("has_reading"))
         assertTrue(wetTank.isNull("water_level_mm"))
+        assertTrue(wetTank.isNull("temperature_c"))
         assertTrue(wetTank.isNull("standard_liters_15c"))
 
         // These are the exact read paths that previously failed with SQLITE_ERROR.
