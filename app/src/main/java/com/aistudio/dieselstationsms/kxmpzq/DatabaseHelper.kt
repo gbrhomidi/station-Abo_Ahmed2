@@ -2288,6 +2288,35 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 SELECT RAISE(ABORT,'movement_audit_log is append-only');
             END
         """.trimIndent())
+        // Build audit snapshots without SQLite JSON1. Android/Robolectric SQLite does not
+        // guarantee json_object(), so the trigger must use core string functions only.
+        fun movementSnapshot(alias: String): String {
+            val numeric = setOf(
+                "id", "product_id", "station_id", "warehouse_id", "quantity_before",
+                "quantity_change", "quantity_after", "unit_cost", "total_cost",
+                "reference_id", "reason_code_id", "performed_by", "approved_by",
+                "created_by", "updated_by", "deleted_by", "is_deleted", "sync_version",
+                "batch_id", "shift_id", "is_locked"
+            )
+            val columns = listOf(
+                "id", "uuid", "movement_code", "product_id", "station_id", "warehouse_id",
+                "movement_type", "movement_subtype", "quantity_before", "quantity_change",
+                "quantity_after", "unit_cost", "total_cost", "reference_type", "reference_id",
+                "reference_code", "from_location", "to_location", "reason", "reason_code",
+                "reason_code_id", "performed_by", "approved_by", "approved_at", "status",
+                "created_at", "updated_at", "deleted_at", "created_by", "updated_by",
+                "deleted_by", "is_deleted", "sync_status", "sync_version", "device_id",
+                "remarks", "extra_data", "batch_id", "shift_id", "is_locked"
+            )
+            fun value(column: String): String {
+                val ref = "$alias.$column"
+                if (column in numeric) return "CASE WHEN $ref IS NULL THEN 'null' ELSE CAST($ref AS TEXT) END"
+                return "CASE WHEN $ref IS NULL THEN 'null' ELSE char(34)||replace(replace(replace(CAST($ref AS TEXT),char(92),char(92)||char(92)),char(34),char(92)||char(34)),char(10),char(92)||'n')||char(34) END"
+            }
+            return "'{'||" + columns.joinToString("||','||") {
+                "char(34)||'$it'||char(34)||':'||${value(it)}"
+            } + "||'}'"
+        }
         // Triggers ensure every direct inventory_movements INSERT/UPDATE/DELETE is recorded.
         db.execSQL("DROP TRIGGER IF EXISTS trg_inventory_movement_audit_insert")
         db.execSQL("""
@@ -2295,23 +2324,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             AFTER INSERT ON inventory_movements BEGIN
                 INSERT INTO movement_audit_log(movement_id,station_id,source_table,action,user_id,reason_code_id,before_json,after_json)
                 VALUES(NEW.id,NEW.station_id,'inventory_movements','create',NEW.performed_by,NEW.reason_code_id,NULL,
-                       json_object(
-                           'id',NEW.id,'uuid',NEW.uuid,'movement_code',NEW.movement_code,
-                           'product_id',NEW.product_id,'station_id',NEW.station_id,'warehouse_id',NEW.warehouse_id,
-                           'movement_type',NEW.movement_type,'movement_subtype',NEW.movement_subtype,
-                           'quantity_before',NEW.quantity_before,'quantity_change',NEW.quantity_change,
-                           'quantity_after',NEW.quantity_after,'unit_cost',NEW.unit_cost,'total_cost',NEW.total_cost,
-                           'reference_type',NEW.reference_type,'reference_id',NEW.reference_id,
-                           'reference_code',NEW.reference_code,'from_location',NEW.from_location,
-                           'to_location',NEW.to_location,'reason',NEW.reason,'reason_code',NEW.reason_code,
-                           'reason_code_id',NEW.reason_code_id,'performed_by',NEW.performed_by,
-                           'approved_by',NEW.approved_by,'approved_at',NEW.approved_at,'status',NEW.status,
-                           'created_at',NEW.created_at,'updated_at',NEW.updated_at,'deleted_at',NEW.deleted_at,
-                           'created_by',NEW.created_by,'updated_by',NEW.updated_by,'deleted_by',NEW.deleted_by,
-                           'is_deleted',NEW.is_deleted,'sync_status',NEW.sync_status,'sync_version',NEW.sync_version,
-                           'device_id',NEW.device_id,'remarks',NEW.remarks,'extra_data',NEW.extra_data,
-                           'batch_id',NEW.batch_id,'shift_id',NEW.shift_id,'is_locked',NEW.is_locked
-                       ));
+                       ${movementSnapshot("NEW")});
             END
         """.trimIndent())
         db.execSQL("DROP TRIGGER IF EXISTS trg_inventory_movement_audit_update")
@@ -2324,40 +2337,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                             WHEN COALESCE(OLD.is_deleted,0)=0 AND COALESCE(NEW.is_deleted,0)=1 THEN 'archive'
                             ELSE 'update' END,
                        COALESCE(NEW.updated_by,NEW.approved_by,NEW.deleted_by,NEW.performed_by),NEW.reason_code_id,
-                       json_object(
-                           'id',OLD.id,'uuid',OLD.uuid,'movement_code',OLD.movement_code,
-                           'product_id',OLD.product_id,'station_id',OLD.station_id,'warehouse_id',OLD.warehouse_id,
-                           'movement_type',OLD.movement_type,'movement_subtype',OLD.movement_subtype,
-                           'quantity_before',OLD.quantity_before,'quantity_change',OLD.quantity_change,
-                           'quantity_after',OLD.quantity_after,'unit_cost',OLD.unit_cost,'total_cost',OLD.total_cost,
-                           'reference_type',OLD.reference_type,'reference_id',OLD.reference_id,
-                           'reference_code',OLD.reference_code,'from_location',OLD.from_location,
-                           'to_location',OLD.to_location,'reason',OLD.reason,'reason_code',OLD.reason_code,
-                           'reason_code_id',OLD.reason_code_id,'performed_by',OLD.performed_by,
-                           'approved_by',OLD.approved_by,'approved_at',OLD.approved_at,'status',OLD.status,
-                           'created_at',OLD.created_at,'updated_at',OLD.updated_at,'deleted_at',OLD.deleted_at,
-                           'created_by',OLD.created_by,'updated_by',OLD.updated_by,'deleted_by',OLD.deleted_by,
-                           'is_deleted',OLD.is_deleted,'sync_status',OLD.sync_status,'sync_version',OLD.sync_version,
-                           'device_id',OLD.device_id,'remarks',OLD.remarks,'extra_data',OLD.extra_data,
-                           'batch_id',OLD.batch_id,'shift_id',OLD.shift_id,'is_locked',OLD.is_locked
-                       ),
-                       json_object(
-                           'id',NEW.id,'uuid',NEW.uuid,'movement_code',NEW.movement_code,
-                           'product_id',NEW.product_id,'station_id',NEW.station_id,'warehouse_id',NEW.warehouse_id,
-                           'movement_type',NEW.movement_type,'movement_subtype',NEW.movement_subtype,
-                           'quantity_before',NEW.quantity_before,'quantity_change',NEW.quantity_change,
-                           'quantity_after',NEW.quantity_after,'unit_cost',NEW.unit_cost,'total_cost',NEW.total_cost,
-                           'reference_type',NEW.reference_type,'reference_id',NEW.reference_id,
-                           'reference_code',NEW.reference_code,'from_location',NEW.from_location,
-                           'to_location',NEW.to_location,'reason',NEW.reason,'reason_code',NEW.reason_code,
-                           'reason_code_id',NEW.reason_code_id,'performed_by',NEW.performed_by,
-                           'approved_by',NEW.approved_by,'approved_at',NEW.approved_at,'status',NEW.status,
-                           'created_at',NEW.created_at,'updated_at',NEW.updated_at,'deleted_at',NEW.deleted_at,
-                           'created_by',NEW.created_by,'updated_by',NEW.updated_by,'deleted_by',NEW.deleted_by,
-                           'is_deleted',NEW.is_deleted,'sync_status',NEW.sync_status,'sync_version',NEW.sync_version,
-                           'device_id',NEW.device_id,'remarks',NEW.remarks,'extra_data',NEW.extra_data,
-                           'batch_id',NEW.batch_id,'shift_id',NEW.shift_id,'is_locked',NEW.is_locked
-                       ));
+                       ${movementSnapshot("OLD")},
+                       ${movementSnapshot("NEW")});
             END
         """.trimIndent())
         db.execSQL("DROP TRIGGER IF EXISTS trg_inventory_movement_audit_delete")
@@ -2367,23 +2348,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 INSERT INTO movement_audit_log(movement_id,station_id,source_table,action,user_id,reason_code_id,before_json,after_json)
                 VALUES(OLD.id,OLD.station_id,'inventory_movements','delete',
                        COALESCE(OLD.deleted_by,OLD.updated_by,OLD.performed_by),OLD.reason_code_id,
-                       json_object(
-                           'id',OLD.id,'uuid',OLD.uuid,'movement_code',OLD.movement_code,
-                           'product_id',OLD.product_id,'station_id',OLD.station_id,'warehouse_id',OLD.warehouse_id,
-                           'movement_type',OLD.movement_type,'movement_subtype',OLD.movement_subtype,
-                           'quantity_before',OLD.quantity_before,'quantity_change',OLD.quantity_change,
-                           'quantity_after',OLD.quantity_after,'unit_cost',OLD.unit_cost,'total_cost',OLD.total_cost,
-                           'reference_type',OLD.reference_type,'reference_id',OLD.reference_id,
-                           'reference_code',OLD.reference_code,'from_location',OLD.from_location,
-                           'to_location',OLD.to_location,'reason',OLD.reason,'reason_code',OLD.reason_code,
-                           'reason_code_id',OLD.reason_code_id,'performed_by',OLD.performed_by,
-                           'approved_by',OLD.approved_by,'approved_at',OLD.approved_at,'status',OLD.status,
-                           'created_at',OLD.created_at,'updated_at',OLD.updated_at,'deleted_at',OLD.deleted_at,
-                           'created_by',OLD.created_by,'updated_by',OLD.updated_by,'deleted_by',OLD.deleted_by,
-                           'is_deleted',OLD.is_deleted,'sync_status',OLD.sync_status,'sync_version',OLD.sync_version,
-                           'device_id',OLD.device_id,'remarks',OLD.remarks,'extra_data',OLD.extra_data,
-                           'batch_id',OLD.batch_id,'shift_id',OLD.shift_id,'is_locked',OLD.is_locked
-                       ),NULL);
+                       ${movementSnapshot("OLD")},NULL);
             END
         """.trimIndent())
         // Approved legacy rows are locked without changing their business fields.

@@ -115,8 +115,20 @@ class MovementInfrastructureV75Test {
 
     @Test fun movementAuditStoresFullSnapshotsAndLabelsApprovalAndArchive() {
         val db = helper.writableDatabase
+        val roleId = db.rawQuery("SELECT id FROM roles ORDER BY id LIMIT 1", null).use {
+            assertTrue("seeded role required", it.moveToFirst()); it.getLong(0)
+        }
         val userId = db.rawQuery("SELECT id FROM users ORDER BY id LIMIT 1", null).use {
-            assertTrue("seeded test user required", it.moveToFirst()); it.getLong(0)
+            if (it.moveToFirst()) it.getLong(0) else {
+                db.insertOrThrow("users", null, android.content.ContentValues().apply {
+                    put("uuid", java.util.UUID.randomUUID().toString())
+                    put("username", "movement-audit-test")
+                    put("password_hash", "synthetic-test-hash")
+                    put("full_name", "Movement Audit Test")
+                    put("role_id", roleId)
+                    put("station_id", 1)
+                })
+            }
         }
         val productId = db.rawQuery("SELECT id FROM products WHERE station_id=1 AND is_deleted=0 ORDER BY id LIMIT 1", null).use {
             assertTrue("seeded product required", it.moveToFirst()); it.getLong(0)
