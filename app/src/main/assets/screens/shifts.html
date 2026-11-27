@@ -3007,6 +3007,14 @@
 
             </div>
 
+            <div class="form-grid report-filter-grid">
+                <div class="form-group"><label class="form-label" for="reportStatus">الحالة</label><select id="reportStatus" class="form-input"><option value="">كل الحالات</option><option value="open">مفتوحة</option><option value="closed">مغلقة</option><option value="verified">مراجعة</option><option value="approved">معتمدة</option></select></div>
+                <div class="form-group"><label class="form-label" for="reportShiftType">نوع الوردية</label><select id="reportShiftType" class="form-input"><option value="">كل الأنواع</option><option value="morning">صباحية</option><option value="evening">مسائية</option><option value="night">ليلية</option><option value="full_day">يوم كامل</option></select></div>
+                <div class="form-group"><label class="form-label" for="reportCashier">أمين الصندوق</label><select id="reportCashier" class="form-input"><option value="">كل الأمناء</option></select></div>
+                <div class="form-group"><label class="form-label" for="reportManager">المدير</label><select id="reportManager" class="form-input"><option value="">كل المديرين</option></select></div>
+                <div class="form-group full"><label class="form-label" for="reportSearch">بحث في رمز الوردية أو المحطة أو الموظف</label><input id="reportSearch" class="form-input" type="search" placeholder="اكتب كلمة البحث"></div>
+                <div class="form-group full"><label class="form-label" for="reportType">نوع التقرير</label><select id="reportType" class="form-input"><option value="summary">ملخص مالي وتشغيلي</option><option value="daily">تقرير يومي تفصيلي</option><option value="cash">تقرير النقدية والانحراف</option><option value="sales">تقرير المبيعات ووسائل الدفع</option><option value="attendance">تقرير المسؤولين والورديات</option></select></div>
+            </div>
 
             <div class="actions">
 
@@ -6044,12 +6052,10 @@
 
                 const result =
                     await invoke(
-                        CURRENT_CONTRACTS.update,
+                        "closeShiftRecordTyped",
                         [
                             Number(id),
-                            JSON.stringify(
-                                payload
-                            )
+                            JSON.stringify(payload)
                         ]
                     );
 
@@ -6183,6 +6189,14 @@
            REPORT
         ========================================================= */
 
+        function populateReportFilters(){
+            const cashiers = state.options?.cashiers || [];
+            const managers = state.options?.managers || [];
+            const fill = (id, rows, labelKeys) => { const el=$(id); if(!el) return; const previous=el.value; el.innerHTML='<option value="">الكل</option>'+rows.map(r=>`<option value="${esc(r.id ?? r.employee_id ?? '')}">${esc(labelKeys.map(k=>r[k]).find(Boolean)||r.name||r.full_name||r.full_name_ar||'—')}</option>`).join(''); if(previous) el.value=previous; };
+            fill('reportCashier', cashiers, ['full_name_ar','full_name','display_name']);
+            fill('reportManager', managers, ['full_name_ar','full_name','display_name']);
+        }
+
         function openReport(){
 
             $("reportFrom")
@@ -6218,6 +6232,7 @@
                 `;
 
 
+            populateReportFilters();
             $("reportOverlay")
                 .classList
                 .add(
@@ -6271,15 +6286,19 @@
                         to || "",
 
                     search:
-                        $("searchInput")
-                            .value ||
+                        $("reportSearch")?.value ||
+                        $("searchInput")?.value ||
                         "",
 
                     include_archived:
                         true,
-
+                    status: $("reportStatus")?.value || "",
+                    shift_type: $("reportShiftType")?.value || "",
+                    cashier_id: Number($("reportCashier")?.value || 0),
+                    manager_id: Number($("reportManager")?.value || 0),
+                    report_type: $("reportType")?.value || "summary",
                     limit:
-                        1000
+                        500
 
                 };
 
@@ -6455,25 +6474,18 @@
 
 
                     <div class="report-box">
-
-                        <strong>
-                            ${open.toLocaleString("ar")}
-                        </strong>
-
-                        <span>
-                            الورديات المفتوحة
-                        </span>
-
+                        <strong>${open.toLocaleString("ar")}</strong>
+                        <span>الورديات المفتوحة</span>
                     </div>
+                    <div class="report-box"><strong>${money(rows.reduce((sum,row)=>sum+number(row.total_cash),0))}</strong><span>المبيعات النقدية</span></div>
+                    <div class="report-box"><strong>${money(rows.reduce((sum,row)=>sum+number(row.total_credit_card)+number(row.total_bank_transfer)+number(row.total_credit_sales)+number(row.total_cheque)+number(row.total_other),0))}</strong><span>المدفوعات غير النقدية</span></div>
 
                 </div>
 
 
+                <div class="report-row"><strong>نوع التقرير:</strong> ${esc($("reportType")?.selectedOptions?.[0]?.textContent || "ملخص مالي وتشغيلي")}</div>
                 <div class="report-row">
-
-                    <strong>
-                        صافي الانحراف النقدي:
-                    </strong>
+                    <strong>صافي الانحراف النقدي:</strong>
 
                     ${money(variance)}
 

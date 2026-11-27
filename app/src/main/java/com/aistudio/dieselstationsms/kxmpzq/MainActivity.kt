@@ -13482,7 +13482,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
         @JavascriptInterface
-        fun generateShiftReport(jsonData: String = "{}") = operationalReport("sales", "shifts", jsonData)
+        fun generateShiftReport(jsonData: String = "{}"): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val params = JSONObject(jsonData.ifBlank { "{}" }).apply { put("station_id", stationId) }
+                dataResponse(db.getShiftRecordsTyped(params))
+            } catch (e: Exception) {
+                DebugLogger.logException("GenerateShiftReport", e)
+                errorResponse(e.message ?: "تعذر توليد تقرير الورديات من SQLite")
+            }
+        }
         @JavascriptInterface
         fun saveShiftRecord(jsonData: String) = operationalSave("sales", "shifts", jsonData)
         @JavascriptInterface
@@ -13529,6 +13540,30 @@ fun getDashboardStats(jsonData: String = "{}"): String {
       errorResponse(e.message)
   }
         }
+        @JavascriptInterface
+        fun closeShiftRecordTyped(id: Long, jsonData: String = "{}"): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val payload = JSONObject(jsonData.ifBlank { "{}" })
+                val closed = db.closeShift(
+                    shiftId = id.toInt(),
+                    stationScopeId = stationId,
+                    closingCash = payload.optDouble("closing_cash", 0.0),
+                    closingBank = payload.optDouble("closing_bank", 0.0),
+                    totalSales = payload.optDouble("total_sales", 0.0),
+                    operator = activity.currentUserId.toString(),
+                    closedBy = activity.currentUserId
+                )
+                if (!closed) errorResponse("لم يتم إغلاق الوردية: قد تكون مغلقة أو خارج نطاق المحطة")
+                else JSONObject().put("success", true).put("id", id).put("message", "تم إغلاق الوردية وتحديث بياناتها في SQLite والتحقق منها").toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("CloseShiftTyped", e)
+                errorResponse(e.message ?: "فشل إغلاق الوردية؛ لم يتم اعتماد التغيير")
+            }
+        }
+
         @JavascriptInterface
         fun updateShiftRecord(id: Long, jsonData: String) = operationalUpdate("sales", "shifts", id, jsonData)
         @JavascriptInterface

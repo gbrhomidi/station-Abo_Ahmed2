@@ -10532,11 +10532,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.beginTransaction()
         try {
             var openingCash = 0.0
+            var openingCredit = 0.0
             var startTime = ""
-            db.rawQuery("SELECT opening_cash, start_time FROM shifts WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'open'", arrayOf(shiftId.toString(), stationScopeId.toString())).use { cursor ->
+            db.rawQuery("SELECT opening_cash, opening_credit, start_time FROM shifts WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'open'", arrayOf(shiftId.toString(), stationScopeId.toString())).use { cursor ->
                 if (!cursor.moveToFirst()) return false
                 openingCash = cursor.getDouble(0)
-                startTime = cursor.getString(1)
+                openingCredit = cursor.getDouble(1)
+                startTime = cursor.getString(2)
             }
             val closedAt = getCurrentDateTime()
             var total = 0.0
@@ -10546,15 +10548,27 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             var transfer = 0.0
             var credit = 0.0
             var other = 0.0
+            var fuelSales = 0.0
+            var productSales = 0.0
+            var serviceSales = 0.0
+            var discounts = 0.0
+            var tax = 0.0
+            var vat = 0.0
+            var fuelLiters = 0.0
             db.rawQuery("""SELECT COALESCE(SUM(net_amount),0),
                     COALESCE(SUM(CASE WHEN payment_method='cash' AND invoice_type <> 'credit_note' AND status <> 'refunded' AND payment_status <> 'refunded' THEN net_amount ELSE 0 END),0),
                     COALESCE(SUM(CASE WHEN payment_method='credit_card' THEN net_amount ELSE 0 END),0),
                     COALESCE(SUM(CASE WHEN payment_method='bank_transfer' THEN net_amount ELSE 0 END),0),
                     COALESCE(SUM(CASE WHEN payment_method='credit' THEN net_amount ELSE 0 END),0),
-                    COALESCE(SUM(CASE WHEN payment_method NOT IN ('cash','credit_card','bank_transfer','credit') THEN net_amount ELSE 0 END),0)
+                    COALESCE(SUM(CASE WHEN payment_method NOT IN ('cash','credit_card','bank_transfer','credit') THEN net_amount ELSE 0 END),0),
+                    COALESCE(SUM(CASE WHEN COALESCE(fuel_type_id,0)>0 OR LOWER(COALESCE(sale_type,''))='fuel' THEN net_amount ELSE 0 END),0),
+                    COALESCE(SUM(CASE WHEN COALESCE(product_id,0)>0 OR LOWER(COALESCE(sale_type,''))='product' THEN net_amount ELSE 0 END),0),
+                    COALESCE(SUM(CASE WHEN LOWER(COALESCE(sale_type,''))='service' OR COALESCE(service_fee,0)>0 THEN net_amount ELSE 0 END),0),
+                    COALESCE(SUM(discount_amount),0), COALESCE(SUM(tax_amount),0), COALESCE(SUM(vat_amount),0)
                     FROM sales_transactions WHERE shift_id=? AND station_id=? AND status='completed' AND is_deleted=0""", arrayOf(shiftId.toString(), stationScopeId.toString())).use { cursor ->
-                if (cursor.moveToFirst()) { total = cursor.getDouble(0); cashSales = cursor.getDouble(1); card = cursor.getDouble(2); transfer = cursor.getDouble(3); credit = cursor.getDouble(4); other = cursor.getDouble(5) }
+                if (cursor.moveToFirst()) { total = cursor.getDouble(0); cashSales = cursor.getDouble(1); card = cursor.getDouble(2); transfer = cursor.getDouble(3); credit = cursor.getDouble(4); other = cursor.getDouble(5); fuelSales = cursor.getDouble(6); productSales = cursor.getDouble(7); serviceSales = cursor.getDouble(8); discounts = cursor.getDouble(9); tax = cursor.getDouble(10); vat = cursor.getDouble(11) }
             }
+            db.rawQuery("SELECT COALESCE(SUM(quantity),0) FROM fuel_sales WHERE shift_id=? AND station_id=? AND is_deleted=0 AND status NOT IN ('cancelled','reversed')", arrayOf(shiftId.toString(), stationScopeId.toString())).use { cursor -> if (cursor.moveToFirst()) fuelLiters = cursor.getDouble(0) }
             db.rawQuery("""SELECT COALESCE(SUM(ABS(net_amount)),0) FROM sales_transactions
                 WHERE shift_id=? AND station_id=? AND is_deleted=0 AND payment_method='cash'
                   AND (invoice_type='credit_note' OR status='refunded' OR payment_status='refunded')""", arrayOf(shiftId.toString(), stationScopeId.toString())).use { cursor ->
@@ -10594,6 +10608,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                   ))
                   AND COALESCE(cm.reference_type,'') NOT IN
                       ('cash_deposit','cash_deposit_reversal','expense','expense_reversal')
+                  AND COALESCE(cm.description,'') NOT IN ('دفع مصروف','إيداع في البنك')
                   AND datetime(cm.created_at) > datetime(?) AND datetime(cm.created_at) <= datetime(?)""", arrayOf(stationScopeId.toString(), startTime, closedAt)).use { cursor ->
                 if (cursor.moveToFirst()) { cashMovementsIn = cursor.getDouble(0); cashMovementsOut = cursor.getDouble(1) }
             }
@@ -10611,6 +10626,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("closing_cash", closingCash)
                 put("closing_bank", closingBank)
                 put("total_sales", total)
+                put("total_fuel_sales", fuelSales)
+                put("total_product_sales", productSales)
+                put("total_service_sales", serviceSales)
+                put("total_discounts", discounts)
+                put("total_tax", tax)
+                put("total_vat", vat)
+                put("total_fuel_liters", fuelLiters)
+                put("closing_credit", openingCredit + credit)
                 put("total_cash", cash)
                 put("total_credit_card", card)
                 put("total_bank_transfer", transfer)
@@ -10643,7 +10666,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     .put("closing_bank", closingBank).put("total_sales", total)
                     .put("total_cash", cash).put("cash_variance", calculateCashVariance(openingCash, cash, closingCash))
                     .put("closed_at", closedAt).put("closed_by", closedBy).toString())
-                put("changed_columns", "status,end_time,closing_cash,closing_bank,total_sales,total_cash,cash_variance,closed_at,closed_by")
+                put("changed_columns", "status,end_time,duration_minutes,closing_cash,closing_bank,closing_credit,total_sales,total_fuel_sales,total_product_sales,total_service_sales,total_discounts,total_tax,total_vat,total_cash,total_credit_card,total_bank_transfer,total_credit_sales,total_cheque,total_other,total_fuel_liters,cash_variance,closed_at,closed_by")
                 put("created_at", closedAt)
             })
             logActivity(operator, "shift_close", "إغلاق الوردية $shiftId")
@@ -21947,15 +21970,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     """.trimIndent()
                 repeat(9) { args += "%$search%" }
             }
-            val status = params.optString("status", "").trim()
+            val status = params.optString("status", "").trim().lowercase(Locale.ROOT)
             if (status.isNotBlank()) {
-                when (status) {
-                    "open", "closed", "cancelled" -> {
-                        where += "sh.status =?"
-                        args += status
-                    }
-                }
+                require(status in setOf("open", "closed", "cancelled", "verified", "approved")) { "حالة الوردية غير صالحة" }
+                where += "LOWER(CAST(sh.status AS TEXT)) = ?"
+                args += status
             }
+            val shiftType = params.optString("shift_type", "").trim().lowercase(Locale.ROOT)
+            if (shiftType.isNotBlank()) {
+                require(shiftType in setOf("morning", "evening", "night", "full_day")) { "نوع الوردية غير صالح" }
+                where += "LOWER(sh.shift_type) = ?"
+                args += shiftType
+            }
+            val cashierId = params.optLong("cashier_id", 0L)
+            if (cashierId > 0L) { where += "sh.cashier_employee_id = ?"; args += cashierId.toString() }
+            val managerId = params.optLong("manager_id", 0L)
+            if (managerId > 0L) { where += "sh.manager_id = ?"; args += managerId.toString() }
             val fromDate = params.optString(
                 "from_date", params.optString("start_date", "")
             ).trim()
@@ -21980,7 +22010,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 " WHERE " + where.joinToString(" AND ")
             }
             val query = """
-                SELECT sh.*, st.station_name AS station_name, st.station_name_ar AS station_name_ar, manager.full_name AS manager_name, manager.full_name_ar AS manager_name_ar, cashier_employee.full_name AS cashier_name, cashier_employee.full_name_ar AS cashier_name_ar FROM shifts sh LEFT JOIN stations st ON st.id = sh.station_id LEFT JOIN employees manager ON manager.id = sh.manager_id LEFT JOIN employees cashier_employee ON cashier_employee.id = sh.cashier_employee_id $whereSql ORDER BY sh.id DESC LIMIT? OFFSET?
+                SELECT sh.*, st.station_name AS station_name, st.station_name_ar AS station_name_ar,
+                       manager.full_name AS manager_name, manager.full_name_ar AS manager_name_ar,
+                       COALESCE(cashier_employee.full_name, legacy_cashier.full_name) AS cashier_name,
+                       COALESCE(cashier_employee.full_name_ar, legacy_cashier.full_name_ar) AS cashier_name_ar
+                FROM shifts sh
+                LEFT JOIN stations st ON st.id = sh.station_id
+                LEFT JOIN employees manager ON manager.id = sh.manager_id
+                LEFT JOIN employees cashier_employee ON cashier_employee.id = sh.cashier_employee_id
+                LEFT JOIN users legacy_cashier ON legacy_cashier.id = sh.cashier_id
+                $whereSql ORDER BY sh.id DESC LIMIT? OFFSET?
                 """.trimIndent()
             val queryArgs = args.toMutableList().apply {
                 add(limit.toString())
@@ -37225,7 +37264,7 @@ private fun postSalesReversalJournal(
         managementRequired(columns, "shifts", "station_id")
         managementRequired(columns, "shifts", "status")
         val where = buildString {
-  append("station_id = ? AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = '' OR end_time = 0)")
+  append("station_id = ? AND status = 'open' AND (end_time IS NULL OR TRIM(CAST(end_time AS TEXT)) = '' OR end_time = 0)")
   if ("is_deleted" in columns) append(" AND (is_deleted = 0 OR is_deleted IS NULL)")
         }
         var id = 0L
@@ -37251,67 +37290,24 @@ private fun postSalesReversalJournal(
     }
 
     fun closeOpenShiftForManagement(stationId: Long, currentUserId: Long): Long {
-        val db = getWritableDatabase()
-        val columns = managementColumns("shifts")
-        managementRequired(columns, "shifts", "id")
-        managementRequired(columns, "shifts", "station_id")
-        managementRequired(columns, "shifts", "status")
-        db.beginTransaction()
-        try {
-  val where = buildString {
-      append("station_id = ? AND status = 'open'")
-      if ("is_deleted" in columns) append(" AND is_deleted = 0")
-  }
-  var id = 0L
-  var startRaw: String? = null
-  var currentStatus: String? = null
-  var count = 0
-  db.query("shifts", arrayOf("id", "start_time", "status"), where, arrayOf(stationId.toString()), null, null, "start_time ASC").use { cursor ->
-      val statusIndex = cursor.getColumnIndex("status")
-      while (cursor.moveToNext()) {
-          count++
-          id = cursor.getLong(cursor.getColumnIndexOrThrow("id"))
-          startRaw = cursor.getString(cursor.getColumnIndexOrThrow("start_time"))
-          if (statusIndex >= 0 && !cursor.isNull(statusIndex)) currentStatus = cursor.getString(statusIndex)
-      }
-  }
-  if (count == 0) throw IllegalStateException("لا توجد وردية مفتوحة حالياً لهذه المحطة")
-  if (count > 1) throw IllegalStateException("يوجد أكثر من وردية مفتوحة؛ تم رفض الإغلاق حتى تتم معالجة تعارض SQLite")
-
-  val endValue = managementNowForColumn("shifts", "end_time")
-  val values = android.content.ContentValues()
-  managementPut(values, columns, "end_time", endValue)
-  managementPut(values, columns, "closed_at", endValue)
-  managementPut(values, columns, "updated_at", if ("updated_at" in columns) managementNowForColumn("shifts", "updated_at") else null)
-  managementPut(values, columns, "closed_by", currentUserId.takeIf { it > 0L })
-  managementPut(values, columns, "updated_by", currentUserId.takeIf { it > 0L })
-  if ("status" in columns) {
-      val type = managementTableColumnInfo("shifts", "status")?.first?.uppercase().orEmpty()
-      if (type.contains("INT")) managementPut(values, columns, "status", 0)
-      else managementPut(values, columns, "status", if (currentStatus?.firstOrNull()?.isUpperCase() == true) "CLOSED" else "closed")
-  }
-  if ("is_open" in columns) managementPut(values, columns, "is_open", 0)
-  if ("duration_minutes" in columns && startRaw != null) {
-      val startMillis = startRaw!!.toLongOrNull() ?: runCatching {
-          java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", java.util.Locale.US).parse(startRaw!!)?.time
-      }.getOrNull()
-      val endMillis = endValue.toString().toLongOrNull() ?: runCatching {
-          java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", java.util.Locale.US).parse(endValue.toString())?.time
-      }.getOrNull()
-      if (startMillis != null && endMillis != null && endMillis >= startMillis) {
-          managementPut(values, columns, "duration_minutes", (endMillis - startMillis) / 60000L)
-      }
-  }
-  val changed = db.update("shifts", values, "id = ? AND station_id = ? AND status = 'open' AND is_deleted = 0", arrayOf(id.toString(), stationId.toString()))
-  if (changed != 1) throw IllegalStateException("فشل UPDATE الحقيقي للوردية: لم يتغير سجل SQLite المتوقع")
-  db.query("shifts", arrayOf("status"), "id = ? AND station_id = ?", arrayOf(id.toString(), stationId.toString()), null, null, null, "1").use { cursor ->
-      require(cursor.moveToFirst() && cursor.getString(0) != "open") { "فشل التحقق بعد إغلاق الوردية" }
-  }
-  db.setTransactionSuccessful()
-  return id
-        } finally {
-  db.endTransaction()
-        }
+        require(stationId > 0L) { "معرف المحطة مطلوب لإغلاق الوردية" }
+        require(currentUserId > 0L) { "معرف المستخدم القائم بالإغلاق مطلوب" }
+        val row = getOpenShiftForManagement(stationId)
+            ?: throw IllegalStateException("لا توجد وردية مفتوحة حالياً لهذه المحطة")
+        val id = row.optLong("id", row.optLong("shift_id", 0L))
+        require(id in 1L..Int.MAX_VALUE.toLong()) { "معرف الوردية المفتوحة غير صالح" }
+        val closingCash = row.optDouble("closing_cash", 0.0)
+        val closingBank = row.optDouble("closing_bank", 0.0)
+        check(closeShift(
+            shiftId = id.toInt(),
+            stationScopeId = stationId.toInt(),
+            closingCash = closingCash,
+            closingBank = closingBank,
+            totalSales = row.optDouble("total_sales", 0.0),
+            operator = currentUserId.toString(),
+            closedBy = currentUserId
+        )) { "فشل إغلاق الوردية المفتوحة ذرياً؛ لم يتم اعتماد التغيير" }
+        return id
     }
     // ========================================================================
     // GENERIC DATABASE BROWSER — استعلام شامل و CRUD فعلي عبر SQLite

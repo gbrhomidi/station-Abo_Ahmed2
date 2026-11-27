@@ -18,9 +18,17 @@ assert(database.includes('cashRefunds'), 'Close path accounts for cash refunds')
 assert(database.includes('cashExpenses'), 'Close path accounts for cash expenses');
 assert(database.includes('cashDeposits'), 'Close path accounts for cash deposits');
 assert(database.includes('cashMovementsIn') && database.includes('cashMovementsOut'), 'Close path accounts for cash movements');
-assert(database.includes("description IN ('دفع مصروف','إيداع في البنك')"), 'Close path avoids double counting expense and deposit movements');
+assert(database.includes("COALESCE(cm.reference_type,'') NOT IN") && database.includes("COALESCE(cm.description,'') NOT IN ('دفع مصروف','إيداع في البنك')"), 'Close path avoids double counting expense and deposit movements');
 assert(database.includes('closedBy = activity.currentUserId') || main.includes('activity.currentUserId)'), 'Bridge passes authenticated user for close audit');
+assert(main.includes('fun closeShiftRecordTyped('), 'MainActivity exposes typed shift close bridge');
+assert(main.includes('fun generateShiftReport('), 'MainActivity exposes dedicated shift report bridge');
 assert(screen.includes('saveShiftRecordTyped'), 'UI uses typed save bridge');
+assert(screen.includes('closeShiftRecordTyped'), 'UI uses typed close bridge');
+assert(screen.includes('generateShiftReport'), 'UI uses dedicated shift report bridge');
 assert(screen.includes('<option value="full_day">'), 'UI exposes full_day option');
+for (const filter of ['status', 'shift_type', 'cashier_id', 'manager_id', 'search']) {
+  assert(screen.includes(filter), `UI exposes ${filter} report filter`);
+}
+assert(database.includes('closeOpenShiftForManagement') && database.includes('closeShift('), 'Open-shift management close uses full close path');
 
 console.log('PASS: Android Bridge shift_type contract');
