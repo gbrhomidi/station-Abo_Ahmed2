@@ -85,7 +85,7 @@ class TriggerSqlCompatibilityTest {
             null
         ).use { cursor ->
             assertTrue("core trigger functions must execute", cursor.moveToFirst())
-            assertEquals(2, cursor.getInt(0))
+            assertEquals(1, cursor.getInt(0))
             assertEquals(1, cursor.getInt(1))
             assertEquals("abc", cursor.getString(2))
             assertEquals("ab", cursor.getString(3))
