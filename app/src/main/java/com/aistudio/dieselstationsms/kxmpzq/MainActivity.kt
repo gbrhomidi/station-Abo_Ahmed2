@@ -5501,6 +5501,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
+                requireInventoryPermission("inventory_movements", "create")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val data = JSONObject(jsonData).apply {
                     put("station_id", stationId)
@@ -5519,6 +5520,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                requireInventoryPermission("inventory_movements", "update")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val quantity = db.adjustProductStock(productId, targetQuantity, stationId, activity.currentUserId)
                 dataResponse(JSONObject().put("product_id", productId).put("current_stock", quantity))
@@ -5535,6 +5537,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
                 val data = JSONObject(jsonData.ifBlank { "{}" })
+                requireInventoryPermission("inventory_movements", "create")
                 val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val id = db.transferStockMovement(data, stationId, activity.currentUserId)
                 successResponse(id, "تم تنفيذ التحويل الذري بين المستودعين")
@@ -5550,6 +5553,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                requireInventoryPermission("inventory_movements", "read")
                 val movements = db.getStockMovementsPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(movements)
             } catch (e: Exception) {
@@ -5564,6 +5568,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                requireInventoryPermission("inventory_movements", "read")
                 dataResponse(db.getFuelTypes()) 
             } catch (e: Exception) {
                 DebugLogger.logException("InventoryFuelTypes", e)
@@ -5576,6 +5581,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                requireInventoryPermission("inventory_movements", "read")
                 dataResponse(db.getUnifiedInventoryMovements(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
             } catch (e: Exception) {
                 DebugLogger.logException("UnifiedInventoryMovements", e)
@@ -5588,9 +5594,23 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                requireInventoryPermission("inventory_movements", "read")
                 dataResponse(db.getUnifiedInventoryMovementStats(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
             } catch (e: Exception) {
                 DebugLogger.logException("UnifiedInventoryStats", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun simulateInventoryMovement(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                requireInventoryPermission("inventory_movements", "read")
+                dataResponse(db.simulateInventoryMovement(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
+            } catch (e: Exception) {
+                DebugLogger.logException("SimulateInventoryMovement", e)
                 errorResponse(e.message)
             }
         }
@@ -5600,6 +5620,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                requireInventoryPermission("inventory_movements", "read")
                 dataResponse(db.getTanks(requireCurrentStationId(db, activity.currentUserId)))
             } catch (e: Exception) {
                 DebugLogger.logException("InventoryFuelTanks", e)
@@ -5612,6 +5633,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                requireInventoryPermission("inventory_movements", "create")
                 val id = db.addFuelInventoryMovement(
                     JSONObject(jsonData.ifBlank { "{}" }),
                     requireCurrentStationId(db, activity.currentUserId),
@@ -5629,6 +5651,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                requireInventoryPermission("inventory_movements", "read")
                 dataResponse(db.getFuelInventoryAnalysis(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
             } catch (e: Exception) {
                 DebugLogger.logException("FuelInventoryAnalysis", e)
@@ -5645,6 +5668,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
+                requireInventoryPermission("inventory_movements", "export")
                 val path = db.exportUnifiedInventoryMovementsCsv(
                     JSONObject(jsonData.ifBlank { "{}" }),
                     requireCurrentStationId(db, activity.currentUserId)
@@ -5682,6 +5706,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getStockMovementDetailsAsync(requestId: String, movementId: Long): String =
             runInventoryMovementDetailsRead(requestId) { db, stationId ->
+                requireInventoryPermission("inventory_movements", "read")
                 dataResponse(
                     db.getStockMovementsPage(
                         JSONObject().put("movement_id", movementId).put("limit", 1),
@@ -5699,6 +5724,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
+                requireInventoryPermission("inventory_movements", "update")
                 val rows = db.archiveStockMovement(movementId, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(rows > 0, if (rows > 0) "تمت أرشفة الحركة" else "لم يتم العثور على الحركة")
             } catch (e: Exception) { DebugLogger.logException("StockArchive", e); errorResponse(e.message) }
@@ -5710,6 +5736,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                requireInventoryPermission("inventory_movements", "read")
                 dataResponse(db.getInventoryMovementStats(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
             }
             catch (e: Exception) { DebugLogger.logException("StockStats", e); errorResponse(e.message) }
@@ -12071,12 +12098,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
          * reports.export because the current catalogue has no inventory.export permission.
          */
         private fun requireInventoryPermission(screenKey: String, action: String) {
-            if (screenKey !in setOf("warehouses", "stock_alerts")) return
+            if (screenKey !in setOf("warehouses", "stock_alerts", "inventory_movements")) return
             val activity = getActivity() ?: throw IllegalStateException("النشاط غير متاح")
             val db = getDbHelper() ?: throw IllegalStateException("قاعدة البيانات غير متاحة")
             val userId = activity.currentUserId
             if (action == "export" && !db.hasPermission(userId, "inventory.read")) {
                 throw SecurityException("ليس لديك صلاحية inventory.read")
+            }
+            if (action == "export" && !db.hasPermission(userId, "reports.export")) {
+                throw SecurityException("ليس لديك صلاحية reports.export")
             }
             val permissionCode = when (action) {
                 "read" -> "inventory.read"

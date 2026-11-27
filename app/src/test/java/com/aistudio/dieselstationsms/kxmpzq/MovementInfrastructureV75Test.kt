@@ -56,7 +56,7 @@ class MovementInfrastructureV75Test {
 
         helper = DatabaseHelper.getInstance(context)
         val upgraded = helper.writableDatabase
-        assertEquals(75, upgraded.version)
+        assertEquals(76, upgraded.version)
         listOf("fuel_shifts","fuel_shift_readings","fuel_dips","fuel_deliveries","movement_reasons","movement_audit_log").forEach { table ->
             val exists = upgraded.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", arrayOf(table)).use { it.moveToFirst() }
             assertTrue("V74 upgrade must create $table", exists)
@@ -84,7 +84,7 @@ class MovementInfrastructureV75Test {
         // A second open is a no-op: DDL and reference seeding are idempotent.
         DatabaseHelper.closeInstance()
         helper = DatabaseHelper.getInstance(context)
-        assertEquals(75, helper.writableDatabase.version)
+        assertEquals(76, helper.writableDatabase.version)
     }
 
     @Test fun auditJournalIsAppendOnlyAndDaosExposeCoreQueries() {
@@ -111,5 +111,59 @@ class MovementInfrastructureV75Test {
         assertNull(FuelShiftDao(db).getOpenShift(1L))
         assertNull(ProductBatchDao(db).getActiveBatchByProduct(999999L))
         assertEquals(1, AuditLogger.page(db, 1L).length())
+    }
+
+    @Test fun movementAuditStoresFullSnapshotsAndLabelsApprovalAndArchive() {
+        val db = helper.writableDatabase
+        val userId = db.rawQuery("SELECT id FROM users ORDER BY id LIMIT 1", null).use {
+            assertTrue("seeded test user required", it.moveToFirst()); it.getLong(0)
+        }
+        val productId = db.rawQuery("SELECT id FROM products WHERE station_id=1 AND is_deleted=0 ORDER BY id LIMIT 1", null).use {
+            assertTrue("seeded product required", it.moveToFirst()); it.getLong(0)
+        }
+        val movementId = db.insertOrThrow("inventory_movements", null, android.content.ContentValues().apply {
+            put("uuid", java.util.UUID.randomUUID().toString())
+            put("movement_code", "AUDIT-" + java.util.UUID.randomUUID().toString().take(12))
+            put("product_id", productId); put("station_id", 1)
+            put("movement_type", "in"); put("movement_subtype", "in")
+            put("quantity_before", 2.0); put("quantity_change", 3.0); put("quantity_after", 5.0)
+            put("unit_cost", 7.5); put("total_cost", 22.5); put("reason", "استلام تجريبي")
+            put("performed_by", userId); put("status", "completed")
+        })
+        val created = db.rawQuery("SELECT after_json FROM movement_audit_log WHERE movement_id=? AND action='create' ORDER BY id DESC LIMIT 1", arrayOf(movementId.toString())).use {
+            assertTrue(it.moveToFirst()); JSONObject(it.getString(0))
+        }
+        assertEquals(3.0, created.getDouble("quantity_change"), 0.000001)
+        assertEquals(22.5, created.getDouble("total_cost"), 0.000001)
+        assertEquals("استلام تجريبي", created.getString("reason"))
+
+        db.execSQL("UPDATE inventory_movements SET quantity_change=4, quantity_after=6, updated_by=? WHERE id=?", arrayOf(userId, movementId))
+        val updated = db.rawQuery("SELECT before_json,after_json,action FROM movement_audit_log WHERE movement_id=? ORDER BY id DESC LIMIT 1", arrayOf(movementId.toString())).use {
+            assertTrue(it.moveToFirst()); Triple(JSONObject(it.getString(0)), JSONObject(it.getString(1)), it.getString(2))
+        }
+        assertEquals("update", updated.third)
+        assertEquals(3.0, updated.first.getDouble("quantity_change"), 0.000001)
+        assertEquals(4.0, updated.second.getDouble("quantity_change"), 0.000001)
+
+        db.execSQL("UPDATE inventory_movements SET approved_by=?, approved_at=CURRENT_TIMESTAMP, updated_by=? WHERE id=?", arrayOf(userId, userId, movementId))
+        assertEquals("approve", db.rawQuery("SELECT action FROM movement_audit_log WHERE movement_id=? ORDER BY id DESC LIMIT 1", arrayOf(movementId.toString())).use {
+            assertTrue(it.moveToFirst()); it.getString(0)
+        })
+        try {
+            db.execSQL("UPDATE inventory_movements SET is_deleted=1, deleted_by=?, updated_by=? WHERE id=?", arrayOf(userId, userId, movementId))
+            fail("approved movement must remain locked")
+        } catch (_: SQLiteConstraintException) { }
+
+        val archiveId = db.insertOrThrow("inventory_movements", null, android.content.ContentValues().apply {
+            put("uuid", java.util.UUID.randomUUID().toString())
+            put("movement_code", "ARCH-" + java.util.UUID.randomUUID().toString().take(12))
+            put("product_id", productId); put("station_id", 1)
+            put("movement_type", "in"); put("quantity_before", 0.0); put("quantity_change", 1.0); put("quantity_after", 1.0)
+            put("performed_by", userId); put("status", "completed")
+        })
+        db.execSQL("UPDATE inventory_movements SET is_deleted=1, deleted_by=?, deleted_at=CURRENT_TIMESTAMP, updated_by=? WHERE id=?", arrayOf(userId, userId, archiveId))
+        assertEquals("archive", db.rawQuery("SELECT action FROM movement_audit_log WHERE movement_id=? ORDER BY id DESC LIMIT 1", arrayOf(archiveId.toString())).use {
+            assertTrue(it.moveToFirst()); it.getString(0)
+        })
     }
 }

@@ -1418,6 +1418,9 @@
       <button class="btn btn-secondary" data-bs-dismiss="modal" type="button" onclick="closeCreateModal()">
        ❌ إلغاء
       </button>
+      <button class="btn btn-info" onclick="simulateMovement()" type="button">
+       🧪 محاكاة أثر الحركة
+      </button>
       <button class="btn btn-primary" onclick="saveMovement()" type="button">
        💾 حفظ الحركة
       </button>
@@ -1570,6 +1573,7 @@ function apiCall(action, params = {}) {
         case 'getActiveCashBoxes': return invokeTypedBridge('getActiveCashBoxes');
         case 'getMovements': return invokeTypedBridge('getInventoryMovementPage', [json]);
         case 'getMovementStats': return invokeTypedBridge('getInventoryMovementUnifiedStats', [json]);
+        case 'simulateMovement': return invokeTypedBridge('simulateInventoryMovement', [json]);
         case 'getInventoryDetails': return invokeTypedBridge('getInventoryProductDetails', [Number(p.product_id)]);
         case 'deleteMovement': return invokeTypedBridge('archiveStockMovement', [Number(p.movement_id)]);
         case 'saveMovement': return p.stock_type === 'fuel' ? invokeTypedBridge('addFuelInventoryMovement', [json]) : invokeTypedBridge('addStockMovement', [json]);
@@ -2642,6 +2646,76 @@ async function saveMovement() {
         showToast(e.error || e.message || 'فشل الحفظ ولم يتم اعتماد الحركة', 'error');
     } finally {
         showLoading(false);
+    }
+}
+
+async function simulateMovement() {
+    const stockType = document.getElementById('movement-stock-type').value;
+    const type = document.getElementById('movement-type').value;
+    const quantity = Number(document.getElementById('movement-quantity').value);
+    const unitPrice = Number(document.getElementById('unit-price').value || 0);
+    if (!type || !Number.isFinite(quantity) || quantity <= 0) {
+        showToast('اختر نوع الحركة وأدخل كمية صحيحة للمحاكاة', 'error');
+        return;
+    }
+    let payload;
+    if (stockType === 'fuel') {
+        const fuelTypeId = Number(document.getElementById('fuel-select').value || 0);
+        const tankId = Number(document.getElementById('tank-select').value || 0);
+        if (!fuelTypeId || !tankId) {
+            showToast('اختر نوع الوقود والخزان من بيانات SQLite أولاً', 'error');
+            return;
+        }
+        payload = {
+            stock_type: 'fuel', movement_type: type,
+            fuel_type_id: fuelTypeId,
+            tank_id: tankId,
+            quantity, unit_cost: unitPrice,
+            adjustment_direction: document.getElementById('adjustment-direction').value
+        };
+    } else {
+        const sourceWarehouse = Number(document.getElementById('source-warehouse').value || 0);
+        const targetWarehouse = Number(document.getElementById('target-warehouse').value || 0);
+        const productId = Number(document.getElementById('product-select').value || 0);
+        if (!productId) {
+            showToast('اختر المنتج من SQLite أولاً', 'error');
+            return;
+        }
+        if (type === 'transfer' && (!sourceWarehouse || !targetWarehouse || sourceWarehouse === targetWarehouse)) {
+            showToast('اختر مستودعين مختلفين للتحويل', 'error');
+            return;
+        }
+        const requiredWarehouse = ['in', 'return_customer'].includes(type) ? targetWarehouse : sourceWarehouse;
+        if (type !== 'transfer' && !requiredWarehouse) {
+            showToast('اختر المستودع المرتبط بالحركة أولاً', 'error');
+            return;
+        }
+        const backendType = type === 'return_customer' ? 'return'
+            : type === 'return_supplier' ? 'out'
+            : type === 'waste' ? 'damage'
+            : type === 'stocktake' ? 'adjustment' : type;
+        const signedQuantity = ['adjustment', 'stocktake'].includes(type) &&
+            document.getElementById('adjustment-direction').value === 'decrease' ? -quantity : quantity;
+        payload = {
+            stock_type: 'products', movement_type: backendType,
+            product_id: productId,
+            quantity, signed_quantity: signedQuantity, unit_cost: unitPrice,
+            warehouse_id: type === 'transfer' ? sourceWarehouse : (['in', 'return_customer'].includes(type) ? targetWarehouse : sourceWarehouse),
+            source_warehouse_id: sourceWarehouse, target_warehouse_id: targetWarehouse,
+            adjustment_direction: document.getElementById('adjustment-direction').value
+        };
+    }
+    try {
+        const result = normalizeInventoryMovementBridgeResult(await apiCall('simulateMovement', payload));
+        if (!result || result.success === false) throw new Error(result?.error || result?.message || 'تعذرت المحاكاة');
+        const preview = result.data || result;
+        const changes = preview.movement_type === 'transfer'
+            ? `المصدر: ${toNumber(preview.source_quantity_before).toLocaleString('ar')} ← ${toNumber(preview.source_quantity_after).toLocaleString('ar')}\nالهدف: ${toNumber(preview.target_quantity_before).toLocaleString('ar')} ← ${toNumber(preview.target_quantity_after).toLocaleString('ar')}`
+            : `الرصيد قبل: ${toNumber(preview.quantity_before).toLocaleString('ar')}\nالتغير: ${toNumber(preview.quantity_change).toLocaleString('ar')}\nالرصيد المتوقع: ${toNumber(preview.quantity_after).toLocaleString('ar')}`;
+        const warnings = Array.isArray(preview.warnings) && preview.warnings.length ? `\nتنبيه: ${preview.warnings.join('، ')}` : '';
+        window.alert(`محاكاة فقط — لم يتم حفظ أي حركة أو تغيير رصيد\n${changes}${warnings}`);
+    } catch (error) {
+        showToast(error?.error || error?.message || 'فشلت المحاكاة؛ لم يتم تغيير المخزون', 'error');
     }
 }
 

@@ -75,6 +75,70 @@ class InventoryScreensRobolectricTest {
     }
 
     @Test
+    fun whatIfSimulationCalculatesProductAndFuelBalancesWithoutWriting() {
+        val db = helper.writableDatabase
+        val productId = createProduct(5.0, 2.0)
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+        val movementCountBefore = db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_movements WHERE product_id=? AND station_id=1",
+            arrayOf(productId.toString())
+        ).use { it.moveToFirst(); it.getInt(0) }
+        val productPreview = helper.simulateInventoryMovement(
+            JSONObject().put("stock_type", "products").put("movement_type", "out")
+                .put("product_id", productId).put("warehouse_id", warehouseId)
+                .put("quantity", 3.0).put("unit_cost", 10.0),
+            1
+        )
+        assertEquals(5.0, productPreview.getDouble("quantity_before"), 0.0001)
+        assertEquals(-3.0, productPreview.getDouble("quantity_change"), 0.0001)
+        assertEquals(2.0, productPreview.getDouble("quantity_after"), 0.0001)
+        assertEquals(1, productPreview.getJSONArray("warnings").length())
+        assertEquals(5.0, db.rawQuery(
+            "SELECT quantity_on_hand FROM inventory_levels WHERE product_id=? AND warehouse_id=?",
+            arrayOf(productId.toString(), warehouseId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getDouble(0) }, 0.0001)
+        assertEquals(movementCountBefore, db.rawQuery(
+            "SELECT COUNT(*) FROM inventory_movements WHERE product_id=? AND station_id=1",
+            arrayOf(productId.toString())
+        ).use { it.moveToFirst(); it.getInt(0) })
+
+        val tankId = createLowFuelTank(1, "WHAT-IF")
+        val fuelPreview = helper.simulateInventoryMovement(
+            JSONObject().put("stock_type", "fuel").put("movement_type", "out")
+                .put("fuel_type_id", 1).put("tank_id", tankId).put("quantity", 25.0),
+            1
+        )
+        assertEquals(250.0, fuelPreview.getDouble("quantity_before"), 0.0001)
+        assertEquals(-25.0, fuelPreview.getDouble("quantity_change"), 0.0001)
+        assertEquals(225.0, fuelPreview.getDouble("quantity_after"), 0.0001)
+        assertEquals(250.0, db.rawQuery(
+            "SELECT current_quantity FROM tanks WHERE id=? AND station_id=1",
+            arrayOf(tankId.toString())
+        ).use { assertTrue(it.moveToFirst()); it.getDouble(0) }, 0.0001)
+    }
+
+    @Test
+    fun whatIfSimulationRejectsCrossStationAndImpossibleFuelMovements() {
+        val productId = createProduct(4.0, 1.0)
+        val warehouseId = helper.ensureOperationalWarehouse(1)
+        assertTrue(runCatching {
+            helper.simulateInventoryMovement(
+                JSONObject().put("stock_type", "products").put("movement_type", "out")
+                    .put("product_id", productId).put("warehouse_id", warehouseId).put("quantity", 1.0),
+                2
+            )
+        }.isFailure)
+        val tankId = createLowFuelTank(1, "WHAT-IF-OVERDRAW")
+        assertTrue(runCatching {
+            helper.simulateInventoryMovement(
+                JSONObject().put("stock_type", "fuel").put("movement_type", "out")
+                    .put("fuel_type_id", 1).put("tank_id", tankId).put("quantity", 251.0),
+                1
+            )
+        }.isFailure)
+    }
+
+    @Test
     fun completedLegacyRefillWithoutTrustedDeliveredQuantityCannotBeReversed() {
         val db = helper.writableDatabase
         val tankId = createLowFuelTank(1, "legacy-refill")

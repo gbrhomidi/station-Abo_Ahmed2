@@ -9,11 +9,14 @@ expect(screen.includes('id="filter-stock-type"') && screen.includes('id="filter-
 expect(screen.includes('openProductPicker') && screen.includes('openFuelPicker'), 'يجب أن تستخدم الشاشة منتقيات حقيقية من SQLite');
 expect(screen.includes("case 'getFuelTypes': return invokeTypedBridge('getFuelTypesForInventoryMovements')"), 'يجب أن يملك JavaScript عقد جلب الوقود');
 expect(screen.includes("case 'saveMovement': return p.stock_type === 'fuel' ? invokeTypedBridge('addFuelInventoryMovement'"), 'يجب فصل حفظ حركة الوقود عن حركة المنتجات');
+expect(screen.includes('onclick="simulateMovement()"') && screen.includes("case 'simulateMovement': return invokeTypedBridge('simulateInventoryMovement'") && screen.includes('لم يتم حفظ أي حركة أو تغيير رصيد'), 'يجب أن تعرض الشاشة معاينة what-if عبر SQLite دون حفظ');
 expect(screen.includes("case 'exportInventoryReport': return invokeTypedBridge('exportInventoryMovementReport'"), 'يجب أن يمر التصدير عبر Android Native');
 expect(screen.includes('report-stock-type') && screen.includes('value="movement"'), 'يجب دعم تقرير حركات موحد مع نطاق المنتجات/الوقود/الكل');
 expect(screen.includes('analytics-stock-type') && screen.includes('getFuelAnalysis'), 'يجب دعم تحليل الوقود الحقيقي');
 expect(db.includes('fun getUnifiedInventoryMovements') && db.includes("'fuel' AS stock_type"), 'يجب أن يملك SQLite استعلاماً موحداً مع إبقاء نوع الوقود منفصلاً');
 expect(db.includes('fun addFuelInventoryMovement') && db.includes('UPDATE tanks SET current_quantity'), 'يجب تحديث رصيد الخزان ضمن معاملة حركة الوقود');
+expect(db.includes('fun simulateInventoryMovement(data: JSONObject, stationScopeId: Int)') && db.includes('المحاكاة ستتجاوز الرصيد المتاح') && db.includes('المحاكاة ستتجاوز سعة الخزان'), 'يجب فرض حدود المخزون والسعة في معاينة الحركة دون تغيير المخزون');
 expect(db.includes('db.beginTransaction()') && db.includes('db.setTransactionSuccessful()'), 'يجب أن تكون حركة الوقود ذرية');
+expect(bridge.includes('fun simulateInventoryMovement(jsonData: String)') && bridge.includes('requireInventoryPermission("inventory_movements", "read")'), 'يجب حراسة محاكاة الحركات بصلاحية القراءة في الجسر الأصلي');
 expect(bridge.includes('fun exportInventoryMovementReport') && bridge.includes('FileProvider'), 'يجب إنشاء الملف وفتحه عبر Android');
 console.log('Inventory unified products/fuel regression contract PASS.');

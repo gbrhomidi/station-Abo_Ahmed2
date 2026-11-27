@@ -58,7 +58,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 75
+        const val VERSION = 76
         private const val REVERSIBLE_LEGACY_RETURN_REFERENCE_TYPE = "legacy_return"
 
         private const val HASH_ITERATIONS = 10000
@@ -2295,7 +2295,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             AFTER INSERT ON inventory_movements BEGIN
                 INSERT INTO movement_audit_log(movement_id,station_id,source_table,action,user_id,reason_code_id,before_json,after_json)
                 VALUES(NEW.id,NEW.station_id,'inventory_movements','create',NEW.performed_by,NEW.reason_code_id,NULL,
-                       '{"id":'||NEW.id||',"movement_code":"' || replace(COALESCE(NEW.movement_code,''),'"','\\"') || '"}');
+                       json_object(
+                           'id',NEW.id,'uuid',NEW.uuid,'movement_code',NEW.movement_code,
+                           'product_id',NEW.product_id,'station_id',NEW.station_id,'warehouse_id',NEW.warehouse_id,
+                           'movement_type',NEW.movement_type,'movement_subtype',NEW.movement_subtype,
+                           'quantity_before',NEW.quantity_before,'quantity_change',NEW.quantity_change,
+                           'quantity_after',NEW.quantity_after,'unit_cost',NEW.unit_cost,'total_cost',NEW.total_cost,
+                           'reference_type',NEW.reference_type,'reference_id',NEW.reference_id,
+                           'reference_code',NEW.reference_code,'from_location',NEW.from_location,
+                           'to_location',NEW.to_location,'reason',NEW.reason,'reason_code',NEW.reason_code,
+                           'reason_code_id',NEW.reason_code_id,'performed_by',NEW.performed_by,
+                           'approved_by',NEW.approved_by,'approved_at',NEW.approved_at,'status',NEW.status,
+                           'created_at',NEW.created_at,'updated_at',NEW.updated_at,'deleted_at',NEW.deleted_at,
+                           'created_by',NEW.created_by,'updated_by',NEW.updated_by,'deleted_by',NEW.deleted_by,
+                           'is_deleted',NEW.is_deleted,'sync_status',NEW.sync_status,'sync_version',NEW.sync_version,
+                           'device_id',NEW.device_id,'remarks',NEW.remarks,'extra_data',NEW.extra_data,
+                           'batch_id',NEW.batch_id,'shift_id',NEW.shift_id,'is_locked',NEW.is_locked
+                       ));
             END
         """.trimIndent())
         db.execSQL("DROP TRIGGER IF EXISTS trg_inventory_movement_audit_update")
@@ -2303,9 +2319,45 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             CREATE TRIGGER trg_inventory_movement_audit_update
             AFTER UPDATE ON inventory_movements BEGIN
                 INSERT INTO movement_audit_log(movement_id,station_id,source_table,action,user_id,reason_code_id,before_json,after_json)
-                VALUES(NEW.id,NEW.station_id,'inventory_movements','update',NEW.updated_by,NEW.reason_code_id,
-                       '{"id":'||OLD.id||',"status":"' || replace(COALESCE(OLD.status,''),'"','\\"') || '"}',
-                       '{"id":'||NEW.id||',"status":"' || replace(COALESCE(NEW.status,''),'"','\\"') || '"}');
+                VALUES(NEW.id,NEW.station_id,'inventory_movements',
+                       CASE WHEN OLD.approved_by IS NULL AND NEW.approved_by IS NOT NULL THEN 'approve'
+                            WHEN COALESCE(OLD.is_deleted,0)=0 AND COALESCE(NEW.is_deleted,0)=1 THEN 'archive'
+                            ELSE 'update' END,
+                       COALESCE(NEW.updated_by,NEW.approved_by,NEW.deleted_by,NEW.performed_by),NEW.reason_code_id,
+                       json_object(
+                           'id',OLD.id,'uuid',OLD.uuid,'movement_code',OLD.movement_code,
+                           'product_id',OLD.product_id,'station_id',OLD.station_id,'warehouse_id',OLD.warehouse_id,
+                           'movement_type',OLD.movement_type,'movement_subtype',OLD.movement_subtype,
+                           'quantity_before',OLD.quantity_before,'quantity_change',OLD.quantity_change,
+                           'quantity_after',OLD.quantity_after,'unit_cost',OLD.unit_cost,'total_cost',OLD.total_cost,
+                           'reference_type',OLD.reference_type,'reference_id',OLD.reference_id,
+                           'reference_code',OLD.reference_code,'from_location',OLD.from_location,
+                           'to_location',OLD.to_location,'reason',OLD.reason,'reason_code',OLD.reason_code,
+                           'reason_code_id',OLD.reason_code_id,'performed_by',OLD.performed_by,
+                           'approved_by',OLD.approved_by,'approved_at',OLD.approved_at,'status',OLD.status,
+                           'created_at',OLD.created_at,'updated_at',OLD.updated_at,'deleted_at',OLD.deleted_at,
+                           'created_by',OLD.created_by,'updated_by',OLD.updated_by,'deleted_by',OLD.deleted_by,
+                           'is_deleted',OLD.is_deleted,'sync_status',OLD.sync_status,'sync_version',OLD.sync_version,
+                           'device_id',OLD.device_id,'remarks',OLD.remarks,'extra_data',OLD.extra_data,
+                           'batch_id',OLD.batch_id,'shift_id',OLD.shift_id,'is_locked',OLD.is_locked
+                       ),
+                       json_object(
+                           'id',NEW.id,'uuid',NEW.uuid,'movement_code',NEW.movement_code,
+                           'product_id',NEW.product_id,'station_id',NEW.station_id,'warehouse_id',NEW.warehouse_id,
+                           'movement_type',NEW.movement_type,'movement_subtype',NEW.movement_subtype,
+                           'quantity_before',NEW.quantity_before,'quantity_change',NEW.quantity_change,
+                           'quantity_after',NEW.quantity_after,'unit_cost',NEW.unit_cost,'total_cost',NEW.total_cost,
+                           'reference_type',NEW.reference_type,'reference_id',NEW.reference_id,
+                           'reference_code',NEW.reference_code,'from_location',NEW.from_location,
+                           'to_location',NEW.to_location,'reason',NEW.reason,'reason_code',NEW.reason_code,
+                           'reason_code_id',NEW.reason_code_id,'performed_by',NEW.performed_by,
+                           'approved_by',NEW.approved_by,'approved_at',NEW.approved_at,'status',NEW.status,
+                           'created_at',NEW.created_at,'updated_at',NEW.updated_at,'deleted_at',NEW.deleted_at,
+                           'created_by',NEW.created_by,'updated_by',NEW.updated_by,'deleted_by',NEW.deleted_by,
+                           'is_deleted',NEW.is_deleted,'sync_status',NEW.sync_status,'sync_version',NEW.sync_version,
+                           'device_id',NEW.device_id,'remarks',NEW.remarks,'extra_data',NEW.extra_data,
+                           'batch_id',NEW.batch_id,'shift_id',NEW.shift_id,'is_locked',NEW.is_locked
+                       ));
             END
         """.trimIndent())
         db.execSQL("DROP TRIGGER IF EXISTS trg_inventory_movement_audit_delete")
@@ -2313,8 +2365,25 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             CREATE TRIGGER trg_inventory_movement_audit_delete
             AFTER DELETE ON inventory_movements BEGIN
                 INSERT INTO movement_audit_log(movement_id,station_id,source_table,action,user_id,reason_code_id,before_json,after_json)
-                VALUES(OLD.id,OLD.station_id,'inventory_movements','delete',OLD.deleted_by,OLD.reason_code_id,
-                       '{"id":'||OLD.id||',"status":"' || replace(COALESCE(OLD.status,''),'"','\\"') || '"}',NULL);
+                VALUES(OLD.id,OLD.station_id,'inventory_movements','delete',
+                       COALESCE(OLD.deleted_by,OLD.updated_by,OLD.performed_by),OLD.reason_code_id,
+                       json_object(
+                           'id',OLD.id,'uuid',OLD.uuid,'movement_code',OLD.movement_code,
+                           'product_id',OLD.product_id,'station_id',OLD.station_id,'warehouse_id',OLD.warehouse_id,
+                           'movement_type',OLD.movement_type,'movement_subtype',OLD.movement_subtype,
+                           'quantity_before',OLD.quantity_before,'quantity_change',OLD.quantity_change,
+                           'quantity_after',OLD.quantity_after,'unit_cost',OLD.unit_cost,'total_cost',OLD.total_cost,
+                           'reference_type',OLD.reference_type,'reference_id',OLD.reference_id,
+                           'reference_code',OLD.reference_code,'from_location',OLD.from_location,
+                           'to_location',OLD.to_location,'reason',OLD.reason,'reason_code',OLD.reason_code,
+                           'reason_code_id',OLD.reason_code_id,'performed_by',OLD.performed_by,
+                           'approved_by',OLD.approved_by,'approved_at',OLD.approved_at,'status',OLD.status,
+                           'created_at',OLD.created_at,'updated_at',OLD.updated_at,'deleted_at',OLD.deleted_at,
+                           'created_by',OLD.created_by,'updated_by',OLD.updated_by,'deleted_by',OLD.deleted_by,
+                           'is_deleted',OLD.is_deleted,'sync_status',OLD.sync_status,'sync_version',OLD.sync_version,
+                           'device_id',OLD.device_id,'remarks',OLD.remarks,'extra_data',OLD.extra_data,
+                           'batch_id',OLD.batch_id,'shift_id',OLD.shift_id,'is_locked',OLD.is_locked
+                       ),NULL);
             END
         """.trimIndent())
         // Approved legacy rows are locked without changing their business fields.
@@ -14366,6 +14435,103 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             put("page", 1)
         }
         return getUnifiedInventoryMovements(request, stationScopeId).optJSONObject("stats") ?: JSONObject()
+    }
+
+    /** Pure what-if preview: reads authoritative SQLite balances and never writes movements or stock. */
+    fun simulateInventoryMovement(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        val quantity = data.optDouble("quantity", Double.NaN)
+        require(quantity.isFinite() && quantity > 0.0) { "كمية المحاكاة يجب أن تكون رقماً أكبر من صفر" }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val stockType = data.optString("stock_type", "products").trim().lowercase(Locale.ROOT)
+            val movementType = data.optString("movement_type", "").trim().lowercase(Locale.ROOT)
+            val direction = data.optString("adjustment_direction", "increase").trim().lowercase(Locale.ROOT)
+            val unitCost = data.optDouble("unit_cost", 0.0)
+            require(unitCost.isFinite() && unitCost >= 0.0) { "تكلفة الوحدة غير صالحة" }
+
+            if (stockType == "fuel") {
+                val tankId = data.optLong("tank_id", 0L)
+                require(tankId > 0L && movementType in setOf("in", "out", "adjustment")) { "بيانات حركة الوقود غير صالحة للمحاكاة" }
+                db.rawQuery("SELECT fuel_type_id,current_quantity,capacity_liters FROM tanks WHERE id=? AND station_id=? AND is_deleted=0 AND status<>'retired'", arrayOf(tankId.toString(), stationScopeId.toString())).use { c ->
+                    require(c.moveToFirst()) { "الخزان خارج نطاق المحطة أو غير نشط" }
+                    val fuelTypeId = data.optLong("fuel_type_id", 0L)
+                    require(fuelTypeId == c.getLong(0)) { "نوع الوقود لا يطابق نوع الخزان" }
+                    val before = c.getDouble(1)
+                    val capacity = c.getDouble(2)
+                    val signed = when (movementType) {
+                        "in" -> quantity
+                        "out" -> -quantity
+                        else -> if (direction == "decrease") -quantity else quantity
+                    }
+                    val after = before + signed
+                    require(after >= -1e-9) { "المحاكاة ستجعل رصيد الخزان سالباً" }
+                    require(after <= capacity + 1e-9) { "المحاكاة ستتجاوز سعة الخزان" }
+                    JSONObject().put("stock_type", stockType).put("tank_id", tankId)
+                        .put("quantity_before", before).put("quantity_change", signed)
+                        .put("quantity_after", after.coerceAtLeast(0.0)).put("capacity_liters", capacity)
+                        .put("capacity_utilization_percent", if (capacity > 0) after / capacity * 100.0 else 0.0)
+                        .put("estimated_movement_value", quantity * unitCost)
+                        .put("warnings", JSONArray())
+                }
+            } else {
+                require(stockType == "products") { "نوع المخزون غير مدعوم للمحاكاة" }
+                val productId = data.optLong("product_id", 0L)
+                val warehouseId = data.optLong("warehouse_id", 0L)
+                require(productId > 0L && warehouseId > 0L) { "المنتج والمستودع مطلوبان للمحاكاة" }
+                require(movementType in setOf("in", "out", "return", "damage", "adjustment", "transfer")) { "نوع حركة المنتجات غير صالح للمحاكاة" }
+                if (movementType == "transfer") {
+                    val sourceId = data.optLong("source_warehouse_id", warehouseId)
+                    val targetId = data.optLong("target_warehouse_id", 0L)
+                    require(sourceId > 0L && targetId > 0L && sourceId != targetId) { "يجب اختيار مستودعين مختلفين" }
+                    fun balance(id: Long): Pair<Double, Double> = db.rawQuery("""SELECT COALESCE(il.quantity_on_hand,0),COALESCE(il.average_cost,0)
+                        FROM warehouses w LEFT JOIN inventory_levels il ON il.warehouse_id=w.id AND il.product_id=?
+                        JOIN products p ON p.id=? AND p.station_id=w.station_id
+                        WHERE w.id=? AND w.station_id=? AND w.is_active=1 AND p.is_deleted=0 LIMIT 1""".trimIndent(),
+                        arrayOf(productId.toString(), productId.toString(), id.toString(), stationScopeId.toString())).use { c ->
+                        require(c.moveToFirst()) { "المستودع أو المنتج غير موجود ضمن المحطة" }
+                        c.getDouble(0) to c.getDouble(1)
+                    }
+                    val source = balance(sourceId)
+                    val target = balance(targetId)
+                    require(source.first + 1e-9 >= quantity) { "المحاكاة ستتجاوز رصيد المستودع المصدر" }
+                    return JSONObject().put("stock_type", stockType).put("movement_type", "transfer")
+                        .put("product_id", productId).put("source_warehouse_id", sourceId).put("target_warehouse_id", targetId)
+                        .put("source_quantity_before", source.first).put("source_quantity_after", source.first - quantity)
+                        .put("target_quantity_before", target.first).put("target_quantity_after", target.first + quantity)
+                        .put("quantity_change", quantity).put("unit_cost", source.second)
+                        .put("estimated_movement_value", quantity * source.second).put("warnings", JSONArray())
+                }
+                val row = db.rawQuery("""SELECT COALESCE(il.quantity_on_hand,0),COALESCE(il.average_cost,0),COALESCE(p.minimum_stock,0)
+                    FROM warehouses w JOIN products p ON p.id=? AND p.station_id=w.station_id
+                    LEFT JOIN inventory_levels il ON il.product_id=p.id AND il.warehouse_id=w.id
+                    WHERE p.id=? AND w.id=? AND w.station_id=? AND w.is_active=1 AND p.is_deleted=0 LIMIT 1""".trimIndent(),
+                    arrayOf(productId.toString(), productId.toString(), warehouseId.toString(), stationScopeId.toString())).use { c ->
+                    require(c.moveToFirst()) { "المنتج أو المستودع غير موجود في المحطة أو لم يُهيأ رصيده" }
+                    Triple(c.getDouble(0), c.getDouble(1), c.getDouble(2))
+                }
+                val signed = when (movementType) {
+                    "in", "return" -> quantity
+                    "out", "damage" -> -quantity
+                    else -> data.optDouble("signed_quantity", if (direction == "decrease") -quantity else quantity)
+                }
+                require(signed.isFinite() && signed != 0.0) { "كمية التسوية غير صالحة للمحاكاة" }
+                val after = row.first + signed
+                require(after >= -1e-9) { "المحاكاة ستتجاوز الرصيد المتاح" }
+                val cost = if (unitCost > 0.0) unitCost else row.second
+                val weightedCost = if (signed > 0.0 && after > 0.0) ((row.first * row.second) + (signed * cost)) / after else row.second
+                val warnings = JSONArray()
+                if (after <= row.third) warnings.put("سيصبح الرصيد عند الحد الأدنى أو دونه")
+                JSONObject().put("stock_type", stockType).put("product_id", productId).put("warehouse_id", warehouseId)
+                    .put("quantity_before", row.first).put("quantity_change", signed)
+                    .put("quantity_after", after.coerceAtLeast(0.0)).put("average_cost_before", row.second)
+                    .put("estimated_average_cost_after", weightedCost).put("minimum_stock", row.third)
+                    .put("estimated_movement_value", kotlin.math.abs(signed) * cost).put("warnings", warnings)
+            }
+        } finally {
+            dbLock.unlock()
+        }
     }
 
     fun addFuelInventoryMovement(data: JSONObject, stationScopeId: Int, userId: Long): Long {
