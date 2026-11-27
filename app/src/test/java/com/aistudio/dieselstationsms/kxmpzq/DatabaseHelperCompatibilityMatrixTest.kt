@@ -15,7 +15,7 @@ import java.util.TimeZone
 @RunWith(RobolectricTestRunner::class)
 class DatabaseHelperCompatibilityMatrixTest {
     @Test
-    @Config(sdk = [26, 28, 35])
+    @Config(sdk = [26, 28, 30, 33, 34, 35])
     fun opensWithForeignKeysAndWalAcrossSupportedAndroidApiLevels() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         DatabaseHelper.closeInstance()

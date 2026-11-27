@@ -18,7 +18,7 @@ import org.robolectric.annotation.Config
  * optional extensions such as JSON1, so trigger SQL must stay within core SQLite.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [26, 28, 35])
+@Config(sdk = [26, 28, 30, 33, 34, 35])
 class TriggerSqlCompatibilityTest {
     @After
     fun tearDown() {
