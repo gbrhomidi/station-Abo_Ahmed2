@@ -5486,7 +5486,9 @@ async function completeSale() {
 
     let selectedPaymentTermId = 0;
     if (isCredit) {
-        entityId = selectedEntityId;
+        // Read the selected entity at the point of credit-sale validation and
+        // pass that exact SQLite ID to invoiceData.entity_id below.
+        entityId = Number(document.getElementById('customerId').value || 0);
         if (!entityId || !selectedCreditCustomer || Number(selectedCreditCustomer.id || selectedCreditCustomer.party_id || selectedCreditCustomer.entity_id) !== entityId) {
             showToast('اختر عميلاً نشطاً للبيع الآجل', 'error');
             return;

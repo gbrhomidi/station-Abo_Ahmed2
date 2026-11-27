@@ -14,7 +14,10 @@ const db = read('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/Database
 
 expect(pos.includes("apiCall('getCustomers', {})"), 'POS يجب أن يجلب العملاء الحقيقيين من الجسر');
 expect(pos.includes('const isCredit = paymentType === \'آجل\';'), 'POS يجب أن يميز البيع الآجل بوضوح');
-expect(pos.includes('entityId = Number(document.getElementById(\'customerId\').value || 0);'), 'البيع الآجل يجب أن يربط الفاتورة بالعميل المختار');
+const completeSale = pos.slice(pos.indexOf('async function completeSale()'), pos.indexOf('// 11. عرض الفاتورة'));
+expect(completeSale.includes('entityId = Number(document.getElementById(\'customerId\').value || 0);') &&
+       completeSale.includes('selectedCreditCustomer.id || selectedCreditCustomer.party_id || selectedCreditCustomer.entity_id') &&
+       completeSale.includes('entity_id: entityId,'), 'يجب تمرير معرف العميل المختار والتحقق من مطابقته قبل وضعه في invoiceData.entity_id');
 expect(pos.includes('const paid = isCredit ? 0'), 'البيع الآجل الكامل لا يجوز أن يطلب مبلغاً نقدياً وهمياً');
 expect(db.includes("type_code IN ('INDIVIDUAL','COMPANY','GOVERNMENT','TRANSPORT','CONTRACTOR')"), 'SQLite يجب أن يقبل العملاء فقط للبيع الآجل');
 expect(db.includes('يتجاوز البيع الآجل الحد الائتماني للعميل'), 'SQLite يجب أن يفرض الحد الائتماني عند البيع الآجل');
@@ -26,7 +29,7 @@ expect(movements.includes("case 'ensureOperationalWarehouse'"), 'شاشة الح
 expect(movements.includes('activeMovementFilters'), 'فلاتر حركات المخزون يجب أن تمرر إلى طلب SQLite');
 expect(movements.includes('new URLSearchParams(window.location.search)'), 'مباشرة إعادة التعبئة من التنبيه يجب أن تفتح حركة إدخال فعلية');
 
-expect(stockLevels.includes('AndroidInterface.getStockAlertRecords'), 'مستويات المخزون يجب أن تقرأ سجل التنبيهات الحقيقي');
+expect(stockLevels.includes("return invokeBridge('getStockAlertRecords', [json]);") && bridge.includes('fun getStockAlertRecords(jsonData: String = "{}")'), 'مستويات المخزون يجب أن تقرأ سجل التنبيهات الحقيقي عبر الجسر الفعلي');
 expect(!stockLevels.includes('getLowStockitems'), 'يجب إزالة اسم الجسر الخاطئ getLowStockitems');
 expect(stockLevels.includes("window.location.href = 'stocktake.html'"), 'زر تقرير الجرد يجب أن يفتح تدفق الجرد الحقيقي');
 expect(stocktake.includes("call('saveStocktakeDetailRecord'"), 'واجهة الجرد يجب أن تحفظ عدّ المنتج في SQLite');
