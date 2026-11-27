@@ -889,6 +889,9 @@
             margin-top: 2px;
         }
 
+        .modal-notice { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--gold-primary, #c9972b); background: rgba(201,151,43,.12); color: var(--text-primary, #172b45); font-size: 13px; line-height: 1.6; }
+        .modal-notice.error { border-color: var(--danger, #c0392b); background: rgba(192,57,43,.12); }
+        .modal-notice.success { border-color: var(--emerald-primary, #16805c); background: rgba(22,128,92,.12); }
         .modal-body { padding: 4px 0; }
         .modal-footer {
             display: flex;
@@ -1369,6 +1372,14 @@
         // أدوات مساعدة
         // ============================================================
         function toast(message, bad=false) {
+            const activeModal = document.querySelector('.modal-overlay.show .modal-body');
+            if (activeModal) {
+                let notice = activeModal.querySelector('.modal-notice');
+                if (!notice) { notice = document.createElement('div'); notice.className = 'modal-notice'; activeModal.prepend(notice); }
+                notice.className = 'modal-notice ' + (bad ? 'error' : 'info');
+                notice.textContent = String(message == null ? '' : message);
+                notice.setAttribute('role', bad ? 'alert' : 'status');
+            }
             const node = $('toast');
             node.textContent = message;
             node.className = 'toast show';

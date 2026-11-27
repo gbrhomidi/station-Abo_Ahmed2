@@ -631,7 +631,10 @@ body {
     opacity: 0; transition: opacity 0.3s;
 }
 .modal-overlay.show { display: flex; opacity: 1; }
-.modal {
+.modal-notice { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--gold-primary, #c9972b); background: rgba(201,151,43,.12); color: var(--text-primary, #172b45); font-size: 13px; line-height: 1.6; }
+        .modal-notice.error { border-color: var(--danger, #c0392b); background: rgba(192,57,43,.12); }
+        .modal-notice.success { border-color: var(--emerald-primary, #16805c); background: rgba(22,128,92,.12); }
+        .modal {
     background: var(--bg-secondary);
     border-radius: 24px 24px 0 0;
     width: 100%; max-width: 720px;
@@ -1394,6 +1397,14 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
     const today = () => businessDayDate();
 
     function toast(message, type = 'info') {
+        const activeModal = document.querySelector('.modal-overlay.show .modal-body');
+        if (activeModal) {
+            let notice = activeModal.querySelector('.modal-notice');
+            if (!notice) { notice = document.createElement('div'); notice.className = 'modal-notice'; activeModal.prepend(notice); }
+            notice.className = 'modal-notice ' + type;
+            notice.textContent = String(message == null ? '' : message);
+            notice.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        }
         const node = $('toast');
         if (!node) return;
         node.className = 'toast show ' + type;
@@ -1454,7 +1465,7 @@ textarea.form-input { min-height: 70px; resize: vertical; line-height: 1.6; text
     }
 
     function idOf(row) {
-        return pick(row, ['id', 'pump_id', '_id']);
+        return pick(row, ['id', 'pump_id', 'tank_id', 'nozzle_id', '_id']);
     }
 
     function statusOf(row) {
