@@ -149,6 +149,9 @@ android {
             isIncludeAndroidResources = true
             all {
                 it.jvmArgs("-XX:+TieredCompilation", "-XX:TieredStopAtLevel=1")
+                it.testLogging {
+                    showStandardStreams = true
+                }
             }
         }
     }
