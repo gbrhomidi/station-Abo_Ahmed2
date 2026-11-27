@@ -131,7 +131,26 @@ class MovementInfrastructureV75Test {
             }
         }
         val productId = db.rawQuery("SELECT id FROM products WHERE station_id=1 AND is_deleted=0 ORDER BY id LIMIT 1", null).use {
-            assertTrue("seeded product required", it.moveToFirst()); it.getLong(0)
+            if (it.moveToFirst()) it.getLong(0) else {
+                val categoryId = db.rawQuery("SELECT id FROM product_categories WHERE is_deleted=0 ORDER BY id LIMIT 1", null).use { c ->
+                    assertTrue("seeded product category required", c.moveToFirst()); c.getLong(0)
+                }
+                val unitId = db.rawQuery("SELECT id FROM units ORDER BY id LIMIT 1", null).use { u ->
+                    assertTrue("seeded product unit required", u.moveToFirst()); u.getLong(0)
+                }
+                helper.insertProduct(
+                    org.json.JSONObject()
+                        .put("product_name", "Movement audit test product")
+                        .put("product_name_ar", "منتج اختبار تدقيق الحركات")
+                        .put("category_id", categoryId)
+                        .put("unit_id", unitId)
+                        .put("purchase_price", 7.5)
+                        .put("sale_price", 8.0)
+                        .put("minimum_stock", 0.0),
+                    1,
+                    userId
+                )
+            }
         }
         val movementId = db.insertOrThrow("inventory_movements", null, android.content.ContentValues().apply {
             put("uuid", java.util.UUID.randomUUID().toString())
