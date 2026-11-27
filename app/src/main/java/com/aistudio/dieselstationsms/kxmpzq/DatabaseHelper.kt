@@ -2333,7 +2333,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             AFTER UPDATE ON inventory_movements BEGIN
                 INSERT INTO movement_audit_log(movement_id,station_id,source_table,action,user_id,reason_code_id,before_json,after_json)
                 VALUES(NEW.id,NEW.station_id,'inventory_movements',
-                       CASE WHEN OLD.approved_by IS NULL AND NEW.approved_by IS NOT NULL THEN 'approve'
+                       CASE WHEN (OLD.approved_by IS NULL AND NEW.approved_by IS NOT NULL)
+                                  OR (COALESCE(OLD.is_locked,0)=0 AND COALESCE(NEW.is_locked,0)=1 AND NEW.approved_by IS NOT NULL) THEN 'approve'
                             WHEN COALESCE(OLD.is_deleted,0)=0 AND COALESCE(NEW.is_deleted,0)=1 THEN 'archive'
                             ELSE 'update' END,
                        COALESCE(NEW.updated_by,NEW.approved_by,NEW.deleted_by,NEW.performed_by),NEW.reason_code_id,
